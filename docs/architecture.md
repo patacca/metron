@@ -212,15 +212,24 @@ with members in exactly this order: `seq`, `time`, `prev`, `type`, `data`,
   the last occurrence of `,"hash":"`, followed by a closing `}`.
 
 Verification needs no canonicalization and can be reimplemented in any
-language. Payloads never use a member named `hash`; they use `digest`.
+language. Payloads are written in canonical JSON and never use a member named
+`hash`; they use `digest`. The first event is `ledger.initialized`, and replay
+rejects a ledger whose first event is anything else.
 
 **Writing.** All events of one command are committed together or not at all:
 the store writes the complete new ledger to a temporary file in the state
 directory, syncs it, and renames it over `ledger.jsonl`. A leftover temporary
-file is discarded on the next run. Every command that writes holds an exclusive
-operating-system lock on `<state>/lock` from before it reads the ledger until
-after it commits; the lock disappears with the process, so a crash never
-leaves it held.
+file is discarded by the next command that writes. Every command that writes
+holds an exclusive operating-system lock on `<state>/lock` from before it reads
+the ledger until after it commits; the lock disappears with the process, so a
+crash never leaves it held.
+
+Packet and report files are written after the ledger commit that refers to
+them, so the ledger never trails a file. A crash in between leaves an event
+whose file is missing, which is detectable and recoverable: an open packet
+without a matching file is voided and issued again, and a report file is
+restored by ingesting the same report again. `metron fsck` and the gate treat
+a missing or mismatching file as an integrity failure.
 
 **Event types**
 

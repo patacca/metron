@@ -1,0 +1,3 @@
+base: &shared
+  a: 1
+other: 2

@@ -1,0 +1,40 @@
+# Acceptance contract used by the store tests.
+schema: metron.contract/v1
+project:
+  name: "Metron: example"
+  objectives:
+    - Decide whether a commit is approved
+    - 'Keep review loops finite'
+stage: prototype
+authorizes: >-
+  Internal use by
+  the team
+scope: [cmd/, internal/]
+operating_envelope:
+  - |
+    Single user,
+    local repository
+requirements:
+  - id: REQ-1
+    domain: functional-correctness
+    statement: The gate fails closed
+    criterion: Every error path exits non-zero
+    command: go test ./...
+  - id: REQ-2
+    domain: architecture
+    statement: "yes"
+    criterion: on
+    from: prototype
+risks:
+  unacceptable:
+    - id: RISK-1
+      statement: A gate opens on a violated requirement
+not_applicable: []
+convergence:
+  root_cause_after: 2
+  convergence_audit_after: 3
+  process_audit_after: -5
+  quoted_date: "2026-01-01"
+  flag: true
+  off: False
+  unicode: "naïve é 😀"
