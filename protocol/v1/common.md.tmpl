@@ -1,0 +1,78 @@
+{{/*
+Partials shared by the role briefs. Each is executed with the brief's view.
+*/}}
+
+{{- define "envelope" -}}
+The report is a single JSON document. Its envelope says which packet it
+answers and who wrote it:
+
+| Member | Content |
+| --- | --- |
+| `schema` | `{{.ReportSchema}}` |
+| `packet` | `{{.ID}}`, the packet you are answering |
+| `role` | `{{.Role}}` |
+| `author` | Who you are. `id` is a stable name for whoever acts in this role; Metron enforces role separation on it. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
+| `body` | Your answer, described below |
+{{- end}}
+
+{{- define "when" -}}
+{{if .Round}}in round {{.Round}} of the `{{.Contract.Stage}}` stage{{else}}at the start of the `{{.Contract.Stage}}` stage{{end}}
+{{- end}}
+
+{{- define "last-review" -}}
+{{if .Round}}This round's review{{else}}The most recent review, held before the contract targeted the `{{.Contract.Stage}}` stage,{{end}}
+{{- end}}
+
+{{- define "read-only" -}}
+## Leave the candidate untouched
+
+This role is read-only. Do not edit, create or delete files in the
+repository, commit, stash, switch branches or check out another revision,
+and do not touch `.metron/`. When you submit your report, Metron compares
+the candidate digest and the cleanliness of the working tree with their
+state when this packet was issued, and rejects the report if either has
+changed. Building the code and running tests is fine as long as nothing is
+left behind that `git status` would show: send output to a directory outside
+the repository or to paths the repository already ignores. To look at
+another revision, use `git show` or a separate clone. Write your report file
+outside the repository too.
+{{- end}}
+
+{{- define "finding-members" -}}
+Each finding is an object. The first eight members are required for every
+finding. A member whose "When" names tiers is required for those tiers and
+left out for the others; the last three are present when what they describe
+applies.
+
+| Member | When | Content |
+| --- | --- | --- |
+| `key` | always | A short label, unique within this report. Metron assigns the finding its permanent `F-` identifier when it accepts the report. |
+| `tier` | always | `T0`, `T1`, `T2`, `T3` or `T4`. |
+| `domain` | always | The review domain the finding belongs to most directly. |
+| `title` | always | One line that names the problem specifically enough to tell it apart from every other finding in the ledger. |
+| `components` | always | The affected files, modules or subsystems, named so that someone else can find them. |
+| `description` | always | The concrete mechanism: what happens, under which conditions, and why. For a non-blocking finding, what could be better and in what way. |
+| `evidence` | always | What lets someone else check the claim: the command and what it printed, the test, the measurement, or the reasoning together with the code locations it rests on. |
+| `impact` | always | The expected effect inside the operating envelope: what is affected, how badly and how often. |
+| `requirement` | `T0`, `T1`: this, `risk`, or both | The applicable requirement (`REQ-` identifier) the finding violates. |
+| `risk` | `T0`, `T1`: this, `requirement`, or both | The unacceptable risk (`RISK-` identifier) the finding realizes. Accepted risks (`ACC-` identifiers) cannot be cited. |
+| `blocking_rationale` | `T0`, `T1` | Why the finding must be resolved before this stage rather than later. |
+| `verification` | `T0`, `T1` | How a fix can be verified: the test to run, the behaviour to observe, or the measurement and its threshold. The verifier will apply it as written. |
+| `proportionality` | `T0`, `T1` in an improvement-prone domain | An object with three members: `proposed_change`, the smallest change that would resolve the finding; `regression_risk`, what that change could break or complicate; `deferral_cost`, why resolving it later would cost substantially more. |
+| `expected_benefit` | `T2` | What the improvement would gain, as concretely as the evidence allows. |
+| `deferral_rationale` | `T2` | Why it can wait without violating the contract. |
+| `evidence_needed` | `T3` | The data or measurement that would settle the question. |
+| `reassess_when` | `T3` | The event or condition at which to look at it again. |
+| `introduced_by` | regressions | The claimed fix, among this packet's subjects, that introduced the regression, by its `F-` identifier. Only a verifier reports regressions. |
+| `contradicts` | when it applies | The `F-` identifier of a finding whose resolution this one would reverse. |
+| `related` | optional | `F-` identifiers of findings already in the ledger that share a cause or a component with this one. |
+
+A good finding describes one problem. Unrelated problems that happen to sit in
+the same file are separate findings; several symptoms of one mechanism are one
+finding. It is specific: a reader can locate the code, follow the mechanism and
+reproduce the evidence without asking you anything. Its tier is the one the
+evidence supports, not the one its domain suggests or the one that would get
+it fixed soonest. And it is written for someone who has not seen your work:
+the implementer and the verifier act on what the finding says and nothing
+else.
+{{- end}}

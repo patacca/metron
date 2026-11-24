@@ -1,0 +1,334 @@
+{{- /*
+A self-contained prompt: the brief, the packet laid out for reading, the report
+skeleton, and how to hand the report back. Executed with the brief's view, with
+Brief and Skeleton set.
+*/ -}}
+{{.Brief}}
+
+---
+
+# Packet {{.ID}}
+
+What follows is the content of packet {{.ID}}, laid out for reading: the
+information the brief above refers to.
+
+## Identification
+
+- Packet: `{{.ID}}`, issued {{.IssuedAt}} under protocol `{{.Protocol}}`
+- Action: `{{.Action}}`, for the `{{.Role}}`{{if .Round}}, in round {{.Round}} of the stage{{end}}
+- Candidate: commit `{{.Candidate.Commit}}`, digest `{{.Candidate.Digest}}`
+{{- with .Base}}
+- Reviewed commit: `{{.Commit}}`, digest `{{.Digest}}`
+{{- end}}
+- Contract digest: `{{.ContractDigest}}`
+- Read-only: {{if .ReadOnly}}yes, the candidate must not change{{else}}no, you are expected to commit changes{{end}}
+
+## Project
+
+{{.Contract.Project.Name}}.
+
+Objectives:
+{{range .Contract.Project.Objectives}}
+- {{.}}
+{{- end}}
+{{- with .Contract.Project.NonObjectives}}
+
+Non-objectives, which the project deliberately does not pursue:
+{{range .}}
+- {{.}}
+{{- end}}
+{{- end}}
+
+## Stage and authorization
+
+The contract targets the `{{.Contract.Stage}}` stage. A GREEN gate authorizes
+this activity: {{.Contract.Authorizes}}
+
+## Scope
+
+{{range .Contract.Scope}}
+- {{.}}
+{{- end}}
+
+## Operating envelope
+
+Findings about behaviour outside these conditions cannot block.
+{{range .Contract.Envelope}}
+- {{.}}
+{{- end}}
+
+## Applicable requirements
+
+These are mandatory at the `{{.Contract.Stage}}` stage.
+{{- range $req := .Applicable}}
+
+### {{.ID}} (`{{.Domain}}`{{with .From}}, from `{{.}}`{{end}})
+
+Statement: {{.Statement}}
+
+Criterion: {{.Criterion}}
+
+{{if .Command -}}
+Check command: `{{.Command}}`
+
+{{with .Evidence -}}
+{{- if eq .Command $req.Command -}}
+Latest result on this candidate: {{if .Passed}}passed{{else}}failed{{end}}, exit status {{.ExitCode}}, output digest `{{.OutputDigest}}`.
+{{- else -}}
+Latest result on this candidate: {{if .Passed}}passed{{else}}failed{{end}}, but for a different command text, `{{.Command}}`, so it does not count for this requirement.
+{{- end}}
+{{- else -}}
+No result is recorded for this candidate.
+{{- end}}
+{{- else -}}
+No check command; the criterion is judged by inspection and evidence.
+{{- end}}
+{{- end}}
+{{- with .Later}}
+
+## Requirements from later stages
+
+These are recorded in the contract but are not mandatory at the
+`{{$.Contract.Stage}}` stage, and no finding can cite them yet.
+{{range .}}
+- `{{.ID}}` (`{{.Domain}}`, from `{{.From}}`): {{.Statement}}
+{{- end}}
+{{- end}}
+
+## Risks
+
+Unacceptable risks, which a blocking finding may cite:
+{{range .Contract.Risks.Unacceptable}}
+- `{{.ID}}`: {{.Statement}}
+{{- end}}
+
+{{with .Contract.Risks.Accepted -}}
+Accepted risks, which governance has decided to live with and which never
+block:
+{{range .}}
+- `{{.ID}}`: {{.Statement}}
+{{- end}}
+{{- else -}}
+Governance has accepted no risks.
+{{- end}}
+{{- with .Contract.NotApplicable}}
+
+## Waived domains
+
+The contract declares these domains not applicable at this stage.
+{{range .}}
+- `{{.Domain}}`: {{.Rationale}}
+{{- end}}
+{{- end}}
+{{- with .Contract.Calibrations}}
+
+## Calibrations
+
+Provisional parameters that cannot be settled without evidence the project
+does not have yet.
+{{- range .}}
+
+### {{.ID}}: {{.Parameter}}
+
+Evidence needed: {{.EvidenceNeeded}}
+
+Reassess when: {{.ReassessWhen}}
+{{- end}}
+{{- end}}
+
+## Convergence thresholds
+
+- Root-cause analysis: required for a finding's next fix once its rejected fixes and reopenings reach {{.Thresholds.RootCauseAfter}}.
+- Convergence analysis: once {{.Thresholds.ConvergenceAuditAfter}} consecutive rounds have ended without GREEN.
+- Independent process audit: each time the count of consecutive rounds without GREEN reaches a multiple of {{.Thresholds.ProcessAuditAfter}}.
+{{- with .Escalations}}
+
+## Escalations to discharge
+{{- range .}}
+
+### {{.ID}}: `{{.Kind}}`, raised in round {{.Round}}
+
+{{.Reason}}
+{{- if or .Findings .Components .Requirements}}
+{{with .Findings}}
+- Findings: {{codes .}}
+{{- end}}
+{{- with .Components}}
+- Components: {{codes .}}
+{{- end}}
+{{- with .Requirements}}
+- Requirements: {{codes .}}
+{{- end}}
+{{- end}}
+{{- end}}
+{{- end}}
+{{- with .SubjectFindings}}
+
+## {{if $.IsFix}}Findings to fix or dispute{{else}}Claimed fixes to verify{{end}}
+{{- range .}}
+
+{{template "finding-record" .}}
+{{- end}}
+{{- end}}
+{{- with .BacklogFindings}}
+
+## Optional backlog
+
+Open non-blocking findings you may also fix.
+{{- range .}}
+
+{{template "finding-record" .}}
+{{- end}}
+{{- end}}
+{{- with .AdjudicableFindings}}
+
+## Findings to adjudicate
+{{- range .}}
+
+{{template "finding-record" .}}
+{{- end}}
+{{- end}}
+{{- with .OtherFindings}}
+
+## {{if or $.SubjectFindings $.AdjudicableFindings}}Other findings in the ledger{{else}}Findings in the ledger{{end}}
+{{- range .}}
+
+{{template "finding-record" .}}
+{{- end}}
+{{- else}}
+{{- if or $.IsReview $.IsAudit}}
+
+## Findings in the ledger
+
+The ledger holds no findings yet.
+{{- end}}
+{{- end}}
+
+## Rounds of this stage
+{{with .History}}
+| Round | Commit | Verdict | Reviewer |
+| --- | --- | --- | --- |
+{{- range .}}
+| {{.Round}} | `{{.Candidate.Commit}}` | {{with .Verdict}}`{{.}}`{{else}}none{{end}} | {{with .Reviewer}}{{.}}{{else}}none{{end}} |
+{{- end}}
+{{- else}}
+No round of this stage has been recorded yet.
+{{- end}}
+
+## Binding decisions
+{{with .Decisions}}
+{{- range .}}
+- `{{.Source}}` by `{{.By}}`{{with .Escalation}}, from `{{.}}`{{end}}: {{.Text}}
+{{- end}}
+{{- else}}
+None recorded.
+{{- end}}
+
+---
+
+# Report skeleton
+
+This skeleton already has the right shape for packet {{.ID}}. Fill in every
+empty value as the brief describes, add the entries the brief allows, and
+remove nothing that is required. Metron rejects a report that still has an
+empty value where one is required.
+
+```json
+{{.Skeleton}}
+```
+
+# Handing the report back
+
+Save the completed report as a file outside the repository and submit it:
+
+```
+metron ingest <file>
+```
+
+If you cannot run commands, return the report as a single JSON document and
+nothing else; whoever operates Metron will submit it. Metron accepts or
+rejects the report as a whole. A rejection says what is wrong and changes
+nothing, so the report can be corrected and submitted again; the packet stays
+open until a report for it is accepted.
+
+{{- define "finding-record"}}
+### {{.ID}}: {{.Input.Title}}
+
+- Tier `{{.Tier}}`{{if ne .Tier .Input.Tier}}, reclassified from `{{.Input.Tier}}`{{end}}, in `{{.Input.Domain}}`
+- Status `{{.Status}}`; opened in round {{.Round}} by the {{.Source}}; recurrences: {{.Recurrences}}
+{{- if .RootCauseRequired}}
+- Root-cause analysis required for its next fix
+{{- end}}
+{{- if .Disputed}}
+- Disputed once; cannot be disputed again
+{{- end}}
+- Components: {{codes .Input.Components}}
+{{- with .Input.Requirement}}
+- Requirement: `{{.}}`
+{{- end}}
+{{- with .Input.Risk}}
+- Risk: `{{.}}`
+{{- end}}
+{{- with .Input.IntroducedBy}}
+- Introduced by the fix for `{{.}}`
+{{- end}}
+{{- with .Input.Contradicts}}
+- Would reverse the resolution of `{{.}}`
+{{- end}}
+{{- with .Input.Related}}
+- Related: {{codes .}}
+{{- end}}
+
+Description: {{.Input.Description}}
+
+Evidence: {{.Input.Evidence}}
+
+Impact: {{.Input.Impact}}
+{{- with .Input.BlockingRationale}}
+
+Blocking rationale: {{.}}
+{{- end}}
+{{- with .Input.Verification}}
+
+Verification: {{.}}
+{{- end}}
+{{- with .Input.Proportionality}}
+
+Proportionality:
+
+- Proposed change: {{.ProposedChange}}
+- Regression risk: {{.RegressionRisk}}
+- Deferral cost: {{.DeferralCost}}
+{{- end}}
+{{- with .Input.ExpectedBenefit}}
+
+Expected benefit: {{.}}
+{{- end}}
+{{- with .Input.DeferralRationale}}
+
+Deferral rationale: {{.}}
+{{- end}}
+{{- with .Input.EvidenceNeeded}}
+
+Evidence needed: {{.}}
+{{- end}}
+{{- with .Input.ReassessWhen}}
+
+Reassess when: {{.}}
+{{- end}}
+{{- with .Fix}}
+
+Latest fix: {{.Summary}}
+
+- Commits: {{codes .Commits}}
+- Components: {{codes .Components}}
+{{- with .RootCause}}
+
+Root cause: {{.}}
+{{- end}}
+{{- with .Tests}}
+
+Tests: {{.}}
+{{- end}}
+{{- end}}
+{{- end}}

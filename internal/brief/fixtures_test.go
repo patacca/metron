@@ -1,0 +1,445 @@
+package brief
+
+import "github.com/patacca/metron/internal/core"
+
+// The packets below are what Metron would issue at four points in the life of
+// one fictional project. They are built by hand so that the golden files show
+// every part of a brief and a prompt.
+
+const (
+	commitRound1 = "4a1c9e2b7d3f60812e5a9c4b7d1e3f2a6b8c0d94"
+	commitRound2 = "9b2d4f6a8c0e1357924680ace13579bdf0246813"
+	commitFixed  = "c3e5a7b9d1f30246813579bdf02468ace1357902"
+	commitRound5 = "e7f9a1b3c5d70246813579bdf02468ace1357924"
+
+	digestRound1 = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	digestRound2 = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	digestFixed  = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	digestRound5 = "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+
+	contractDigest = "sha256:abababababababababababababababababababababababababababababababab"
+	outputDigest   = "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+)
+
+func fullContract() core.Contract {
+	return core.Contract{
+		Schema: core.SchemaContract,
+		Project: core.Project{
+			Name: "Courier",
+			Objectives: []string{
+				"Deliver every accepted webhook event to every matching subscriber.",
+				"Let subscribers filter the events they receive by type.",
+			},
+			NonObjectives: []string{"Exactly-once delivery."},
+		},
+		Stage:      core.StagePilot,
+		Authorizes: "A four-week pilot with two internal teams as subscribers, on staging traffic only.",
+		Scope:      []string{"cmd/courier", "internal/delivery", "internal/store"},
+		Envelope: []string{
+			"Up to 50 events per second, sustained.",
+			"At most 200 subscribers.",
+			"A single instance; restarts are allowed at any time.",
+		},
+		Requirements: []core.Requirement{
+			{ID: "REQ-1", Domain: core.DomainFunctionalCorrectness,
+				Statement: "Every accepted event is delivered at least once to every matching subscriber.",
+				Criterion: "The delivery test over 1000 events and 20 subscribers reports no missing delivery.",
+				Command:   "go test ./internal/delivery -run TestAtLeastOnce"},
+			{ID: "REQ-2", Domain: core.DomainObjectiveAlignment,
+				Statement: "A subscriber receives only the event types it subscribed to.",
+				Criterion: "Filtering is applied before delivery for every subscription, as shown by the routing tests and by inspection."},
+			{ID: "REQ-3", Domain: core.DomainArchitecture,
+				Statement: "Delivery, storage and the HTTP surface are separate packages with one-way dependencies.",
+				Criterion: "No import cycle, and internal/store imports neither of the other two."},
+			{ID: "REQ-4", Domain: core.DomainDataIntegrity, From: core.StageControlledValidation,
+				Statement: "An accepted event survives a crash of the process.",
+				Criterion: "Killing the process at each write boundary loses no accepted event.",
+				Command:   "go test ./internal/store -run TestCrashRecovery"},
+			{ID: "REQ-5", Domain: core.DomainTestability, From: core.StageControlledValidation,
+				Statement: "Delivery behaviour can be tested without a network.",
+				Criterion: "Every delivery test runs against the in-process transport."},
+			{ID: "REQ-6", Domain: core.DomainObservability, From: core.StageControlledValidation,
+				Statement: "Every failed delivery attempt is logged with the event, the subscriber and the cause.",
+				Criterion: "The log of a run with injected failures has one structured entry per failed attempt."},
+			{ID: "REQ-7", Domain: core.DomainStability, From: core.StageControlledValidation,
+				Statement: "Memory use stays bounded under sustained load inside the envelope.",
+				Criterion: "Resident memory after one hour at 50 events per second is within 10% of that after five minutes."},
+			{ID: "REQ-8", Domain: core.DomainReliability, From: core.StagePilot,
+				Statement: "A subscriber that is down receives its events once it recovers.",
+				Criterion: "Retries with backoff continue for at least one hour, and the recovery test passes.",
+				Command:   "go test ./internal/delivery -run TestSubscriberRecovery"},
+			{ID: "REQ-9", Domain: core.DomainPerformance, From: core.StagePilot,
+				Statement: "Delivery latency stays low at the envelope's load.",
+				Criterion: "The 99th percentile from acceptance to first attempt is under 500 ms at 50 events per second.",
+				Command:   "go test ./internal/delivery -run TestLatencyBudget"},
+			{ID: "REQ-10", Domain: core.DomainSecurityPrivacy, From: core.StagePilot,
+				Statement: "Every delivery is signed so that a subscriber can authenticate it.",
+				Criterion: "Each request carries an HMAC-SHA256 signature over the body with the subscriber's secret."},
+			{ID: "REQ-11", Domain: core.DomainScalability, From: core.StageProduction,
+				Statement: "Several instances can share the delivery load.",
+				Criterion: "Two instances deliver 100 events per second without duplicate work beyond retries."},
+			{ID: "REQ-12", Domain: core.DomainOperationalReadiness, From: core.StageProduction,
+				Statement: "A deployment can be rolled back without losing queued events.",
+				Criterion: "The rollback drill loses no accepted event."},
+		},
+		Risks: core.Risks{
+			Unacceptable: []core.Risk{
+				{ID: "RISK-1", Statement: "An event is delivered to a subscriber that did not subscribe to its type."},
+				{ID: "RISK-2", Statement: "A subscriber secret appears in logs or error messages."},
+			},
+			Accepted: []core.Risk{
+				{ID: "ACC-1", Statement: "A subscriber may receive the same event more than once."},
+			},
+		},
+		NotApplicable: []core.Waiver{
+			{Domain: core.DomainCompatibility, Rationale: "First release; there are no existing subscribers or stored data to stay compatible with."},
+		},
+		Calibrations: []core.Calibration{
+			{ID: "CAL-1", Parameter: "Retry backoff starting at 2 s and capped at 5 min",
+				EvidenceNeeded: "Recovery times of real subscribers during the pilot.",
+				ReassessWhen:   "Two weeks of pilot traffic have been delivered."},
+		},
+	}
+}
+
+func applicableIDs(c core.Contract) []string {
+	var ids []string
+	for _, r := range c.Applicable() {
+		ids = append(ids, r.ID)
+	}
+	return ids
+}
+
+func passed(req, command, candidate string) core.Evidence {
+	return core.Evidence{Requirement: req, Command: command, Candidate: candidate,
+		ExitCode: 0, Passed: true, OutputDigest: outputDigest}
+}
+
+// Findings, in the state they have at the given point of the project.
+
+func f1Resolved() core.Finding {
+	return core.Finding{
+		ID: "F-0001", Status: core.StatusResolved, Tier: core.TierMaterial, Round: 1, Source: core.RoleReviewer,
+		Input: core.FindingInput{
+			Key: "retry-stops", Tier: core.TierMaterial, Domain: core.DomainReliability,
+			Title:       "Retries stop after the fifth failed attempt",
+			Components:  []string{"internal/delivery/retry.go"},
+			Description: "The retry loop counts attempts instead of elapsed time and gives up after five, about 62 s with the current backoff.",
+			Evidence:    "TestSubscriberRecovery with a 10-minute outage fails: no delivery after recovery.",
+			Impact:      "Any subscriber outage longer than about a minute loses events, which pilot subscribers will hit.",
+			Requirement: "REQ-8", BlockingRationale: "The pilot depends on subscribers that restart during deployments.",
+			Verification: "TestSubscriberRecovery passes with a one-hour outage.",
+		},
+		Fix: &core.Fix{Finding: "F-0001", Commits: []string{commitRound2}, Summary: "Retry until one hour has elapsed since the first attempt.",
+			Components: []string{"internal/delivery/retry.go"}, Tests: "Extended TestSubscriberRecovery to a one-hour simulated outage."},
+	}
+}
+
+func f2Reclassified() core.Finding {
+	return core.Finding{
+		ID: "F-0002", Status: core.StatusOpen, Tier: core.TierImprovement, Round: 1, Source: core.RoleReviewer, Disputed: true,
+		Input: core.FindingInput{
+			Key: "batch-writes", Tier: core.TierMaterial, Domain: core.DomainPerformance,
+			Title:       "Each accepted event is written with its own fsync",
+			Components:  []string{"internal/store/append.go"},
+			Description: "Appends are synced one at a time, which caps throughput at the disk's sync rate.",
+			Evidence:    "A benchmark on the reference machine reaches 400 appends per second.",
+			Impact:      "Throughput headroom above the envelope's 50 events per second is smaller than it could be.",
+			Requirement: "REQ-9", BlockingRationale: "Latency could exceed the budget under bursts.",
+			Verification: "TestLatencyBudget passes at 200 events per second.",
+			Proportionality: &core.Proportionality{
+				ProposedChange: "Group appends that arrive within 5 ms into one sync.",
+				RegressionRisk: "Group commit changes the durability point of each event.",
+				DeferralCost:   "None identified beyond the pilot.",
+			},
+			ExpectedBenefit:   "Roughly eight times the append throughput.",
+			DeferralRationale: "The envelope's load is an eighth of the measured capacity.",
+		},
+	}
+}
+
+func f3Calibration() core.Finding {
+	return core.Finding{
+		ID: "F-0003", Status: core.StatusOpen, Tier: core.TierCalibration, Round: 1, Source: core.RoleReviewer,
+		Input: core.FindingInput{
+			Key: "backoff-cap", Tier: core.TierCalibration, Domain: core.DomainReliability,
+			Title:          "The 5-minute backoff cap may delay recovery for long outages",
+			Components:     []string{"internal/delivery/retry.go"},
+			Description:    "After a long outage a recovered subscriber may wait up to five minutes for the next attempt.",
+			Evidence:       "Follows from the backoff schedule in retry.go.",
+			Impact:         "Slower catch-up after outages longer than ten minutes.",
+			EvidenceNeeded: "Outage durations of pilot subscribers.",
+			ReassessWhen:   "Two weeks of pilot traffic have been delivered.",
+			Related:        []string{"F-0001"},
+		},
+	}
+}
+
+func f4(status core.FindingStatus, fix *core.Fix) core.Finding {
+	return core.Finding{
+		ID: "F-0004", Status: status, Tier: core.TierMaterial, Round: 1, Source: core.RoleReviewer,
+		Recurrences: 2, RootCauseRequired: true, Fix: fix,
+		Input: core.FindingInput{
+			Key: "lost-on-crash", Tier: core.TierMaterial, Domain: core.DomainDataIntegrity,
+			Title:       "An event acknowledged before its append is synced can be lost on a crash",
+			Components:  []string{"internal/store/append.go", "internal/delivery/accept.go"},
+			Description: "The HTTP handler acknowledges an event as soon as the append call returns, but the append returns before the sync completes.",
+			Evidence:    "TestCrashRecovery with a kill between write and sync loses the acknowledged event in 3 of 10 runs.",
+			Impact:      "An acknowledged event disappears after a restart, and the sender will not resend it.",
+			Requirement: "REQ-4", BlockingRationale: "Restarts are inside the envelope; the pilot's senders rely on acknowledgement.",
+			Verification: "TestCrashRecovery passes 100 consecutive runs with a kill at every write boundary.",
+		},
+	}
+}
+
+func f5(status core.FindingStatus, fix *core.Fix) core.Finding {
+	return core.Finding{
+		ID: "F-0005", Status: status, Tier: core.TierMaterial, Round: 2, Source: core.RoleReviewer, Disputed: true, Fix: fix,
+		Input: core.FindingInput{
+			Key: "store-imports-delivery", Tier: core.TierMaterial, Domain: core.DomainArchitecture,
+			Title:       "internal/store imports internal/delivery for the event type",
+			Components:  []string{"internal/store/event.go"},
+			Description: "The store depends on the delivery package for the Event type, which reverses the intended dependency direction.",
+			Evidence:    "`go list -deps ./internal/store` includes internal/delivery.",
+			Impact:      "Changes to delivery force rebuilding and retesting the store, and the store cannot be reused by the planned replay tool.",
+			Requirement: "REQ-3", BlockingRationale: "The pilot adds the replay tool, which needs the store without delivery.",
+			Verification: "`go list -deps ./internal/store` no longer lists internal/delivery.",
+			Proportionality: &core.Proportionality{
+				ProposedChange: "Move the Event type to a new internal/event package used by both.",
+				RegressionRisk: "Mechanical; the compiler finds every use.",
+				DeferralCost:   "Every package added during the pilot would deepen the inverted dependency.",
+			},
+		},
+	}
+}
+
+func f6Preference() core.Finding {
+	return core.Finding{
+		ID: "F-0006", Status: core.StatusOpen, Tier: core.TierPreference, Round: 2, Source: core.RoleReviewer,
+		Input: core.FindingInput{
+			Key: "options-struct", Tier: core.TierPreference, Domain: core.DomainSimplicity,
+			Title:       "Constructor takes seven positional parameters",
+			Components:  []string{"internal/delivery/dispatcher.go"},
+			Description: "An options struct would make call sites easier to read.",
+			Evidence:    "dispatcher.go, NewDispatcher.",
+			Impact:      "Readability only.",
+		},
+	}
+}
+
+func f7Withdrawn() core.Finding {
+	return core.Finding{
+		ID: "F-0007", Status: core.StatusWithdrawn, Tier: core.TierCritical, Round: 2, Source: core.RoleVerifier,
+		Input: core.FindingInput{
+			Key: "secret-in-log", Tier: core.TierCritical, Domain: core.DomainSecurityPrivacy,
+			Title:        "Signing error message includes the subscriber secret",
+			Components:   []string{"internal/delivery/sign.go"},
+			Description:  "The error returned when signing fails formats the key into the message.",
+			Evidence:     "sign.go formats the key with %q in the error path.",
+			Impact:       "A secret could reach the logs.",
+			Risk:         "RISK-2",
+			IntroducedBy: "F-0001", BlockingRationale: "Secrets in logs are an unacceptable risk at every stage.",
+			Verification: "No error path in sign.go formats the key.",
+		},
+	}
+}
+
+func history(rounds int) []core.RoundSummary {
+	commits := []string{commitRound1, commitRound2, commitFixed, commitFixed, commitRound5}
+	digests := []string{digestRound1, digestRound2, digestFixed, digestFixed, digestRound5}
+	verdicts := []core.Verdict{core.VerdictRed, core.VerdictRed, core.VerdictIndeterminate, "", core.VerdictRed}
+	var out []core.RoundSummary
+	for i := 0; i < rounds; i++ {
+		s := core.RoundSummary{Round: i + 1, Candidate: core.Candidate{Commit: commits[i], Digest: digests[i]}, Verdict: verdicts[i]}
+		if s.Verdict != "" {
+			s.Reviewer = "review-agent"
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func decisions() []core.Decision {
+	return []core.Decision{
+		{Source: core.DecisionDirective, By: core.RoleAuditor,
+			Text: "Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests."},
+		{Source: core.DecisionResolution, Escalation: "E-0002", By: core.RoleGovernance,
+			Text: "Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives."},
+	}
+}
+
+func base(action core.Step, round int, candidate core.Candidate) core.Packet {
+	role, _ := action.PacketRole()
+	c := fullContract()
+	return core.Packet{
+		Schema: core.SchemaPacket, ID: "P-0012", Protocol: core.ProtocolVersion,
+		Role: role, Action: action, Round: round, IssuedAt: "2026-11-20T14:03:09Z",
+		Candidate: candidate, ReadOnly: role.ReadOnly(),
+		ContractDigest: contractDigest, Contract: c, ApplicableRequirements: applicableIDs(c),
+		ReportSchema: core.SchemaReport,
+	}
+}
+
+func fullReview() core.Packet {
+	p := base(core.StepReview, 3, core.Candidate{Commit: commitFixed, Digest: digestFixed})
+	p.Evidence = []core.Evidence{
+		passed("REQ-1", "go test ./internal/delivery -run TestAtLeastOnce", digestFixed),
+		passed("REQ-4", "go test ./internal/store -run TestCrashRecovery", digestFixed),
+		passed("REQ-8", "go test ./internal/delivery -run TestSubscriberRecovery", digestFixed),
+		passed("REQ-9", "go test ./internal/delivery -run TestLatencyBudget", digestFixed),
+	}
+	rootCause := "The handler treated the return of append as durability. Acknowledgement now waits for the sync, and the earlier fixes, which added retries around the write, are removed."
+	p.Findings = []core.Finding{
+		f1Resolved(), f2Reclassified(), f3Calibration(),
+		f4(core.StatusResolved, &core.Fix{Finding: "F-0004", Commits: []string{commitFixed}, Summary: "Acknowledge only after the append is synced.",
+			Components: []string{"internal/delivery/accept.go", "internal/store/append.go"}, RootCause: rootCause,
+			Tests: "TestCrashRecovery now kills the process at every write boundary; 100 runs pass."}),
+		f5(core.StatusResolved, &core.Fix{Finding: "F-0005", Commits: []string{commitFixed}, Summary: "Moved Event to internal/event.",
+			Components: []string{"internal/event", "internal/store", "internal/delivery"}}),
+		f6Preference(), f7Withdrawn(),
+	}
+	p.History = history(2)
+	p.Decisions = decisions()
+	return p
+}
+
+func fullFix() core.Packet {
+	p := base(core.StepFix, 2, core.Candidate{Commit: commitRound2, Digest: digestRound2})
+	p.Base = &core.Candidate{Commit: commitRound2, Digest: digestRound2}
+	p.ReadOnly = false
+	p.Evidence = []core.Evidence{
+		passed("REQ-1", "go test ./internal/delivery -run TestAtLeastOnce", digestRound2),
+		passed("REQ-4", "go test ./internal/store -run TestCrashRecovery", digestRound2),
+		passed("REQ-8", "go test ./internal/delivery -run TestSubscriberRecovery", digestRound2),
+		passed("REQ-9", "go test ./internal/delivery -run TestLatencyBudget", digestRound2),
+	}
+	p.Subjects = []string{"F-0004", "F-0005"}
+	p.Backlog = []string{"F-0002", "F-0003", "F-0006"}
+	p.RootCauseRequired = []string{"F-0004"}
+	p.Findings = []core.Finding{f2Reclassified(), f3Calibration(), f4(core.StatusOpen, nil), f5(core.StatusOpen, nil), f6Preference()}
+	p.History = history(2)
+	p.Decisions = decisions()[:1]
+	return p
+}
+
+func fullVerify() core.Packet {
+	p := base(core.StepVerify, 2, core.Candidate{Commit: commitFixed, Digest: digestFixed})
+	p.Base = &core.Candidate{Commit: commitRound2, Digest: digestRound2}
+	rootCause := "The handler treated the return of append as durability. Acknowledgement now waits for the sync, and the earlier fixes, which added retries around the write, are removed."
+	p.Subjects = []string{"F-0004", "F-0005"}
+	p.Findings = []core.Finding{
+		f4(core.StatusClaimed, &core.Fix{Finding: "F-0004", Commits: []string{commitFixed}, Summary: "Acknowledge only after the append is synced.",
+			Components: []string{"internal/delivery/accept.go", "internal/store/append.go"}, RootCause: rootCause,
+			Tests: "TestCrashRecovery now kills the process at every write boundary; 100 runs pass."}),
+		f5(core.StatusClaimed, &core.Fix{Finding: "F-0005", Commits: []string{commitFixed}, Summary: "Moved Event to internal/event.",
+			Components: []string{"internal/event", "internal/store", "internal/delivery"}}),
+	}
+	p.History = history(2)
+	p.Decisions = decisions()[:1]
+	return p
+}
+
+func fullAudit() core.Packet {
+	p := base(core.StepAudit, 5, core.Candidate{Commit: commitRound5, Digest: digestRound5})
+	p.Evidence = []core.Evidence{
+		passed("REQ-1", "go test ./internal/delivery -run TestAtLeastOnce", digestRound5),
+		passed("REQ-4", "go test ./internal/store -run TestCrashRecovery -count 1", digestRound5),
+		passed("REQ-9", "go test ./internal/delivery -run TestLatencyBudget", digestRound5),
+	}
+	contradicting := core.Finding{
+		ID: "F-0009", Status: core.StatusOpen, Tier: core.TierMaterial, Round: 5, Source: core.RoleReviewer,
+		Input: core.FindingInput{
+			Key: "retry-unbounded", Tier: core.TierMaterial, Domain: core.DomainStability,
+			Title:       "Retry state for a dead subscriber grows for an hour",
+			Components:  []string{"internal/delivery/retry.go"},
+			Description: "Retrying for one hour keeps every pending event of a dead subscriber in memory for that hour.",
+			Evidence:    "At 50 events per second for one subscriber that never recovers, resident memory grows by 600 MB in an hour.",
+			Impact:      "Memory is not bounded under sustained load with one dead subscriber, which is inside the envelope.",
+			Requirement: "REQ-7", BlockingRationale: "A dead subscriber during the pilot would exhaust the instance's memory.",
+			Verification: "The REQ-7 soak test passes with one subscriber that never recovers.",
+			Contradicts:  "F-0001",
+		},
+	}
+	disputed := f2Reclassified()
+	disputed.Tier = core.TierMaterial
+	p.Escalations = []core.Escalation{
+		{ID: "E-0006", Kind: core.EscalationDispute, Owner: core.RoleAuditor, Round: 5, Open: true,
+			Reason:   "the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk.",
+			Findings: []string{"F-0002"}},
+		{ID: "E-0007", Kind: core.EscalationContradiction, Owner: core.RoleAuditor, Round: 5, Open: true,
+			Reason:   "F-0009 declares that it reverses the resolution of F-0001",
+			Findings: []string{"F-0009"}},
+		{ID: "E-0008", Kind: core.EscalationComponentChurn, Owner: core.RoleAuditor, Round: 5, Open: true,
+			Reason:     "internal/delivery/retry.go was fixed in rounds 1, 3 and 4.",
+			Components: []string{"internal/delivery/retry.go"}},
+		{ID: "E-0009", Kind: core.EscalationRegressionSpiral, Owner: core.RoleAuditor, Round: 4, Open: true,
+			Reason: "The verification of round 4 confirmed one fix and found two blocking regressions."},
+		{ID: "E-0010", Kind: core.EscalationProcessAudit, Owner: core.RoleAuditor, Round: 5, Open: true,
+			Reason:       "Five consecutive rounds have ended without GREEN.",
+			Requirements: []string{"REQ-7", "REQ-8"}},
+	}
+	p.Adjudicable = []string{"F-0002", "F-0009"}
+	p.Findings = []core.Finding{f1Resolved(), disputed, f3Calibration(), contradicting}
+	p.History = history(5)
+	p.Decisions = decisions()
+	return p
+}
+
+// Minimal packets: the least each action can carry.
+
+func minimalContract() core.Contract {
+	return core.Contract{
+		Schema:       core.SchemaContract,
+		Project:      core.Project{Name: "Minimal", Objectives: []string{"Exist."}},
+		Stage:        core.StagePrototype,
+		Authorizes:   "Internal demonstration.",
+		Scope:        []string{"."},
+		Envelope:     []string{"One user."},
+		Requirements: []core.Requirement{{ID: "REQ-1", Domain: core.DomainFunctionalCorrectness, Statement: "It runs.", Criterion: "It exits 0."}},
+		Risks:        core.Risks{Unacceptable: []core.Risk{{ID: "RISK-1", Statement: "Data loss."}}},
+	}
+}
+
+func minimal(action core.Step) core.Packet {
+	role, _ := action.PacketRole()
+	p := core.Packet{
+		Schema: core.SchemaPacket, ID: "P-0001", Protocol: core.ProtocolVersion,
+		Role: role, Action: action, Round: 1, IssuedAt: "2026-11-20T09:00:00Z",
+		Candidate: core.Candidate{Commit: commitRound1, Digest: digestRound1}, ReadOnly: role.ReadOnly(),
+		ContractDigest: contractDigest, Contract: minimalContract(), ApplicableRequirements: []string{"REQ-1"},
+		ReportSchema: core.SchemaReport,
+	}
+	finding := core.Finding{ID: "F-0001", Status: core.StatusOpen, Tier: core.TierCritical, Round: 1, Source: core.RoleReviewer,
+		Input: core.FindingInput{Key: "k", Tier: core.TierCritical, Domain: core.DomainFunctionalCorrectness, Title: "Crashes on start",
+			Components: []string{"main.go"}, Description: "d", Evidence: "e", Impact: "i"}}
+	switch action {
+	case core.StepFix:
+		p.Base = &p.Candidate
+		p.Subjects = []string{"F-0001"}
+		p.Findings = []core.Finding{finding}
+	case core.StepVerify:
+		p.Base = &core.Candidate{Commit: commitRound2, Digest: digestRound2}
+		finding.Status = core.StatusClaimed
+		finding.Fix = &core.Fix{Finding: "F-0001", Commits: []string{commitRound1}, Summary: "s", Components: []string{"main.go"}}
+		p.Subjects = []string{"F-0001"}
+		p.Findings = []core.Finding{finding}
+	case core.StepAudit:
+		p.Escalations = []core.Escalation{{ID: "E-0001", Kind: core.EscalationNonConvergence, Owner: core.RoleAuditor,
+			Round: 3, Reason: "Three consecutive rounds have ended without GREEN.", Open: true}}
+	}
+	return p
+}
+
+var actions = []core.Step{core.StepReview, core.StepFix, core.StepVerify, core.StepAudit}
+
+func full(action core.Step) core.Packet {
+	switch action {
+	case core.StepReview:
+		return fullReview()
+	case core.StepFix:
+		return fullFix()
+	case core.StepVerify:
+		return fullVerify()
+	}
+	return fullAudit()
+}
