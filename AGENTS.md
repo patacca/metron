@@ -10,8 +10,8 @@ and may not claim about security.
 - **Layering.** `internal/core` and `internal/canon` import only the standard
   library and perform no I/O: no files, no clock, no environment, no git, no
   randomness. Everything observed from outside enters the core as an argument.
-  `store`, `schema`, `vcs` and `protocol` may import `core` and `canon`, never
-  each other's internals and never `cli`.
+  `store`, `schema`, `vcs` and `brief` may import `core` and `canon`, never
+  each other and never `cli`.
 - **Determinism.** The same inputs give the same bytes. Never let map
   iteration order reach an output, an event list or an error message.
 - **Fail closed.** An error, a missing file, an unknown value or an

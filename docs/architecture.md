@@ -260,6 +260,16 @@ Reclassification changes the tier and nothing else.
 Reopening requires one of five reasons: `new-evidence`, `regression`,
 `invalid-verification`, `requirement-changed`, `contract-conflict`.
 
+**Identifiers.** Findings are `F-0001`, packets `P-0001`, escalations
+`E-0001`: a prefix and a sequence number zero-padded to at least four digits,
+assigned in order of creation and never reused.
+
+**Event order.** Accepting a report yields, in this order: `report.accepted`;
+the finding events in the order the report lists them, reopenings before new
+findings; `verdict.recorded`; `directive.issued` in report order;
+`escalation.resolved` in identifier order; `escalation.raised`, ordered by
+kind as listed in section 10 and then by subject.
+
 ## 8. The review loop
 
 `metron next` returns exactly one action. It is the first row of this table
@@ -271,23 +281,34 @@ whose condition holds.
 | 2 | The contract is invalid, or its digest differs from the pinned one | `pin-contract` | governance |
 | 3 | A packet is open and still valid | `submit-report` | the packet's role |
 | 4 | A governance-owned escalation is open | `adjudicate` | governance |
-| 5 | An auditor-owned escalation is open | `audit` | auditor |
-| 6 | A finding is `claimed` | `verify` | verifier |
-| 7 | A blocking finding is `open` | `fix` | implementer |
-| 8 | The working tree is not clean | `commit-changes` | implementer |
+| 5 | The working tree is not clean | `commit-changes` | implementer |
+| 6 | An auditor-owned escalation is open | `audit` | auditor |
+| 7 | A finding is `claimed` | `verify` | verifier |
+| 8 | A blocking finding is `open` | `fix` | implementer |
 | 9 | A mandatory check has no passing result on the candidate | `run-checks` | implementer |
 | 10 | The candidate has no GREEN verdict under the pinned contract | `review` | reviewer |
 | 11 | Otherwise | `none` (the gate is open) | |
 
-Row 9 means a review round never starts on a candidate whose own mandatory
-checks fail. Row 10 is refused when the same candidate already received a
-non-GREEN verdict under the same contract digest and no evidence, escalation
-resolution or contract pin has been recorded since: an unchanged candidate
-cannot be resubmitted in the hope of a different verdict.
+An open packet is **valid** while the pinned contract digest is the one it was
+issued under and, for a read-only role, the candidate digest is unchanged and
+the tree is clean. An open packet that is no longer valid is ignored by
+`metron next` and voided by the next `metron packet`.
+
+Row 5 precedes every packet-issuing row because a packet is bound to a
+candidate, and a candidate is a commit. Row 9 means a review round never starts
+on a candidate whose own mandatory checks fail; the latest result per
+requirement, candidate and command text is the one that counts.
+
+Row 10 is refused when the same candidate already received a non-GREEN verdict
+under the same contract digest and no evidence, escalation resolution or
+contract pin has been recorded since: an unchanged candidate cannot be
+resubmitted in the hope of a different verdict. The action is then
+`commit-changes`, with that reason.
 
 A **round** is one independent, read-only, full-scope review of one candidate.
-Rounds are numbered from 1 per pinned stage. Fixing and verifying happen
-between rounds:
+Issuing a review packet opens a new round. Rounds are numbered from 1 per
+pinned stage. A round whose packet was voided has no verdict and is skipped
+when counting consecutive failures. Fixing and verifying happen between rounds:
 
 ```
 review ──RED──▶ fix ──▶ verify ──all confirmed──▶ review (new candidate)
@@ -310,6 +331,19 @@ candidate, the relevant findings and evidence, binding directives, the
 rendered instructions, and the schema its report must satisfy. A **report** is
 the role's structured answer. Both are versioned JSON documents whose JSON
 Schemas, published under `schemas/`, are the canonical public protocol.
+
+What a packet carries depends on the action:
+
+| Action | Role | Bound to | Subjects | Findings included |
+| --- | --- | --- | --- | --- |
+| `review` | reviewer | The candidate, read-only | none | Every finding in the ledger |
+| `fix` | implementer | The candidate at issue, with the round's candidate as base | Every open blocking finding; open non-blocking findings as optional backlog | Subjects and backlog |
+| `verify` | verifier | The candidate, read-only, with the round's candidate as base | Every claimed finding | Subjects |
+| `audit` | auditor | The candidate, read-only | Every open auditor-owned escalation; the findings of `dispute` and `contradiction` escalations are adjudicable | Every finding in the ledger |
+
+Every packet also carries the contract, the latest check result per applicable
+requirement for its candidate, the earlier rounds of the stage, and every
+directive and governance resolution recorded so far.
 
 A report is a versioned envelope around a role-specific body:
 
@@ -370,7 +404,9 @@ the digest of its canonical JSON form.
 - Addresses every blocking finding in the packet with either a fix or a
   dispute. It may also fix non-blocking findings from the backlog.
 - Each fix lists full commit hashes that lie between the round's candidate and
-  the current one. The tree is clean.
+  the current one, and names at least one component. The tree is clean.
+- A report with at least one fix changes the candidate digest. Commits that
+  touch nothing outside `.metron/` fix nothing.
 - A finding flagged root-cause-required carries a root-cause analysis.
 - A finding can be disputed once. After an auditor upholds it, it must be fixed.
 
@@ -471,7 +507,7 @@ internal/core/      domain: vocabulary, contract rules, events, state, decide,
                     convergence, next action, gate. No I/O, no clock, no git.
 internal/canon/     canonical JSON and digests
 internal/schema/    structural validation against the embedded JSON Schemas
-internal/protocol/  rendering of role instructions from embedded templates
+internal/brief/     rendering of role briefs from the embedded protocol templates
 internal/store/     state directory: ledger, lock, packets, reports;
                     strict contract loading
 internal/vcs/       git plumbing through the git executable
@@ -481,7 +517,7 @@ protocol/           canonical protocol text and role instructions, embedded
 ```
 
 Dependencies point inward: `cli` depends on everything; `store`, `schema`,
-`vcs` and `protocol` depend on `core` and `canon`; `core` and `canon` depend
+`vcs` and `brief` depend on `core` and `canon`; `core` and `canon` depend
 only on the standard library. Anything nondeterministic (time, the file
 system, git) is observed outside the core and passed in as facts.
 
