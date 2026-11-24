@@ -1,7 +1,10 @@
-# Metron
+<h1 align="center">
+  M E T R O N
+  <br>
+  <sub>Convergent Engineering Review Framework</sub>
+</h1>
 
-**Convergent Engineering Review Framework.**
-Quality without excess. Progress without compromise.
+<p align="center"><em>Quality without excess. Progress without compromise.</em></p>
 
 Metron decides whether a specific commit of your repository is approved for a
 specific lifecycle stage, and it keeps the review process that gets you there
