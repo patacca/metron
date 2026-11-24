@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.png binary
+
+# Fixtures whose exact bytes are part of a test must never be normalized.
+**/testdata/** -text

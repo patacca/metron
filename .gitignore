@@ -1,0 +1,18 @@
+# Build output
+/bin/
+/dist/
+/metron
+/metron.exe
+*.test
+*.out
+coverage.*
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Agent harness state
+.omc/
+.claude/settings.local.json
