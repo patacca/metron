@@ -41,6 +41,7 @@ var invalidFixtures = map[string][]string{
 	"report/empty-commits":                            {"/body/fixes/0/commits"},
 	"report/empty-fix-components":                     {"/body/fixes/0/components"},
 	"report/findings-not-an-array":                    {"/body/findings"},
+	"report/finding-cites-accepted-risk":              {"/body/findings/0/risk"},
 	"report/governance-role":                          {"/role"},
 	"report/missing-author-id":                        {"/author"},
 	"report/missing-body-verdict":                     {"/body"},

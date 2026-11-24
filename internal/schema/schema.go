@@ -252,7 +252,6 @@ var patternHints = map[string]string{
 	`^REQ-[0-9]+$`:                  `must be a requirement identifier such as "REQ-1"`,
 	`^RISK-[0-9]+$`:                 `must be an unacceptable-risk identifier such as "RISK-1"`,
 	`^ACC-[0-9]+$`:                  `must be an accepted-risk identifier such as "ACC-1"`,
-	`^(RISK|ACC)-[0-9]+$`:           `must be a risk identifier such as "RISK-1" or "ACC-1"`,
 	`^CAL-[0-9]+$`:                  `must be a calibration identifier such as "CAL-1"`,
 	timePattern:                     `must be an RFC 3339 UTC time with second precision, such as "2026-01-31T09:30:00Z"`,
 }

@@ -56,10 +56,6 @@
       "type": "string",
       "pattern": "^ACC-[0-9]+$"
     },
-    "findingRiskId": {
-      "type": "string",
-      "pattern": "^(RISK|ACC)-[0-9]+$"
-    },
     "calibrationId": {
       "type": "string",
       "pattern": "^CAL-[0-9]+$"
@@ -327,7 +323,7 @@
           "$ref": "#/$defs/requirementId"
         },
         "risk": {
-          "$ref": "#/$defs/findingRiskId"
+          "$ref": "#/$defs/unacceptableRiskId"
         },
         "blocking_rationale": {
           "$ref": "#/$defs/text"
