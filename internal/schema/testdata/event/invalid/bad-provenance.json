@@ -1,0 +1,23 @@
+{
+  "seq": 7,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "6b737fa349652ca7b4a531428c3ae62f37f0c4627bc4276fe553273b87818949",
+  "type": "report.accepted",
+  "data": {
+    "packet": "P-0001",
+    "role": "reviewer",
+    "author": {
+      "id": "claude-reviewer-1",
+      "kind": "agent",
+      "model": "claude-opus-5-5",
+      "harness": "claude-code",
+      "session": "7d1c9a52"
+    },
+    "digest": "sha256:8f6decfb25303bbe670581f55c846b5a24109568fa487e446bca3144b0bffc6a",
+    "raw_digest": "sha256:ee04a76e06b9af33d2d5d18bd6c2c537b32dfdbead46830081878e7218dc5e4b",
+    "provenance": {
+      "mode": "attested"
+    }
+  },
+  "hash": "50a91b2214c584fb911b65961766467c36f0114ae168fdca5f8e6a362f9ec59d"
+}

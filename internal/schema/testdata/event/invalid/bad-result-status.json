@@ -1,0 +1,24 @@
+{
+  "seq": 8,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "50a91b2214c584fb911b65961766467c36f0114ae168fdca5f8e6a362f9ec59d",
+  "type": "verdict.recorded",
+  "data": {
+    "round": 1,
+    "verdict": "RED",
+    "candidate": "sha256:c4c1d611edf69a251edbb091082bdc3004b8386975599ca840e5b72e86476556",
+    "contract": "sha256:2b774ade959f0c8c4463752c219f43b13352eeebdf3fd4f4031e74e0d961256f",
+    "reviewer": "claude-reviewer-1",
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "fine"
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated"
+      }
+    ]
+  },
+  "hash": "969d557c3beb108543f5418aeb2ff91992d7d5f82429d35a5f2e95327c6695fd"
+}

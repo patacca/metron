@@ -1,0 +1,194 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0007",
+  "role": "reviewer",
+  "author": {
+    "id": "claude-reviewer-1",
+    "kind": "robot",
+    "model": "claude-opus-5-5",
+    "harness": "claude-code",
+    "session": "7d1c9a52"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "Check command passed against this candidate."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "Fault injection loses a write at the journal boundary."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "unverified",
+        "evidence": "No access matrix test exists yet."
+      }
+    ],
+    "findings": [
+      {
+        "key": "lost-update",
+        "tier": "T1",
+        "domain": "data-integrity",
+        "title": "Concurrent posts can overwrite each other",
+        "components": [
+          "internal/ledger/post.go"
+        ],
+        "description": "Post reads the balance, then writes it back without a lock, so two concurrent posts lose one update.",
+        "evidence": "go test -race ./internal/ledger -run TestConcurrentPost fails 7 of 10 runs.",
+        "impact": "A posted transaction is silently lost with 50 concurrent users.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "A pilot with partner books must not lose transactions.",
+        "verification": "TestConcurrentPost passes 100 consecutive runs under -race."
+      },
+      {
+        "key": "p99-latency",
+        "tier": "T3",
+        "domain": "performance",
+        "title": "Posting latency budget cannot be set",
+        "components": [
+          "internal/ledger"
+        ],
+        "description": "No measurement of posting latency exists.",
+        "evidence": "No benchmark in the repository.",
+        "impact": "The CAL-1 budget cannot be confirmed.",
+        "evidence_needed": "Latency measurements from the pilot workload.",
+        "reassess_when": "Two weeks of pilot traffic exist."
+      },
+      {
+        "key": "report-cache",
+        "tier": "T2",
+        "domain": "optimization",
+        "title": "Trial balance recomputed on every request",
+        "components": [
+          "internal/report"
+        ],
+        "description": "The report walks every posting.",
+        "evidence": "Profile shows 80% of time in Walk.",
+        "impact": "Slow reports above 100000 postings.",
+        "expected_benefit": "Reports in constant time for unchanged books.",
+        "deferral_rationale": "Within the envelope for the pilot.",
+        "related": [
+          "lost-update"
+        ]
+      }
+    ],
+    "reopen": [
+      {
+        "finding": "F-0002",
+        "reason": "regression",
+        "justification": "The fix reintroduced the empty-account panic."
+      }
+    ],
+    "contract_gaps": [
+      {
+        "title": "Backup restore is not covered",
+        "description": "No requirement says a restored book equals the original.",
+        "suggested_requirement": "A restored backup yields a book with an identical trial balance."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "REQ-2 is violated and F-0001 blocks the gate.",
+    "residual_risks": [
+      "Report lag is accepted under ACC-1."
+    ],
+    "limitations": [
+      "The access matrix could not be run: no test accounts exist."
+    ]
+  }
+}

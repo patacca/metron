@@ -1,0 +1,146 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0007",
+  "role": "reviewer",
+  "author": {
+    "id": "claude-reviewer-1",
+    "kind": "agent",
+    "model": "claude-opus-5-5",
+    "harness": "claude-code",
+    "session": "7d1c9a52"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "Inspected; see findings."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "Check command passed against this candidate."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "Fault injection loses a write at the journal boundary."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "unverified",
+        "evidence": "No access matrix test exists yet."
+      }
+    ],
+    "findings": {},
+    "reopen": [
+      {
+        "finding": "F-0002",
+        "reason": "regression",
+        "justification": "The fix reintroduced the empty-account panic."
+      }
+    ],
+    "contract_gaps": [
+      {
+        "title": "Backup restore is not covered",
+        "description": "No requirement says a restored book equals the original.",
+        "suggested_requirement": "A restored backup yields a book with an identical trial balance."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "REQ-2 is violated and F-0001 blocks the gate.",
+    "residual_risks": [
+      "Report lag is accepted under ACC-1."
+    ],
+    "limitations": [
+      "The access matrix could not be run: no test accounts exist."
+    ]
+  }
+}

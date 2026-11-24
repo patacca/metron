@@ -1,0 +1,13 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-12345",
+  "role": "auditor",
+  "author": {
+    "id": "carol",
+    "kind": "human"
+  },
+  "body": {
+    "analysis": "Churn in internal/ledger is real.",
+    "conclusion": "Redesign the locking."
+  }
+}

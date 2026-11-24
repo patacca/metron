@@ -1,0 +1,38 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0007",
+  "role": "reviewer",
+  "author": {
+    "id": "alice",
+    "kind": "human"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "No defects found."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "No defects found."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "No defects found."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "Check passed."
+      }
+    ],
+    "findings": [],
+    "verdict": "GREEN",
+    "justification": "Every applicable requirement is satisfied."
+  }
+}

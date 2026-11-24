@@ -1,0 +1,14 @@
+{
+  "seq": 3,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "1248b7c394ca668965c78ca5d6f28406098181e5d99ea9424f39c4d7cbacf376",
+  "type": "evidence.recorded",
+  "data": {
+    "requirement": "REQ-1",
+    "command": "go test ./internal/ledger -run TestBalanced",
+    "candidate": "sha256:c4c1d611edf69a251edbb091082bdc3004b8386975599ca840e5b72e86476556",
+    "exit_code": 0,
+    "output_digest": "sha256:6776128287ef2cb8ead79828e5b76f6eefbd55378c32a6f8a594785c5e0e5997"
+  },
+  "hash": "fdf5ccb269a3aa419efdca65c4fac01a6cfe85d897de938d27e673762f497f1c"
+}

@@ -1,0 +1,28 @@
+{
+  "seq": 9,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "969d557c3beb108543f5418aeb2ff91992d7d5f82429d35a5f2e95327c6695fd",
+  "type": "finding.opened",
+  "data": {
+    "id": "F-0001",
+    "round": 1,
+    "source": "reviewer",
+    "packet": "P-0001",
+    "finding": {
+      "tier": "T1",
+      "domain": "data-integrity",
+      "title": "Concurrent posts can overwrite each other",
+      "components": [
+        "internal/ledger/post.go"
+      ],
+      "description": "Post reads the balance, then writes it back without a lock, so two concurrent posts lose one update.",
+      "evidence": "go test -race ./internal/ledger -run TestConcurrentPost fails 7 of 10 runs.",
+      "impact": "A posted transaction is silently lost with 50 concurrent users.",
+      "requirement": "REQ-2",
+      "risk": "RISK-1",
+      "blocking_rationale": "A pilot with partner books must not lose transactions.",
+      "verification": "TestConcurrentPost passes 100 consecutive runs under -race."
+    }
+  },
+  "hash": "c8e7cdedb75f9d842413e4bcee78c05b5859eecd711692f24580b6f274812560"
+}

@@ -1,0 +1,410 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/patacca/metron/schemas/v1/report.schema.json",
+  "title": "Metron report",
+  "description": "The envelope in which every role submits its work (metron.report/v1). The body is validated according to role. Structural rules only.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "metron.report/v1"
+    },
+    "packet": {
+      "$ref": "defs.schema.json#/$defs/packetId"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "reviewer",
+        "implementer",
+        "verifier",
+        "auditor"
+      ]
+    },
+    "author": {
+      "$ref": "defs.schema.json#/$defs/author"
+    },
+    "body": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "packet",
+    "role",
+    "author",
+    "body"
+  ],
+  "additionalProperties": false,
+  "role": {
+    "type": "string",
+    "enum": [
+      "reviewer",
+      "implementer",
+      "verifier",
+      "auditor"
+    ]
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "reviewer"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/reviewerBody"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "implementer"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/implementerBody"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "verifier"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/verifierBody"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "auditor"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/auditorBody"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "domainAssessment": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "$ref": "defs.schema.json#/$defs/domain"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "assessed",
+            "not-applicable"
+          ]
+        },
+        "summary": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "domain",
+        "status",
+        "summary"
+      ],
+      "additionalProperties": false
+    },
+    "requirementAssessment": {
+      "type": "object",
+      "properties": {
+        "requirement": {
+          "$ref": "defs.schema.json#/$defs/requirementId"
+        },
+        "status": {
+          "$ref": "defs.schema.json#/$defs/requirementStatus"
+        },
+        "evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "requirement",
+        "status",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "reopen": {
+      "type": "object",
+      "properties": {
+        "finding": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "reason": {
+          "$ref": "defs.schema.json#/$defs/reopenReason"
+        },
+        "justification": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "finding",
+        "reason",
+        "justification"
+      ],
+      "additionalProperties": false
+    },
+    "contractGap": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "description": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "suggested_requirement": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "title",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "dispute": {
+      "type": "object",
+      "properties": {
+        "finding": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "rationale": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "finding",
+        "rationale"
+      ],
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "finding": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "confirmed",
+            "rejected"
+          ]
+        },
+        "evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "finding",
+        "result",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "adjudication": {
+      "type": "object",
+      "properties": {
+        "finding": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "uphold",
+            "withdraw",
+            "reclassify"
+          ]
+        },
+        "tier": {
+          "$ref": "defs.schema.json#/$defs/tier"
+        },
+        "rationale": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "finding",
+        "decision",
+        "rationale"
+      ],
+      "additionalProperties": false
+    },
+    "reviewerBody": {
+      "type": "object",
+      "properties": {
+        "coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/domainAssessment"
+          }
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requirementAssessment"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.schema.json#/$defs/findingInput"
+          }
+        },
+        "reopen": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reopen"
+          }
+        },
+        "contract_gaps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/contractGap"
+          }
+        },
+        "verdict": {
+          "$ref": "defs.schema.json#/$defs/verdict"
+        },
+        "justification": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "residual_risks": {
+          "$ref": "defs.schema.json#/$defs/textList"
+        },
+        "limitations": {
+          "$ref": "defs.schema.json#/$defs/textList"
+        }
+      },
+      "required": [
+        "coverage",
+        "requirements",
+        "findings",
+        "verdict",
+        "justification"
+      ],
+      "additionalProperties": false
+    },
+    "implementerBody": {
+      "type": "object",
+      "properties": {
+        "fixes": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.schema.json#/$defs/fix"
+          }
+        },
+        "disputes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dispute"
+          }
+        },
+        "notes": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "fixes"
+      ],
+      "additionalProperties": false
+    },
+    "verifierBody": {
+      "type": "object",
+      "properties": {
+        "verifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/verification"
+          }
+        },
+        "regressions": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.schema.json#/$defs/findingInput"
+          }
+        },
+        "notes": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "verifications"
+      ],
+      "additionalProperties": false
+    },
+    "auditorBody": {
+      "type": "object",
+      "properties": {
+        "analysis": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "conclusion": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "adjudications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/adjudication"
+          }
+        },
+        "directives": {
+          "$ref": "defs.schema.json#/$defs/textList"
+        },
+        "contract_recommendations": {
+          "$ref": "defs.schema.json#/$defs/textList"
+        }
+      },
+      "required": [
+        "analysis",
+        "conclusion"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

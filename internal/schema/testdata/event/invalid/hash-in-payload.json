@@ -1,0 +1,18 @@
+{
+  "seq": 4,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "fdf5ccb269a3aa419efdca65c4fac01a6cfe85d897de938d27e673762f497f1c",
+  "type": "round.opened",
+  "data": {
+    "round": 1,
+    "stage": "pilot",
+    "candidate": {
+      "commit": "c4c1d611edf69a251edbb091082bdc3004b83869",
+      "digest": "sha256:c4c1d611edf69a251edbb091082bdc3004b8386975599ca840e5b72e86476556"
+    },
+    "contract": "sha256:2b774ade959f0c8c4463752c219f43b13352eeebdf3fd4f4031e74e0d961256f",
+    "protocol": "metron.protocol/v1",
+    "hash": "a1fce4363854ff888cff4b8e7875d600c2682390412a8cf79b37d0b11148b0fa"
+  },
+  "hash": "ed8c033fe2b4cf0aaa5c47f03c927cf8d6329a5536834c9a83ab7caafe959c11"
+}

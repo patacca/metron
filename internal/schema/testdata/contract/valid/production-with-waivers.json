@@ -1,0 +1,50 @@
+{
+  "schema": "metron.contract/v1",
+  "project": {
+    "name": "tally",
+    "objectives": [
+      "Count words in text files."
+    ]
+  },
+  "stage": "production",
+  "authorizes": "General availability.",
+  "scope": [
+    "cmd/tally"
+  ],
+  "operating_envelope": [
+    "Files under 10 MB."
+  ],
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "domain": "functional-correctness",
+      "statement": "Counts are correct.",
+      "criterion": "Counts match wc -w.",
+      "from": "production"
+    },
+    {
+      "id": "REQ-2",
+      "domain": "operational-readiness",
+      "statement": "A runbook exists.",
+      "criterion": "docs/runbook.md covers start, stop and recovery."
+    }
+  ],
+  "risks": {
+    "unacceptable": [
+      {
+        "id": "RISK-1",
+        "statement": "Wrong counts reach a customer."
+      }
+    ]
+  },
+  "not_applicable": [
+    {
+      "domain": "scalability",
+      "rationale": "Not relevant to a command line tool."
+    },
+    {
+      "domain": "cost-efficiency",
+      "rationale": "Not relevant to a command line tool."
+    }
+  ]
+}

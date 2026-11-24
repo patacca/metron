@@ -1,0 +1,12 @@
+{
+  "seq": 6,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "b82e000cbef9d5a19b63c28407727eddf49fcd1dd9682568423c2ad3cbb477a6",
+  "type": "packet.voided",
+  "data": {
+    "packet": "P-0001",
+    "reason": "x",
+    "stage": "pilot"
+  },
+  "hash": "6b737fa349652ca7b4a531428c3ae62f37f0c4627bc4276fe553273b87818949"
+}

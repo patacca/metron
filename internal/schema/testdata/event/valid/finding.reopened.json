@@ -1,0 +1,14 @@
+{
+  "seq": 13,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "5cccdc8e8790b6f0bcaba76075878c70f54a65919f2950337b9bce100d38876c",
+  "type": "finding.reopened",
+  "data": {
+    "id": "F-0001",
+    "packet": "P-0005",
+    "reason": "regression",
+    "justification": "The panic is back.",
+    "root_cause_required": false
+  },
+  "hash": "2b6172fff41798c8c02723c4f2fd114b91f06b9cd74c34bd31fb71a60e33e9c9"
+}

@@ -128,10 +128,10 @@ nothing can be reviewed against an unpinned contract.
 | `project.non_objectives` | no | What it deliberately does not do |
 | `stage` | yes | The lifecycle stage a GREEN gate authorizes entry to |
 | `authorizes` | yes | The concrete activity a GREEN gate permits |
-| `scope` | yes | Statements describing what is under review |
-| `operating_envelope` | yes | Statements of expected conditions and load; findings outside it cannot block |
+| `scope` | yes | Statements describing what is under review; at least one |
+| `operating_envelope` | yes | Statements of expected conditions and load; at least one. Findings outside it cannot block |
 | `requirements` | yes | See below; at least one |
-| `risks.unacceptable` | yes | `RISK-n` statements a blocking finding may cite |
+| `risks.unacceptable` | yes | `RISK-n` statements a blocking finding may cite; at least one |
 | `risks.accepted` | no | Residual risks governance has accepted; never blocking |
 | `not_applicable` | no | Domains waived for this stage, each with a rationale |
 | `calibrations` | no | Provisional parameters, the evidence needed, and when to reassess |

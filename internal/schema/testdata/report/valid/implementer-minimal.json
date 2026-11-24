@@ -1,0 +1,12 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0008",
+  "role": "implementer",
+  "author": {
+    "id": "bob",
+    "kind": "human"
+  },
+  "body": {
+    "fixes": []
+  }
+}

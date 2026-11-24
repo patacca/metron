@@ -1,0 +1,508 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/patacca/metron/schemas/v1/defs.schema.json",
+  "title": "Metron shared definitions",
+  "description": "Definitions shared by the Metron v1 contract, report, packet and event schemas.",
+  "$defs": {
+    "text": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hex64": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "findingId": {
+      "type": "string",
+      "pattern": "^F-[0-9]{4,}$"
+    },
+    "packetId": {
+      "type": "string",
+      "pattern": "^P-[0-9]{4,}$"
+    },
+    "escalationId": {
+      "type": "string",
+      "pattern": "^E-[0-9]{4,}$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^REQ-[0-9]+$"
+    },
+    "unacceptableRiskId": {
+      "type": "string",
+      "pattern": "^RISK-[0-9]+$"
+    },
+    "acceptedRiskId": {
+      "type": "string",
+      "pattern": "^ACC-[0-9]+$"
+    },
+    "findingRiskId": {
+      "type": "string",
+      "pattern": "^(RISK|ACC)-[0-9]+$"
+    },
+    "calibrationId": {
+      "type": "string",
+      "pattern": "^CAL-[0-9]+$"
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "prototype",
+        "controlled-validation",
+        "pilot",
+        "production",
+        "continuous-improvement"
+      ]
+    },
+    "tier": {
+      "type": "string",
+      "enum": [
+        "T0",
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ]
+    },
+    "domain": {
+      "type": "string",
+      "enum": [
+        "functional-correctness",
+        "objective-alignment",
+        "security-privacy",
+        "data-integrity",
+        "stability",
+        "reliability",
+        "performance",
+        "optimization",
+        "scalability",
+        "architecture",
+        "maintainability",
+        "technical-debt",
+        "simplicity",
+        "testability",
+        "observability",
+        "compatibility",
+        "operational-readiness",
+        "cost-efficiency"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "GREEN",
+        "RED",
+        "INDETERMINATE"
+      ]
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "governance",
+        "implementer",
+        "reviewer",
+        "verifier",
+        "auditor"
+      ]
+    },
+    "packetRole": {
+      "type": "string",
+      "enum": [
+        "implementer",
+        "reviewer",
+        "verifier",
+        "auditor"
+      ]
+    },
+    "packetAction": {
+      "type": "string",
+      "enum": [
+        "review",
+        "fix",
+        "verify",
+        "audit"
+      ]
+    },
+    "findingStatus": {
+      "type": "string",
+      "enum": [
+        "open",
+        "claimed",
+        "resolved",
+        "withdrawn"
+      ]
+    },
+    "reopenReason": {
+      "type": "string",
+      "enum": [
+        "new-evidence",
+        "regression",
+        "invalid-verification",
+        "requirement-changed",
+        "contract-conflict"
+      ]
+    },
+    "escalationKind": {
+      "type": "string",
+      "enum": [
+        "dispute",
+        "contradiction",
+        "component-churn",
+        "regression-spiral",
+        "non-convergence",
+        "process-audit",
+        "contract-gap",
+        "evidence-gap"
+      ]
+    },
+    "requirementStatus": {
+      "type": "string",
+      "enum": [
+        "satisfied",
+        "violated",
+        "unverified"
+      ]
+    },
+    "protocol": {
+      "type": "string",
+      "const": "metron.protocol/v1"
+    },
+    "textList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/text"
+      }
+    },
+    "findingIdList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/findingId"
+      }
+    },
+    "author": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/text"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "agent",
+            "human"
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/text"
+        },
+        "harness": {
+          "$ref": "#/$defs/text"
+        },
+        "session": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "candidate": {
+      "type": "object",
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/commit"
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "commit",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "requirement": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "command": {
+          "$ref": "#/$defs/text"
+        },
+        "candidate": {
+          "$ref": "#/$defs/sha256"
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "output_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "requirement",
+        "command",
+        "candidate",
+        "exit_code",
+        "passed",
+        "output_digest"
+      ],
+      "additionalProperties": false
+    },
+    "proportionality": {
+      "type": "object",
+      "properties": {
+        "proposed_change": {
+          "$ref": "#/$defs/text"
+        },
+        "regression_risk": {
+          "$ref": "#/$defs/text"
+        },
+        "deferral_cost": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "proposed_change",
+        "regression_risk",
+        "deferral_cost"
+      ],
+      "additionalProperties": false
+    },
+    "findingInput": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/text"
+        },
+        "tier": {
+          "$ref": "#/$defs/tier"
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "title": {
+          "$ref": "#/$defs/text"
+        },
+        "components": {
+          "$ref": "#/$defs/textList"
+        },
+        "description": {
+          "$ref": "#/$defs/text"
+        },
+        "evidence": {
+          "$ref": "#/$defs/text"
+        },
+        "impact": {
+          "$ref": "#/$defs/text"
+        },
+        "requirement": {
+          "$ref": "#/$defs/requirementId"
+        },
+        "risk": {
+          "$ref": "#/$defs/findingRiskId"
+        },
+        "blocking_rationale": {
+          "$ref": "#/$defs/text"
+        },
+        "verification": {
+          "$ref": "#/$defs/text"
+        },
+        "proportionality": {
+          "$ref": "#/$defs/proportionality"
+        },
+        "expected_benefit": {
+          "$ref": "#/$defs/text"
+        },
+        "deferral_rationale": {
+          "$ref": "#/$defs/text"
+        },
+        "evidence_needed": {
+          "$ref": "#/$defs/text"
+        },
+        "reassess_when": {
+          "$ref": "#/$defs/text"
+        },
+        "introduced_by": {
+          "$ref": "#/$defs/text"
+        },
+        "contradicts": {
+          "$ref": "#/$defs/text"
+        },
+        "related": {
+          "$ref": "#/$defs/textList"
+        }
+      },
+      "required": [
+        "key",
+        "tier",
+        "domain",
+        "title",
+        "components",
+        "description",
+        "evidence",
+        "impact"
+      ],
+      "additionalProperties": false
+    },
+    "fix": {
+      "type": "object",
+      "properties": {
+        "finding": {
+          "$ref": "#/$defs/findingId"
+        },
+        "commits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/commit"
+          },
+          "minItems": 1
+        },
+        "summary": {
+          "$ref": "#/$defs/text"
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/text"
+          },
+          "minItems": 1
+        },
+        "root_cause": {
+          "$ref": "#/$defs/text"
+        },
+        "tests": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "finding",
+        "commits",
+        "summary",
+        "components"
+      ],
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/findingId"
+        },
+        "status": {
+          "$ref": "#/$defs/findingStatus"
+        },
+        "tier": {
+          "$ref": "#/$defs/tier"
+        },
+        "round": {
+          "$ref": "#/$defs/count"
+        },
+        "source": {
+          "$ref": "#/$defs/role"
+        },
+        "recurrences": {
+          "$ref": "#/$defs/count"
+        },
+        "root_cause_required": {
+          "type": "boolean"
+        },
+        "disputed": {
+          "type": "boolean"
+        },
+        "fix": {
+          "$ref": "#/$defs/fix"
+        },
+        "finding": {
+          "$ref": "#/$defs/findingInput"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "tier",
+        "round",
+        "source",
+        "recurrences",
+        "root_cause_required",
+        "disputed",
+        "finding"
+      ],
+      "additionalProperties": false
+    },
+    "escalation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/escalationId"
+        },
+        "kind": {
+          "$ref": "#/$defs/escalationKind"
+        },
+        "owner": {
+          "$ref": "#/$defs/role"
+        },
+        "round": {
+          "$ref": "#/$defs/count"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        },
+        "findings": {
+          "$ref": "#/$defs/findingIdList"
+        },
+        "components": {
+          "$ref": "#/$defs/textList"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requirementId"
+          }
+        },
+        "open": {
+          "type": "boolean"
+        },
+        "resolution": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "owner",
+        "round",
+        "reason",
+        "open"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

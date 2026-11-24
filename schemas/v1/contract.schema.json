@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/patacca/metron/schemas/v1/contract.schema.json",
+  "title": "Metron contract",
+  "description": "A repository's acceptance contract (metron.contract/v1), as the JSON value of .metron/contract.yaml. Structural rules only; cross-field rules belong to the semantic layer.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "metron.contract/v1"
+    },
+    "project": {
+      "$ref": "#/$defs/project"
+    },
+    "stage": {
+      "$ref": "defs.schema.json#/$defs/stage"
+    },
+    "authorizes": {
+      "$ref": "defs.schema.json#/$defs/text"
+    },
+    "scope": {
+      "$ref": "defs.schema.json#/$defs/textList",
+      "minItems": 1
+    },
+    "operating_envelope": {
+      "$ref": "defs.schema.json#/$defs/textList",
+      "minItems": 1
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/requirement"
+      },
+      "minItems": 1
+    },
+    "risks": {
+      "$ref": "#/$defs/risks"
+    },
+    "not_applicable": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/waiver"
+      }
+    },
+    "calibrations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/calibration"
+      }
+    },
+    "convergence": {
+      "$ref": "#/$defs/convergence"
+    }
+  },
+  "required": [
+    "schema",
+    "project",
+    "stage",
+    "authorizes",
+    "scope",
+    "operating_envelope",
+    "requirements",
+    "risks"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "project": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "objectives": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.schema.json#/$defs/text"
+          },
+          "minItems": 1
+        },
+        "non_objectives": {
+          "$ref": "defs.schema.json#/$defs/textList"
+        }
+      },
+      "required": [
+        "name",
+        "objectives"
+      ],
+      "additionalProperties": false
+    },
+    "requirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/requirementId"
+        },
+        "domain": {
+          "$ref": "defs.schema.json#/$defs/domain"
+        },
+        "statement": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "criterion": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "command": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "from": {
+          "$ref": "defs.schema.json#/$defs/stage"
+        }
+      },
+      "required": [
+        "id",
+        "domain",
+        "statement",
+        "criterion"
+      ],
+      "additionalProperties": false
+    },
+    "unacceptableRisk": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/unacceptableRiskId"
+        },
+        "statement": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "statement"
+      ],
+      "additionalProperties": false
+    },
+    "acceptedRisk": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/acceptedRiskId"
+        },
+        "statement": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "statement"
+      ],
+      "additionalProperties": false
+    },
+    "risks": {
+      "type": "object",
+      "properties": {
+        "unacceptable": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/unacceptableRisk"
+          },
+          "minItems": 1
+        },
+        "accepted": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/acceptedRisk"
+          }
+        }
+      },
+      "required": [
+        "unacceptable"
+      ],
+      "additionalProperties": false
+    },
+    "waiver": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "$ref": "defs.schema.json#/$defs/domain"
+        },
+        "rationale": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "domain",
+        "rationale"
+      ],
+      "additionalProperties": false
+    },
+    "calibration": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/calibrationId"
+        },
+        "parameter": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "evidence_needed": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "reassess_when": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "parameter",
+        "evidence_needed",
+        "reassess_when"
+      ],
+      "additionalProperties": false
+    },
+    "convergence": {
+      "type": "object",
+      "properties": {
+        "root_cause_after": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "convergence_audit_after": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "process_audit_after": {
+          "$ref": "defs.schema.json#/$defs/count"
+        }
+      },
+      "required": [
+        "root_cause_after",
+        "convergence_audit_after",
+        "process_audit_after"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

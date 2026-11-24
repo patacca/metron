@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/patacca/metron/schemas/v1/packet.schema.json",
+  "title": "Metron packet",
+  "description": "Everything a role needs to perform one action (metron.packet/v1). Structural rules only.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "metron.packet/v1"
+    },
+    "id": {
+      "$ref": "defs.schema.json#/$defs/packetId"
+    },
+    "protocol": {
+      "$ref": "defs.schema.json#/$defs/protocol"
+    },
+    "role": {
+      "$ref": "defs.schema.json#/$defs/packetRole"
+    },
+    "action": {
+      "$ref": "defs.schema.json#/$defs/packetAction"
+    },
+    "round": {
+      "$ref": "defs.schema.json#/$defs/count"
+    },
+    "issued_at": {
+      "$ref": "defs.schema.json#/$defs/time"
+    },
+    "candidate": {
+      "$ref": "defs.schema.json#/$defs/candidate"
+    },
+    "base": {
+      "$ref": "defs.schema.json#/$defs/candidate"
+    },
+    "read_only": {
+      "type": "boolean"
+    },
+    "contract_digest": {
+      "$ref": "defs.schema.json#/$defs/sha256"
+    },
+    "contract": {
+      "$ref": "contract.schema.json"
+    },
+    "applicable_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "defs.schema.json#/$defs/requirementId"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "defs.schema.json#/$defs/evidence"
+      }
+    },
+    "subjects": {
+      "$ref": "defs.schema.json#/$defs/findingIdList"
+    },
+    "backlog": {
+      "$ref": "defs.schema.json#/$defs/findingIdList"
+    },
+    "root_cause_required": {
+      "$ref": "defs.schema.json#/$defs/findingIdList"
+    },
+    "escalations": {
+      "type": "array",
+      "items": {
+        "$ref": "defs.schema.json#/$defs/escalation"
+      }
+    },
+    "adjudicable": {
+      "$ref": "defs.schema.json#/$defs/findingIdList"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "defs.schema.json#/$defs/finding"
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/roundSummary"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+    "report_schema": {
+      "$ref": "defs.schema.json#/$defs/text"
+    },
+    "instructions": {
+      "$ref": "defs.schema.json#/$defs/text"
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "protocol",
+    "role",
+    "action",
+    "round",
+    "issued_at",
+    "candidate",
+    "read_only",
+    "contract_digest",
+    "contract",
+    "applicable_requirements",
+    "report_schema",
+    "instructions"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "roundSummary": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "candidate": {
+          "$ref": "defs.schema.json#/$defs/candidate"
+        },
+        "verdict": {
+          "$ref": "defs.schema.json#/$defs/verdict"
+        },
+        "reviewer": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "round",
+        "candidate"
+      ],
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "directive",
+            "resolution"
+          ]
+        },
+        "escalation": {
+          "$ref": "defs.schema.json#/$defs/escalationId"
+        },
+        "by": {
+          "$ref": "defs.schema.json#/$defs/role"
+        },
+        "text": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "source",
+        "by",
+        "text"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

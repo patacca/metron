@@ -1,0 +1,33 @@
+{
+  "schema": "metron.contract/v1",
+  "project": {
+    "name": "tally",
+    "objectives": [
+      "Count words in text files."
+    ]
+  },
+  "stage": "prototype",
+  "authorizes": "Internal use by the authors.",
+  "scope": [
+    "cmd/tally"
+  ],
+  "operating_envelope": [
+    "Files under 10 MB."
+  ],
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "domain": "functional-correctness",
+      "statement": "The word count of a file is correct.",
+      "criterion": "Counts match wc -w on the test corpus."
+    }
+  ],
+  "risks": {
+    "unacceptable": [
+      {
+        "id": "RISK-1",
+        "statement": "Wrong word counts reach a user."
+      }
+    ]
+  }
+}

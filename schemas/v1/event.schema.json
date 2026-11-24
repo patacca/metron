@@ -1,0 +1,898 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/patacca/metron/schemas/v1/event.schema.json",
+  "title": "Metron ledger event",
+  "description": "One line of the Metron ledger. The data member is validated according to type. Structural rules only.",
+  "type": "object",
+  "properties": {
+    "seq": {
+      "$ref": "defs.schema.json#/$defs/sequence"
+    },
+    "time": {
+      "$ref": "defs.schema.json#/$defs/time"
+    },
+    "prev": {
+      "$ref": "defs.schema.json#/$defs/hex64"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "ledger.initialized",
+        "contract.pinned",
+        "evidence.recorded",
+        "round.opened",
+        "packet.issued",
+        "packet.voided",
+        "report.accepted",
+        "verdict.recorded",
+        "finding.opened",
+        "finding.fix-claimed",
+        "finding.fix-confirmed",
+        "finding.fix-rejected",
+        "finding.reopened",
+        "finding.withdrawn",
+        "finding.reclassified",
+        "escalation.raised",
+        "escalation.resolved",
+        "directive.issued"
+      ]
+    },
+    "data": {
+      "type": "object"
+    },
+    "hash": {
+      "$ref": "defs.schema.json#/$defs/hex64"
+    }
+  },
+  "required": [
+    "seq",
+    "time",
+    "prev",
+    "type",
+    "data",
+    "hash"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ledger.initialized"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/ledgerInitialized"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "contract.pinned"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/contractPinned"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "evidence.recorded"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/evidenceRecorded"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "round.opened"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/roundOpened"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "packet.issued"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/packetIssued"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "packet.voided"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/packetVoided"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "report.accepted"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/reportAccepted"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "verdict.recorded"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/verdictRecorded"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "finding.opened"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/findingOpened"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "finding.fix-claimed"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/findingFixClaimed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "finding.fix-confirmed"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/findingFixConfirmed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "finding.fix-rejected"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/findingFixRejected"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "finding.reopened"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/findingReopened"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "finding.withdrawn"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/findingWithdrawn"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "finding.reclassified"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/findingReclassified"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "escalation.raised"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/escalationRaised"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "escalation.resolved"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/escalationResolved"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "directive.issued"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/directiveIssued"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "ledgerInitialized": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "$ref": "defs.schema.json#/$defs/protocol"
+        }
+      },
+      "required": [
+        "protocol"
+      ],
+      "additionalProperties": false
+    },
+    "contractPinned": {
+      "type": "object",
+      "properties": {
+        "digest": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "raw_digest": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "stage": {
+          "$ref": "defs.schema.json#/$defs/stage"
+        },
+        "reason": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "by": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "digest",
+        "raw_digest",
+        "stage",
+        "reason",
+        "by"
+      ],
+      "additionalProperties": false
+    },
+    "evidenceRecorded": {
+      "$ref": "defs.schema.json#/$defs/evidence"
+    },
+    "roundOpened": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "stage": {
+          "$ref": "defs.schema.json#/$defs/stage"
+        },
+        "candidate": {
+          "$ref": "defs.schema.json#/$defs/candidate"
+        },
+        "contract": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "protocol": {
+          "$ref": "defs.schema.json#/$defs/protocol"
+        }
+      },
+      "required": [
+        "round",
+        "stage",
+        "candidate",
+        "contract",
+        "protocol"
+      ],
+      "additionalProperties": false
+    },
+    "packetIssued": {
+      "type": "object",
+      "properties": {
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "role": {
+          "$ref": "defs.schema.json#/$defs/packetRole"
+        },
+        "action": {
+          "$ref": "defs.schema.json#/$defs/packetAction"
+        },
+        "round": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "candidate": {
+          "$ref": "defs.schema.json#/$defs/candidate"
+        },
+        "contract": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "protocol": {
+          "$ref": "defs.schema.json#/$defs/protocol"
+        },
+        "digest": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "subjects": {
+          "$ref": "defs.schema.json#/$defs/findingIdList"
+        },
+        "backlog": {
+          "$ref": "defs.schema.json#/$defs/findingIdList"
+        },
+        "root_cause_required": {
+          "$ref": "defs.schema.json#/$defs/findingIdList"
+        },
+        "escalations": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.schema.json#/$defs/escalationId"
+          }
+        },
+        "adjudicable": {
+          "$ref": "defs.schema.json#/$defs/findingIdList"
+        }
+      },
+      "required": [
+        "packet",
+        "role",
+        "action",
+        "round",
+        "candidate",
+        "contract",
+        "protocol",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "packetVoided": {
+      "type": "object",
+      "properties": {
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "reason": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "packet",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "reportAccepted": {
+      "type": "object",
+      "properties": {
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "role": {
+          "$ref": "defs.schema.json#/$defs/packetRole"
+        },
+        "author": {
+          "$ref": "defs.schema.json#/$defs/author"
+        },
+        "digest": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "raw_digest": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "required": [
+        "packet",
+        "role",
+        "author",
+        "digest",
+        "raw_digest",
+        "provenance"
+      ],
+      "additionalProperties": false
+    },
+    "verdictRecorded": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "verdict": {
+          "$ref": "defs.schema.json#/$defs/verdict"
+        },
+        "candidate": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "contract": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "reviewer": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requirementResult"
+          }
+        }
+      },
+      "required": [
+        "round",
+        "verdict",
+        "candidate",
+        "contract",
+        "reviewer",
+        "requirements"
+      ],
+      "additionalProperties": false
+    },
+    "findingOpened": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "round": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "source": {
+          "$ref": "defs.schema.json#/$defs/role"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "finding": {
+          "$ref": "defs.schema.json#/$defs/findingInput"
+        }
+      },
+      "required": [
+        "id",
+        "round",
+        "source",
+        "packet",
+        "finding"
+      ],
+      "additionalProperties": false
+    },
+    "findingFixClaimed": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "round": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "fix": {
+          "$ref": "defs.schema.json#/$defs/fix"
+        }
+      },
+      "required": [
+        "id",
+        "round",
+        "packet",
+        "fix"
+      ],
+      "additionalProperties": false
+    },
+    "findingFixConfirmed": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "packet",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "findingFixRejected": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "root_cause_required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "packet",
+        "evidence",
+        "root_cause_required"
+      ],
+      "additionalProperties": false
+    },
+    "findingReopened": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "reason": {
+          "$ref": "defs.schema.json#/$defs/reopenReason"
+        },
+        "justification": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "root_cause_required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "packet",
+        "reason",
+        "justification",
+        "root_cause_required"
+      ],
+      "additionalProperties": false
+    },
+    "findingWithdrawn": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "rationale": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "packet",
+        "rationale"
+      ],
+      "additionalProperties": false
+    },
+    "findingReclassified": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "from": {
+          "$ref": "defs.schema.json#/$defs/tier"
+        },
+        "to": {
+          "$ref": "defs.schema.json#/$defs/tier"
+        },
+        "rationale": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "packet",
+        "from",
+        "to",
+        "rationale"
+      ],
+      "additionalProperties": false
+    },
+    "escalationRaised": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/escalationId"
+        },
+        "kind": {
+          "$ref": "defs.schema.json#/$defs/escalationKind"
+        },
+        "owner": {
+          "$ref": "defs.schema.json#/$defs/role"
+        },
+        "round": {
+          "$ref": "defs.schema.json#/$defs/count"
+        },
+        "reason": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "findings": {
+          "$ref": "defs.schema.json#/$defs/findingIdList"
+        },
+        "components": {
+          "$ref": "defs.schema.json#/$defs/textList"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.schema.json#/$defs/requirementId"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "owner",
+        "round",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "escalationResolved": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/escalationId"
+        },
+        "by": {
+          "$ref": "defs.schema.json#/$defs/role"
+        },
+        "actor": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "resolution": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "by",
+        "actor",
+        "resolution"
+      ],
+      "additionalProperties": false
+    },
+    "directiveIssued": {
+      "type": "object",
+      "properties": {
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "text": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "packet",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "declared"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "requirementResult": {
+      "type": "object",
+      "properties": {
+        "requirement": {
+          "$ref": "defs.schema.json#/$defs/requirementId"
+        },
+        "status": {
+          "$ref": "defs.schema.json#/$defs/requirementStatus"
+        }
+      },
+      "required": [
+        "requirement",
+        "status"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

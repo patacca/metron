@@ -1,0 +1,187 @@
+{
+  "schema": "metron.packet/v1",
+  "id": "P-0007",
+  "protocol": "metron.protocol/v1",
+  "role": "reviewer",
+  "action": "review",
+  "round": 2,
+  "issued_at": "2026-03-14T10:26:53+01:00",
+  "candidate": {
+    "commit": "c4c1d611edf69a251edbb091082bdc3004b83869",
+    "digest": "sha256:c4c1d611edf69a251edbb091082bdc3004b8386975599ca840e5b72e86476556"
+  },
+  "read_only": true,
+  "contract_digest": "sha256:2b774ade959f0c8c4463752c219f43b13352eeebdf3fd4f4031e74e0d961256f",
+  "contract": {
+    "schema": "metron.contract/v1",
+    "project": {
+      "name": "Ledgerly",
+      "objectives": [
+        "Record double-entry bookkeeping transactions durably.",
+        "Produce a trial balance on demand."
+      ],
+      "non_objectives": [
+        "Multi-currency conversion."
+      ]
+    },
+    "stage": "pilot",
+    "authorizes": "A pilot with three partner accounting teams on non-production books.",
+    "scope": [
+      "internal/ledger",
+      "internal/report",
+      "cmd/ledgerly"
+    ],
+    "operating_envelope": [
+      "Up to 50 concurrent users.",
+      "At most 1 million transactions per book."
+    ],
+    "requirements": [
+      {
+        "id": "REQ-1",
+        "domain": "functional-correctness",
+        "statement": "Every posted transaction balances to zero.",
+        "criterion": "The property test over 10000 random transactions finds no unbalanced posting.",
+        "command": "go test ./internal/ledger -run TestBalanced"
+      },
+      {
+        "id": "REQ-2",
+        "domain": "data-integrity",
+        "statement": "A crash during posting never leaves a partial transaction.",
+        "criterion": "Fault injection at every write boundary leaves the book consistent.",
+        "from": "controlled-validation"
+      },
+      {
+        "id": "REQ-3",
+        "domain": "security-privacy",
+        "statement": "Account data is readable only by its owners.",
+        "criterion": "The access matrix test passes for all role and account pairs.",
+        "from": "pilot"
+      }
+    ],
+    "risks": {
+      "unacceptable": [
+        {
+          "id": "RISK-1",
+          "statement": "Silent loss of a posted transaction."
+        },
+        {
+          "id": "RISK-2",
+          "statement": "Disclosure of one tenant's books to another."
+        }
+      ],
+      "accepted": [
+        {
+          "id": "ACC-1",
+          "statement": "Reports may lag writes by up to five seconds."
+        }
+      ]
+    },
+    "not_applicable": [
+      {
+        "domain": "scalability",
+        "rationale": "The pilot is capped at three teams."
+      }
+    ],
+    "calibrations": [
+      {
+        "id": "CAL-1",
+        "parameter": "Posting latency budget of 200 ms",
+        "evidence_needed": "Latency measurements from the pilot workload.",
+        "reassess_when": "Two weeks of pilot traffic exist."
+      }
+    ],
+    "convergence": {
+      "root_cause_after": 2,
+      "convergence_audit_after": 3,
+      "process_audit_after": 5
+    }
+  },
+  "applicable_requirements": [
+    "REQ-1",
+    "REQ-2",
+    "REQ-3"
+  ],
+  "report_schema": "metron.report/v1",
+  "instructions": "You are the reviewer. Assess every domain and every applicable requirement; do not modify the repository.",
+  "evidence": [
+    {
+      "requirement": "REQ-1",
+      "command": "go test ./internal/ledger -run TestBalanced",
+      "candidate": "sha256:c4c1d611edf69a251edbb091082bdc3004b8386975599ca840e5b72e86476556",
+      "exit_code": 0,
+      "passed": true,
+      "output_digest": "sha256:6776128287ef2cb8ead79828e5b76f6eefbd55378c32a6f8a594785c5e0e5997"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-0001",
+      "status": "claimed",
+      "tier": "T1",
+      "round": 1,
+      "source": "reviewer",
+      "recurrences": 0,
+      "root_cause_required": false,
+      "disputed": false,
+      "fix": {
+        "finding": "F-0001",
+        "commits": [
+          "1bae936e7b396d2b9b480493db6e6d09d6bc2d87"
+        ],
+        "summary": "Hold the book mutex across the read-modify-write in Post.",
+        "components": [
+          "internal/ledger/post.go"
+        ],
+        "root_cause": "The balance cache was introduced without a lock discipline.",
+        "tests": "Added TestConcurrentPost."
+      },
+      "finding": {
+        "key": "lost-update",
+        "tier": "T1",
+        "domain": "data-integrity",
+        "title": "Concurrent posts can overwrite each other",
+        "components": [
+          "internal/ledger/post.go"
+        ],
+        "description": "Post reads the balance, then writes it back without a lock, so two concurrent posts lose one update.",
+        "evidence": "go test -race ./internal/ledger -run TestConcurrentPost fails 7 of 10 runs.",
+        "impact": "A posted transaction is silently lost with 50 concurrent users.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "A pilot with partner books must not lose transactions.",
+        "verification": "TestConcurrentPost passes 100 consecutive runs under -race."
+      }
+    }
+  ],
+  "history": [
+    {
+      "round": 1,
+      "candidate": {
+        "commit": "c2d0da0251f952aa0a61276406d4a48ae94fd7ec",
+        "digest": "sha256:c2d0da0251f952aa0a61276406d4a48ae94fd7eca84c0fddf94c89471790708c"
+      },
+      "verdict": "RED",
+      "reviewer": "claude-reviewer-1"
+    },
+    {
+      "round": 2,
+      "candidate": {
+        "commit": "c4c1d611edf69a251edbb091082bdc3004b83869",
+        "digest": "sha256:c4c1d611edf69a251edbb091082bdc3004b8386975599ca840e5b72e86476556"
+      }
+    }
+  ],
+  "decisions": [
+    {
+      "source": "directive",
+      "escalation": "E-0001",
+      "by": "auditor",
+      "text": "Every fix to internal/ledger includes a race test."
+    },
+    {
+      "source": "resolution",
+      "by": "governance",
+      "text": "ACC-1 stands for the pilot."
+    }
+  ]
+}

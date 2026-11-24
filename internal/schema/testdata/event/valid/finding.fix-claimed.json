@@ -1,0 +1,24 @@
+{
+  "seq": 10,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "c8e7cdedb75f9d842413e4bcee78c05b5859eecd711692f24580b6f274812560",
+  "type": "finding.fix-claimed",
+  "data": {
+    "id": "F-0001",
+    "round": 2,
+    "packet": "P-0003",
+    "fix": {
+      "finding": "F-0001",
+      "commits": [
+        "1bae936e7b396d2b9b480493db6e6d09d6bc2d87"
+      ],
+      "summary": "Hold the book mutex across the read-modify-write in Post.",
+      "components": [
+        "internal/ledger/post.go"
+      ],
+      "root_cause": "The balance cache was introduced without a lock discipline.",
+      "tests": "Added TestConcurrentPost."
+    }
+  },
+  "hash": "14c795baef1229956e39c6d81c0c511bb3800a180133f0ef5ca866f102a1d12e"
+}

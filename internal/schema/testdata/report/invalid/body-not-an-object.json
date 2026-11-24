@@ -1,0 +1,13 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0007",
+  "role": "reviewer",
+  "author": {
+    "id": "claude-reviewer-1",
+    "kind": "agent",
+    "model": "claude-opus-5-5",
+    "harness": "claude-code",
+    "session": "7d1c9a52"
+  },
+  "body": "text"
+}

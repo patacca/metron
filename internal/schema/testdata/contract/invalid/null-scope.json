@@ -1,0 +1,80 @@
+{
+  "schema": "metron.contract/v1",
+  "project": {
+    "name": "Ledgerly",
+    "objectives": [
+      "Record double-entry bookkeeping transactions durably.",
+      "Produce a trial balance on demand."
+    ],
+    "non_objectives": [
+      "Multi-currency conversion."
+    ]
+  },
+  "stage": "pilot",
+  "authorizes": "A pilot with three partner accounting teams on non-production books.",
+  "scope": null,
+  "operating_envelope": [
+    "Up to 50 concurrent users.",
+    "At most 1 million transactions per book."
+  ],
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "domain": "functional-correctness",
+      "statement": "Every posted transaction balances to zero.",
+      "criterion": "The property test over 10000 random transactions finds no unbalanced posting.",
+      "command": "go test ./internal/ledger -run TestBalanced"
+    },
+    {
+      "id": "REQ-2",
+      "domain": "data-integrity",
+      "statement": "A crash during posting never leaves a partial transaction.",
+      "criterion": "Fault injection at every write boundary leaves the book consistent.",
+      "from": "controlled-validation"
+    },
+    {
+      "id": "REQ-3",
+      "domain": "security-privacy",
+      "statement": "Account data is readable only by its owners.",
+      "criterion": "The access matrix test passes for all role and account pairs.",
+      "from": "pilot"
+    }
+  ],
+  "risks": {
+    "unacceptable": [
+      {
+        "id": "RISK-1",
+        "statement": "Silent loss of a posted transaction."
+      },
+      {
+        "id": "RISK-2",
+        "statement": "Disclosure of one tenant's books to another."
+      }
+    ],
+    "accepted": [
+      {
+        "id": "ACC-1",
+        "statement": "Reports may lag writes by up to five seconds."
+      }
+    ]
+  },
+  "not_applicable": [
+    {
+      "domain": "scalability",
+      "rationale": "The pilot is capped at three teams."
+    }
+  ],
+  "calibrations": [
+    {
+      "id": "CAL-1",
+      "parameter": "Posting latency budget of 200 ms",
+      "evidence_needed": "Latency measurements from the pilot workload.",
+      "reassess_when": "Two weeks of pilot traffic exist."
+    }
+  ],
+  "convergence": {
+    "root_cause_after": 2,
+    "convergence_audit_after": 3,
+    "process_audit_after": 5
+  }
+}

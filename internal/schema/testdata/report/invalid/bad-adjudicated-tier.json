@@ -1,0 +1,40 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0010",
+  "role": "auditor",
+  "author": {
+    "id": "claude-auditor-1",
+    "kind": "agent",
+    "model": "claude-opus-5-5",
+    "harness": "claude-code",
+    "session": "7d1c9a52"
+  },
+  "body": {
+    "analysis": "F-0001 reproduces on the base candidate; the implementer's dispute rests on a single-user assumption.",
+    "conclusion": "The dispute is rejected and the finding upheld.",
+    "adjudications": [
+      {
+        "finding": "F-0001",
+        "decision": "uphold",
+        "rationale": "The failure is inside the operating envelope."
+      },
+      {
+        "finding": "F-0002",
+        "decision": "reclassify",
+        "tier": "T9",
+        "rationale": "No requirement or risk is affected."
+      },
+      {
+        "finding": "F-0003",
+        "decision": "withdraw",
+        "rationale": "Duplicates F-0001."
+      }
+    ],
+    "directives": [
+      "Every fix to internal/ledger includes a race test."
+    ],
+    "contract_recommendations": [
+      "Add a backup and restore requirement."
+    ]
+  }
+}

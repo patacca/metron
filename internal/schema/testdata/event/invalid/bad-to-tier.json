@@ -1,0 +1,14 @@
+{
+  "seq": 15,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "1bfd948295ac75aa8236c956128d6fd06b52b8d615ab9db9766583e21ac7c60e",
+  "type": "finding.reclassified",
+  "data": {
+    "id": "F-0001",
+    "packet": "P-0006",
+    "from": "T1",
+    "to": "T7",
+    "rationale": "No requirement is affected."
+  },
+  "hash": "c1c6e9564f2ddfaab41b7e82ea8e7e1e564f49e2ea44d5272c511a06ad139052"
+}

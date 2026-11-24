@@ -1,0 +1,14 @@
+{
+  "seq": 17,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "ba23e291d10cd9f78a6405b8c52e7f6ddd42470cf6e4ac1b372114fda4c78e9a",
+  "type": "escalation.resolved",
+  "data": {
+    "id": "E-0001",
+    "by": "nobody",
+    "actor": "claude-auditor-1",
+    "packet": "P-0006",
+    "resolution": "Redesign the locking."
+  },
+  "hash": "6a38d3c81a4b7e859191ce5b95e96bfd1fc561e3cc20c44d6bacf8fd34aa4fc0"
+}

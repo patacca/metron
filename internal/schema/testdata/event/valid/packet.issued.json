@@ -1,0 +1,20 @@
+{
+  "seq": 5,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "ed8c033fe2b4cf0aaa5c47f03c927cf8d6329a5536834c9a83ab7caafe959c11",
+  "type": "packet.issued",
+  "data": {
+    "packet": "P-0001",
+    "role": "reviewer",
+    "action": "review",
+    "round": 1,
+    "candidate": {
+      "commit": "c4c1d611edf69a251edbb091082bdc3004b83869",
+      "digest": "sha256:c4c1d611edf69a251edbb091082bdc3004b8386975599ca840e5b72e86476556"
+    },
+    "contract": "sha256:2b774ade959f0c8c4463752c219f43b13352eeebdf3fd4f4031e74e0d961256f",
+    "protocol": "metron.protocol/v1",
+    "digest": "sha256:c48e8d2fd69d694f90962ad5c6da898c6e83f070c32804601d4c8b4b02854127"
+  },
+  "hash": "b82e000cbef9d5a19b63c28407727eddf49fcd1dd9682568423c2ad3cbb477a6"
+}
