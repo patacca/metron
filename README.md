@@ -12,9 +12,10 @@ from looping forever.
 
 It is a single deterministic executable. It does not run models. Humans and
 agents supply the engineering judgment; Metron supplies the rules they cannot
-bend: what must be reviewed, what may block, when a finding may be reopened,
-when repeated failure must change the investigation, and when the gate is
-open.
+bend: what must be reviewed, what may block, what a correction may change,
+when a finding may be reopened, when repeated failure must change the
+investigation, when the process must stop and wait for you, and when the gate
+is open.
 
 > **Status: early.** The standalone core works end to end in local trust mode.
 > There are no releases yet, agent execution is not integrated, and the gate
@@ -39,7 +40,7 @@ that must hold. Everything else is fixed by the protocol.
 
 Metron then runs a loop in which it always names exactly one next step:
 
-![The Metron review loop. A pinned contract and its mandatory checks lead to an independent review. RED goes to batch correction and independent verification, then back to the checks as a new candidate. INDETERMINATE goes to governance. GREEN goes to the deterministic gate and the next authorized stage. Non-blocking findings go to the improvement backlog.](docs/assets/review-loop.png)
+![The Metron review loop. A pinned contract and its mandatory checks lead to an independent review. RED starts a correction on one candidate: fix, run the checks, verify; a failed check, a rejected fix or a blocking regression goes back to the fix, and once every fix is confirmed the new candidate is reviewed. INDETERMINATE goes to governance. GREEN goes to the deterministic gate and the next authorized stage. Non-blocking findings go to the improvement backlog, outside the correction. Convergence safeguards bring in an auditor, and a suspension stops the campaign until governance resumes it.](docs/assets/review-loop.svg)
 
 The contract's automated checks run first, so a review never starts on a
 candidate that fails them. Then:
@@ -48,15 +49,28 @@ candidate that fails them. Then:
    domains, and reports findings in five tiers. Only `T0` and `T1` block, and
    only when tied to a requirement or an unacceptable risk in the contract.
 2. An **implementer** fixes the blocking findings as a batch, or disputes one.
-3. A **verifier** confirms or rejects each fix.
-4. The reviewer reviews the new candidate. When nothing blocks and every
+   A correction changes what those findings need and nothing else: every
+   commit since the review is listed under a fix.
+3. The checks run again on the fixed candidate.
+4. A **verifier** confirms or rejects each fix, and rejects one that changes
+   more than its finding needs.
+5. The reviewer reviews the new candidate. When nothing blocks and every
    requirement is satisfied with evidence, the verdict is GREEN. When nothing
    blocks but a requirement could not be verified, it is INDETERMINATE, and
    governance supplies the missing evidence or amends the contract.
-5. If the loop stops converging (three rounds without GREEN, the same
-   component fixed again and again, a disputed finding), an **auditor** is
+6. If the loop stops converging (three failed steps without GREEN, the same
+   files changed fix after fix, a disputed finding), an **auditor** is
    brought in, and a finding whose fix keeps failing needs a root-cause
    analysis before it can be fixed again. The bar never drops.
+7. If that does not help, the campaign is **suspended**: after a process
+   audit, when an auditor asks for it, or after 20 packets without an
+   approval (the contract can change these limits). Only you, as governance,
+   can resume it. Nothing ever opens the gate because a count, a budget or a
+   time limit ran out.
+
+Non-blocking findings go to the backlog. They are worked on in ordinary
+commits, never inside a correction, and a later review closes the ones it
+finds addressed.
 
 Each role receives a **packet** and answers with a structured **report**.
 Metron validates every report, records everything in a hash-chained ledger,
@@ -69,7 +83,7 @@ G = C ∧ B ∧ E ∧ I ∧ V
 | | The gate is open only when |
 | --- | --- |
 | C | every applicable requirement is satisfied in the latest review |
-| B | no blocking finding is unresolved and no escalation is open |
+| B | no blocking finding is unresolved, none was recorded on this candidate and fixed on another, and no escalation is open |
 | E | every automated check passed on this exact candidate |
 | I | the candidate, the contract and the ledger are the ones that were reviewed |
 | V | an independent reviewer issued GREEN for this candidate |
@@ -82,13 +96,19 @@ the report back. There are three ways to arrange that, and they differ only
 in how much of that hand-off is automated: all three go through the same
 commands, so the rules and the gate are identical in each.
 
-![The three execution modes. A, standalone: you pass packets and reports yourself. B, integrated: an agent harness or CI job calls Metron and starts an agent for each role. C, fully automated: a workflow engine runs the whole loop unattended.](docs/assets/modes.png)
+![The three execution modes. A, standalone: you pass packets and reports yourself. B, integrated: an agent harness or CI job calls Metron and starts an agent for each role. C, fully automated: a workflow engine runs the loop unattended.](docs/assets/modes.png)
 
 Mode A is what works today. Modes B and C rely on tools that Metron does not
 include and never requires: an agent client such as acpx, which starts an
 agent and passes it a prompt, and a workflow engine such as Dagu. Both
 integrations are planned as optional add-ons; the
 [decision records](docs/decisions/) say why and how far they have got.
+
+In every mode, whatever drives the loop runs the step `metron next` names and
+stops in two cases: the step is `none`, because the gate is open, or its owner
+is `governance`. A governance step is a decision for the repository's owner,
+never something to automate, and a campaign waiting for one has not been
+approved.
 
 ## Quickstart
 
@@ -135,7 +155,8 @@ would make it unclean.
 `metron status`, `metron findings` and `metron log` show where things stand.
 Commands meant for automation accept `--json`. Exit status is 0 for success
 or an open gate, 1 for a negative outcome, 2 for a usage error and 3 for an
-environment error.
+environment error. A closed gate does not mean there is more to do: only
+`metron next` says that.
 
 Commit `.metron/` together with your work. The candidate under review is
 identified by its tree without `.metron/`, so committing review state never
@@ -153,6 +174,13 @@ planned authenticated mode adds.
 
 A GREEN gate approves one candidate for one stage and the activity the
 contract names. It does not claim the code is free of defects or optimal.
+
+Metron bounds how long a campaign runs before the next step is yours; it
+cannot make the campaign end GREEN. That takes a candidate that can meet the
+contract, a contract that can be met, and roles that judge well. A suspended
+campaign is the process stopping where only your decision can help.
+[Section 10 of the architecture](docs/architecture.md#10-convergence-safeguards)
+states what is guaranteed and what is not.
 
 ## What is not here yet
 

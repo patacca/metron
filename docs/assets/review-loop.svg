@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 690" width="1000" height="690" role="img" aria-labelledby="title desc">
+  <title id="title">The Metron review loop</title>
+  <desc id="desc">A pinned contract and its mandatory checks lead to an independent review. RED starts a correction on one candidate: fix, run the checks, verify; a failed check, a rejected or excessive fix, or a blocking regression returns to the fix, and when every fix is confirmed the new candidate is reviewed. INDETERMINATE goes to governance. GREEN goes to the deterministic gate and the next authorized stage. Non-blocking findings go to the improvement backlog, outside the correction. Convergence safeguards raise audits, and a suspension stops the campaign until governance resumes it.</desc>
+  <defs>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2937; font-size: 12px; }
+      .h { font-size: 13px; font-weight: 700; fill: #111827; }
+      .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; fill: #374151; }
+      .s { fill: #4b5563; }
+      .p { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; }
+      .c { text-anchor: middle; }
+      .ln { fill: none; stroke-width: 1.8; }
+    </style>
+    <marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+    <marker id="ay" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker>
+    <marker id="an" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/></marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="999" height="689" rx="12" fill="#ffffff" stroke="#e5e7eb"/>
+
+  <text x="28" y="44" style="font-size:24px;font-weight:700;fill:#111827">The Metron review loop</text>
+  <text x="28" y="67" class="s" style="font-size:13px">metron next names one step at a time: the first that applies.</text>
+
+  <!-- Backlog -->
+  <rect x="28" y="84" width="290" height="80" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="173" y="106" class="h c">Improvement backlog</text>
+  <text x="173" y="123" class="c">never blocks; improved in ordinary commits,</text>
+  <text x="173" y="139" class="c">not in a correction; a later review closes</text>
+  <text x="173" y="155" class="c">each finding it no longer sees as addressed</text>
+
+  <!-- Governance -->
+  <rect x="630" y="84" width="342" height="80" rx="8" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+  <text x="801" y="110" class="h c">Governance decides</text>
+  <text x="801" y="128" class="c">supplies the missing evidence or amends the contract,</text>
+  <text x="801" y="146" class="c">then resolves the escalation: <tspan class="m">metron resolve</tspan></text>
+
+  <!-- Main row -->
+  <rect x="28" y="200" width="140" height="62" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="98" y="222" class="h c">Pinned acceptance</text>
+  <text x="98" y="238" class="h c">contract</text>
+  <text x="98" y="254" class="m c">metron contract pin</text>
+
+  <rect x="196" y="200" width="140" height="62" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="266" y="224" class="h c">Mandatory checks</text>
+  <text x="266" y="242" class="m c">metron check</text>
+
+  <rect x="364" y="200" width="160" height="62" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="444" y="222" class="h c">Independent review</text>
+  <text x="444" y="238" class="c s">read-only, full scope;</text>
+  <text x="444" y="253" class="c s">the only source of a verdict</text>
+
+  <rect x="612" y="200" width="188" height="62" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="706" y="222" class="h c">Deterministic gate</text>
+  <text x="706" y="239" class="c" style="font-size:13px">G = C ∧ B ∧ E ∧ I ∧ V</text>
+  <text x="706" y="255" class="m c">metron gate</text>
+
+  <rect x="828" y="200" width="144" height="62" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="900" y="226" class="h c">Next authorized</text>
+  <text x="900" y="243" class="h c">stage</text>
+
+  <path class="ln" d="M168,231 H196" stroke="#4b5563" marker-end="url(#a)"/>
+  <path class="ln" d="M336,231 H364" stroke="#4b5563" marker-end="url(#a)"/>
+  <path class="ln" d="M800,231 H828" stroke="#16a34a" marker-end="url(#ag)"/>
+
+  <!-- GREEN -->
+  <path class="ln" d="M524,231 H612" stroke="#16a34a" marker-end="url(#ag)"/>
+  <rect x="543" y="222" width="48" height="18" rx="9" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="567" y="235" class="p c" style="fill:#15803d">GREEN</text>
+
+  <!-- INDETERMINATE -->
+  <path class="ln" d="M484,200 V124 H630" stroke="#d97706" marker-end="url(#ay)"/>
+  <rect x="502" y="115" width="112" height="18" rx="9" fill="#fffbeb" stroke="#d97706"/>
+  <text x="558" y="128" class="p c" style="fill:#b45309">INDETERMINATE</text>
+
+  <!-- Non-blocking findings -->
+  <path class="ln" d="M404,200 V124 H318" stroke="#9ca3af" stroke-dasharray="5 4" marker-end="url(#an)"/>
+  <rect x="335" y="115" width="50" height="18" rx="9" fill="#f9fafb" stroke="#9ca3af"/>
+  <text x="360" y="128" class="p c" style="fill:#4b5563">T2–T4</text>
+
+  <!-- Correction -->
+  <rect x="196" y="318" width="604" height="150" rx="10" fill="#fff7f7" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="212" y="340" class="h" style="fill:#b91c1c">Correction: one batch on one candidate, blocking findings only</text>
+
+  <rect x="214" y="352" width="180" height="60" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="304" y="373" class="h c">Fix</text>
+  <text x="304" y="389" class="c s">implementer; each new commit</text>
+  <text x="304" y="404" class="c s">is listed under a fix</text>
+
+  <rect x="434" y="352" width="140" height="60" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="504" y="373" class="h c">Run checks</text>
+  <text x="504" y="389" class="c s">on the fixed candidate</text>
+  <text x="504" y="404" class="m c">metron check</text>
+
+  <rect x="612" y="352" width="170" height="60" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="697" y="373" class="h c">Verify</text>
+  <text x="697" y="389" class="c s">verifier: result and scope;</text>
+  <text x="697" y="404" class="c s">an excessive fix is rejected</text>
+
+  <path class="ln" d="M394,382 H434" stroke="#4b5563" marker-end="url(#a)"/>
+  <path class="ln" d="M574,382 H612" stroke="#4b5563" marker-end="url(#a)"/>
+
+  <!-- RED -->
+  <path class="ln" d="M404,262 V290 H180 V382 H214" stroke="#dc2626" marker-end="url(#ar)"/>
+  <rect x="272" y="281" width="40" height="18" rx="9" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="292" y="294" class="p c" style="fill:#b91c1c">RED</text>
+
+  <!-- All confirmed -->
+  <path class="ln" d="M697,352 V290 H484 V262" stroke="#4b5563" marker-end="url(#a)"/>
+  <text x="590" y="283" class="c s" style="font-size:11.5px">every fix confirmed: review again</text>
+
+  <!-- Back to the fix -->
+  <path class="ln" d="M697,412 V436 H304 V412" stroke="#dc2626" marker-end="url(#ar)"/>
+  <path class="ln" d="M504,412 V436" stroke="#dc2626"/>
+  <text x="498" y="456" class="c" style="font-size:11.5px;fill:#991b1b">a check fails, a fix is rejected, or a regression blocks: fix again</text>
+
+  <!-- Safeguards -->
+  <rect x="28" y="490" width="944" height="150" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="44" y="514" class="h" style="font-size:15px;fill:#92400e">Convergence safeguards</text>
+  <text x="44" y="533" class="s">Thresholds come from the contract (defaults shown). An open escalation keeps the gate closed; no count, budget or time limit ever opens it.</text>
+
+  <rect x="44" y="548" width="432" height="80" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+  <text x="260" y="569" class="h c">Audit (auditor)</text>
+  <text x="260" y="587" class="c">dispute, contradiction, component churn, regression spiral;</text>
+  <text x="260" y="603" class="c">3 failed steps without GREEN; a process audit at every 5th</text>
+  <text x="260" y="619" class="c s">failed step: non-GREEN review, rejected fix, failed check</text>
+
+  <path class="ln" d="M476,588 H540" stroke="#be123c" marker-end="url(#ar)"/>
+
+  <rect x="540" y="548" width="416" height="80" rx="8" fill="#fff1f2" stroke="#be123c" stroke-width="1.5"/>
+  <text x="748" y="569" class="h c" style="fill:#9f1239">Suspension (governance): the campaign stops</text>
+  <text x="748" y="587" class="c">raised when a process audit is discharged, an auditor asks,</text>
+  <text x="748" y="603" class="c">or the campaign issues its 20th packet without an approval;</text>
+  <text x="748" y="619" class="c">only <tspan class="m">metron resolve</tspan> resumes it, as a new campaign</text>
+
+  <text x="28" y="664" class="s" style="font-size:11.5px">An orchestrator runs the step metron next names and stops when the gate is open or the step belongs to governance.</text>
+  <text x="28" y="680" class="s" style="font-size:11.5px">Local, cooperative trust mode today; authenticated enforcement is planned.</text>
+</svg>

@@ -1,8 +1,8 @@
 # Quick start
 
 This guide takes a small repository through one complete Metron loop: a
-contract, a failed review, a fix, a verification, a second review, and a gate
-that opens. It takes about fifteen minutes.
+contract, a failed review, a fix, the checks on the fix, a verification, a
+second review, and a gate that opens. It takes about fifteen minutes.
 
 Every command and every piece of output below comes from a real run. A `…`
 marks where a long digest or some output was cut; most commands end with a
@@ -13,7 +13,9 @@ loop, the [cheat sheet](cheatsheet.md) has the same material as tables.
 
 - You write **one file**, the acceptance contract: what the project is for,
   which stage you want to enter, and what must hold before you do.
-- From then on you run **`metron next`** and do the one thing it names.
+- From then on you run **`metron next`** and do the one thing it names,
+  until the gate is open or the next step is a decision only governance can
+  make.
 - Work is handed out as a **packet** and comes back as a **report**. Metron
   validates each report and records it.
 - **`metron gate`** exits 0 when one specific commit is approved, and not
@@ -24,10 +26,10 @@ that, each in one of five roles:
 
 | Role | What it does |
 | --- | --- |
-| governance | Writes the contract and decides what it means. Usually the repository owner. |
+| governance | Writes the contract, decides what it means, and decides whether a suspended campaign resumes. Usually the repository owner. |
 | implementer | Writes and fixes the code. |
 | reviewer | Reviews one commit, read-only, and gives the verdict. |
-| verifier | Checks that each fix does what it claims. |
+| verifier | Checks that each fix does what it claims, and no more than its finding needs. |
 | auditor | Steps in when the loop stops converging. |
 
 One rule decides who may be whom: **whoever implements does not review,
@@ -196,7 +198,7 @@ and the command for it. You never choose the step yourself.
 ```
 $ metron check
 REQ-1    passed  exit 0   sh test.sh
-Recorded 1 result for commit e9c20ad047f4 (candidate sha256:ca215ded…).
+Recorded 1 result for commit fc211ed53a5a (candidate sha256:ca215ded…).
 
 Next step:    review (owner: reviewer)
 …
@@ -307,18 +309,18 @@ Run:          metron packet
 
 ## 5. Fix
 
-The implementer takes the next packet, changes the code, **commits**, and
-runs the checks on the new commit. What Metron reviews is always a commit,
-never the working tree.
+The implementer takes the next packet, changes the code and **commits**. What
+Metron reviews is always a commit, never the working tree.
 
 ```
 $ metron packet --format skeleton -o .metron/work/report.json
 $ $EDITOR slugify.sh test.sh
 $ git add -A && git commit -m "fix: one dash per run of other characters, none at the ends"
-$ metron check
-REQ-1    passed  exit 0   sh test.sh
-…
 ```
+
+The packet holds the blocking finding F-0001 and nothing else. The `T2`
+finding is not part of a correction: a correction changes what its blocking
+findings need, and improvements are made in ordinary commits, outside it.
 
 The fix squeezes each run of other characters into one dash and trims both
 ends, and `test.sh` gains the two cases the finding names, before its `exit`
@@ -339,7 +341,9 @@ check "  a  b  " "a-b"
 ```
 
 The report says which commits fix which finding. Commit hashes are written in
-full; `git rev-parse HEAD` prints one.
+full; `git rev-parse HEAD` prints one. Every commit made since the reviewed
+one must be listed under a fix: Metron lists them itself and refuses a report
+that leaves one out.
 
 ```json
 "author": { "id": "bob", "kind": "human" },
@@ -347,7 +351,7 @@ full; `git rev-parse HEAD` prints one.
   "fixes": [
     {
       "finding": "F-0001",
-      "commits": ["e81f27bdfbe0c78d9eb44ed6170cd338f973d1f6"],
+      "commits": ["cb80625c1a7849c091c46d24c145c39e9507c59c"],
       "summary": "tr -s now squeezes each run of other characters into one dash, and sed removes a dash at either end.",
       "components": ["slugify.sh", "test.sh"],
       "tests": "Added the two cases from the finding to test.sh; sh test.sh passes."
@@ -360,9 +364,9 @@ full; `git rev-parse HEAD` prints one.
 $ metron ingest .metron/work/report.json
 Accepted the implementer report for packet P-0002.
   report.accepted        P-0002: implementer report by bob (human)
-  finding.fix-claimed    F-0001: tr -s now squeezes each run of other characters into one dash, and sed removes a dash at either end. (commits e81f27bdfbe0)
+  finding.fix-claimed    F-0001: tr -s now squeezes each run of other characters into one dash, and sed removes a dash at either end. (commits cb80625c1a78)
 
-Next step:    verify (owner: verifier)
+Next step:    run-checks (owner: implementer)
 …
 ```
 
@@ -370,10 +374,31 @@ The fix is *claimed*, not accepted. An implementer who thinks a finding is
 wrong puts it under `disputes` with a rationale instead, and an auditor
 decides.
 
-## 6. Verify
+## 6. Run the checks on the fix
 
-The verifier applies the `verification` the finding asked for. The verifier
-may be the reviewer, but never the implementer.
+Nobody verifies a fix until the mandatory checks pass on the commit that
+holds it:
+
+```
+$ metron check
+REQ-1    passed  exit 0   sh test.sh
+Recorded 1 result for commit cb80625c1a78 (candidate sha256:09d193e6…).
+
+Next step:    verify (owner: verifier)
+…
+```
+
+If a check fails, correct the code in another commit. The fix was claimed on
+the earlier commit, so the claim has lapsed: `metron next` asks for the fix
+again, the new report lists the new commit too, and the checks run on the
+result. Nothing reaches the verifier that no fix accounts for.
+
+## 7. Verify
+
+The verifier applies the `verification` the finding asked for, and judges the
+fix's scope: `proportionate` when its commits change only what the finding
+needs, `excessive` when they change more. The verifier may be the reviewer,
+but never the implementer.
 
 ```
 $ metron packet --format skeleton -o .metron/work/report.json
@@ -386,7 +411,9 @@ $ metron packet --format skeleton -o .metron/work/report.json
     {
       "finding": "F-0001",
       "result": "confirmed",
-      "evidence": "sh slugify.sh 'Hello, World!' prints hello-world and sh slugify.sh '  a  b  ' prints a-b, as the finding asks."
+      "evidence": "sh slugify.sh 'Hello, World!' prints hello-world and sh slugify.sh '  a  b  ' prints a-b, as the finding asks.",
+      "scope": "proportionate",
+      "scope_evidence": "The commit changes the pipeline in slugify.sh and adds the two cases the finding names to test.sh. Nothing else changed."
     }
   ]
 }
@@ -402,13 +429,17 @@ Next step:    review (owner: reviewer)
 …
 ```
 
-A `rejected` result sends the finding back to the implementer.
+A `rejected` result sends the finding back to the implementer, and so does an
+`excessive` scope: Metron refuses a report that confirms an excessive fix.
 
-## 7. Review the new commit
+## 8. Review the new commit
 
 The code changed, so the earlier verdict no longer applies and the new commit
-gets a full review of its own. This time both requirements are `satisfied`,
-`findings` stays empty, and the verdict is `GREEN`.
+gets a full review of its own. Its packet names the commit the fix was
+verified on, under `verified`; here it is the commit under review, so the
+reviewer knows that no change since has gone unverified. This time both
+requirements are `satisfied`, `findings` stays empty, and the verdict is
+`GREEN`.
 
 ```
 $ metron packet --format skeleton -o .metron/work/report.json
@@ -424,16 +455,16 @@ Next step:    none, the gate is open
 The verdict follows from the content. Metron refuses a report that says
 `GREEN` while it opens a blocking finding, or `RED` without one.
 
-## 8. The gate
+## 9. The gate
 
 ```
 $ metron gate
 Gate: OPEN for stage prototype
 Authorizes: Using slugify.sh in the blog's draft preview, on our own machines
-Candidate: commit e81f27bdfbe0c78d9eb44ed6170cd338f973d1f6, sha256:09d193e6…
+Candidate: commit cb80625c1a7849c091c46d24c145c39e9507c59c, sha256:09d193e6…
 
 [ok]   C  Every applicable requirement is satisfied in the reviewer report of the latest round
-[ok]   B  No unresolved T0 or T1 finding and no open escalation
+[ok]   B  No unresolved T0 or T1 finding, none that was recorded on this candidate and resolved on another, and no open escalation
 [ok]   E  Every applicable requirement with a command has a passing result for this candidate and this command text
 [ok]   I  The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version; the report carrying the verdict is stored intact
 [ok]   V  The latest round's verdict is GREEN, for this candidate, under this contract, by an author who never acted as implementer
@@ -460,6 +491,11 @@ $ metron findings
 F-0002  T2  open      maintainability: No usage message when slugify.sh is called without a title
         round 1, reported by the reviewer; components slugify.sh
 ```
+
+It is worked on like any other change, in ordinary commits and never inside a
+correction. When a later review finds that the commit under review no longer
+has the problem, the reviewer lists the finding under `addressed`, with the
+evidence, and that resolves it.
 
 ## Doing it with agents
 
@@ -503,6 +539,31 @@ $ metron next --json
 }
 ```
 
+An orchestrator runs the step `metron next` names and stops in two cases:
+`step` is `none`, because the gate is open, or `owner` is `governance`. The
+governance steps, `repair-ledger`, `pin-contract` and `adjudicate`, are
+decisions for the repository's owner, never steps to automate. While
+governance owns the next step, `metron packet` issues nothing, and while the
+campaign is suspended `metron check` records nothing either; both then exit
+with status 1. A campaign stopped there has not been approved: only `metron
+gate` exiting 0 means that.
+
+Two more things an unattended run needs:
+
+- **Bound your own retries.** A rejected report changes nothing, so Metron
+  cannot tell an agent that keeps failing from one that has not answered yet.
+  Give each packet a limited number of attempts, then stop and hand it to a
+  person.
+- **Bound the checks.** `metron check` stops a check command still running
+  after 30 minutes, or after `--timeout`, and records it as failed with exit
+  code 124. Set a limit that fits your checks.
+
+The campaign itself is bounded by the contract. Failed steps (a review that
+is not `GREEN`, a rejected fix, a failed check) bring in an auditor, and
+after a process audit, at an auditor's request, or once the campaign has
+issued 20 packets without an approval, it is suspended until governance
+resumes it with `metron resolve`.
+
 Metron does not start agents itself yet. Identities are declared, not proven:
 read the [trust model](trust-model.md) before you rely on the gate against
 agents you do not trust.
@@ -515,12 +576,16 @@ retry.
 | You see | What it means | What to do |
 | --- | --- | --- |
 | `Next step: commit-changes` | Files outside `.metron/` are modified or untracked. A review is bound to a commit. | Commit or discard them. Keep reports under `.metron/work/`. |
+| `Next step: commit-changes` with `blocking finding F-0001 was recorded on candidate …` | You are back on a commit where a blocking finding was recorded, after its fix was confirmed on another, for example because the fix was reverted. | Move to a commit that contains the fix. The same tree is never reviewed again in the hope of another verdict. |
 | `Next step: pin-contract` | The contract is incomplete, or it changed since it was pinned. | `metron contract`, fix what it lists, then `metron contract pin -m "<reason>"`. An open packet is voided. |
 | `report rejected by the structural layer` | The report does not have the right shape; the message names each member. | Fix those members and run `metron ingest` again. |
 | `the verdict is GREEN but the content implies RED` | The verdict must follow from the findings and the requirement statuses. | Correct the verdict or the content. |
 | `author "bob" acted as implementer in this ledger and cannot act as verifier` | Role separation. | Have someone else, or another agent, do it under their own `id`. |
-| `Next step: adjudicate` | Governance owes a decision: the review was `INDETERMINATE`, or the reviewer found a risk the contract does not cover. | Supply the evidence or amend and pin the contract, then `metron resolve E-0001 -m "<decision>"`. After an `INDETERMINATE` review the commit is then reviewed again. |
-| `Next step: audit` | The loop is not converging: a disputed finding, three rounds without `GREEN`, the same component fixed again and again. | `metron packet` issues the auditor's packet. The bar does not drop. |
+| `commit … changes the candidate since the reviewed commit …, and no fix lists it` | A commit made during the correction belongs to no fix. | List it under the finding it serves. A change that serves no finding does not belong in a correction: take it out of the candidate's history and make it outside the correction. |
+| `Next step: fix` with `claim it again in a report that accounts for every commit since the reviewed one` | The commit changed after the fix was claimed, for example to make a check pass, so the claim has lapsed. | `metron packet`, then claim the fix again, listing the new commits too. |
+| `the fix of F-0001 is confirmed although its scope is excessive` | A fix that changes more than its finding needs cannot be confirmed. | Reject it. The implementer takes out what the finding does not need. |
+| `Next step: adjudicate` | Governance owes a decision: the review was `INDETERMINATE`, the reviewer found a risk the contract does not cover, or the campaign is suspended. | Supply the evidence or amend and pin the contract, then `metron resolve E-0001 -m "<decision>"`. After an `INDETERMINATE` review the commit is then reviewed again. Resolving a suspension resumes the campaign; leaving it open ends it. |
+| `Next step: audit` | The loop is not converging: a disputed finding, three failed steps without `GREEN` (a review that is not `GREEN`, a rejected fix, a failed check), the same files changed fix after fix. | `metron packet` issues the auditor's packet. The bar does not drop. |
 | `Next step: submit-report` | A packet is open and waiting for its report. | `metron ingest <file>`. `metron packet` prints the packet again if it was lost. |
 
 ## Where to go next
