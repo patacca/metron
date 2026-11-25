@@ -16,3 +16,6 @@ coverage.*
 # Agent harness state
 .omc/
 .claude/settings.local.json
+
+# Metron
+.metron/
