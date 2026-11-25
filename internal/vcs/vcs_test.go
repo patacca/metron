@@ -272,6 +272,10 @@ func TestHeadWithoutCommits(t *testing.T) {
 	}
 }
 
+// unusualName is a path with a space and non-ASCII letters, which git quotes
+// unless asked for NUL-terminated output. Every platform accepts it.
+const unusualName = "dir with space/naïve é.txt"
+
 // describeRepo builds a history with one commit of each kind Describe must
 // tell apart, and returns their hashes by name. HEAD is the last merge.
 func describeRepo(t *testing.T) (string, *Repo, map[string]string) {
@@ -285,6 +289,11 @@ func describeRepo(t *testing.T) (string, *Repo, map[string]string) {
 	step("fix", func() { write(t, root, "a.txt", "fixed\n") })
 	step("only .metron", func() { write(t, root, ".metron/state/ledger.jsonl", "{}\n") })
 	step("empty", func() {})
+	// The mode changes on disk too, where the file system records it, so that
+	// adding everything for a later commit does not change it back.
+	if err := os.Chmod(filepath.Join(root, "a.txt"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	run(t, root, "update-index", "--chmod=+x", "a.txt")
 	run(t, root, "commit", "-q", "-m", "mode")
 	h["mode"] = head(t, r)
@@ -292,6 +301,12 @@ func describeRepo(t *testing.T) (string, *Repo, map[string]string) {
 		write(t, root, "dir/b.txt", "both\n")
 		write(t, root, ".metron/state/ledger.jsonl", "{}\n{}\n")
 	})
+	step("two directories", func() {
+		write(t, root, "src/one.go", "package one\n")
+		write(t, root, "docs/two.md", "two\n")
+	})
+	step("unusual name", func() { write(t, root, unusualName, "x\n") })
+	step("delete", func() { run(t, root, "rm", "-q", "docs/two.md") })
 
 	run(t, root, "checkout", "-q", "-b", "other")
 	step("other branch", func() { write(t, root, "other.txt", "o\n") })
@@ -321,20 +336,26 @@ func TestDescribe(t *testing.T) {
 	root, r, h := describeRepo(t)
 	missing := strings.Repeat("e", 40) // well formed, no such object
 	type flags struct{ reachable, inBase, substantive bool }
-	commits := map[string]flags{ // with base "fix"
-		"root":                   {true, true, true},
-		"fix":                    {true, true, true},
-		"only .metron":           {true, false, false},
-		"empty":                  {true, false, false},
-		"mode":                   {true, false, true},
-		"both":                   {true, false, true},
-		"other branch":           {false, false, true},
-		"side":                   {true, false, true},
-		"main, only .metron":     {true, false, false},
-		"merge":                  {true, false, true},
-		"side2, only .metron":    {true, false, false},
-		"merge of .metron":       {true, false, false},
-		"root with only .metron": {false, false, false},
+	commits := map[string]struct { // with base "fix"
+		flags
+		paths []string
+	}{
+		"root":                   {flags{true, true, true}, []string{"a.txt", "dir/b.txt"}},
+		"fix":                    {flags{true, true, true}, []string{"a.txt"}},
+		"only .metron":           {flags{true, false, false}, nil},
+		"empty":                  {flags{true, false, false}, nil},
+		"mode":                   {flags{true, false, true}, []string{"a.txt"}},
+		"both":                   {flags{true, false, true}, []string{"dir/b.txt"}},
+		"two directories":        {flags{true, false, true}, []string{"docs/two.md", "src/one.go"}},
+		"unusual name":           {flags{true, false, true}, []string{unusualName}},
+		"delete":                 {flags{true, false, true}, []string{"docs/two.md"}},
+		"other branch":           {flags{false, false, true}, []string{"other.txt"}},
+		"side":                   {flags{true, false, true}, []string{"side.txt"}},
+		"main, only .metron":     {flags{true, false, false}, nil},
+		"merge":                  {flags{true, false, true}, []string{"side.txt"}}, // not .metron/x, from its second parent
+		"side2, only .metron":    {flags{true, false, false}, nil},
+		"merge of .metron":       {flags{true, false, false}, nil},
+		"root with only .metron": {flags{false, false, false}, nil},
 	}
 	var names, input []string
 	for name := range h {
@@ -376,13 +397,18 @@ func TestDescribe(t *testing.T) {
 					want.inBase = false
 				}
 				c := got[i]
-				if (flags{c.Reachable, c.InBase, c.Substantive}) != want {
+				if (flags{c.Reachable, c.InBase, c.Substantive}) != want.flags || !slices.Equal(c.Paths, want.paths) {
 					t.Errorf("%s: got %+v, want %+v", name, c, want)
 				}
 			}
 			for i, c := range got[len(names) : len(names)+len(invalid)] {
-				if c.Reachable || c.InBase || c.Substantive {
-					t.Errorf("hash %q: got %+v, want every flag false", invalid[i], c)
+				if c.Reachable || c.InBase || c.Substantive || c.Paths != nil {
+					t.Errorf("hash %q: got %+v, want every flag false and no paths", invalid[i], c)
+				}
+			}
+			for _, c := range got {
+				if c.Substantive != (len(c.Paths) > 0) {
+					t.Errorf("%s: Substantive is %v with paths %q", c.Hash, c.Substantive, c.Paths)
 				}
 			}
 			if repeated, first := got[len(got)-1], got[slices.Index(names, "fix")]; !reflect.DeepEqual(repeated, first) {
