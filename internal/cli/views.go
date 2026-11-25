@@ -128,11 +128,18 @@ type statusDoc struct {
 	Clean     bool            `json:"clean"`
 	// IgnoreCase is set when git ignores case on a file system that
 	// distinguishes it, which makes the tree unclean.
-	IgnoreCase      bool              `json:"ignore_case_mismatch"`
-	Dirty           []treeDoc         `json:"dirty"`
-	Stage           core.Stage        `json:"stage,omitempty"`
-	Rounds          []core.Round      `json:"rounds"`
-	FailedStreak    int               `json:"failed_streak"`
+	IgnoreCase   bool         `json:"ignore_case_mismatch"`
+	Dirty        []treeDoc    `json:"dirty"`
+	Stage        core.Stage   `json:"stage,omitempty"`
+	Rounds       []core.Round `json:"rounds"`
+	FailedStreak int          `json:"failed_streak"`
+	// CampaignSteps is the number of packets issued in the current campaign
+	// and CampaignBudget the contract's suspend_after, which bounds it; the
+	// budget is 0 while the contract is unusable. Suspended names the open
+	// suspension, if the campaign is suspended.
+	CampaignSteps   int               `json:"campaign_steps"`
+	CampaignBudget  int               `json:"campaign_budget"`
+	Suspended       string            `json:"suspended,omitempty"`
 	OpenPacket      *openPacketDoc    `json:"open_packet"`
 	Findings        findingCounts     `json:"findings"`
 	OpenEscalations []core.Escalation `json:"open_escalations"`
@@ -237,8 +244,14 @@ func (w *world) status() statusDoc {
 			Protocol: st.Protocol(), Problem: w.facts.LedgerProblem},
 		Contract: contractSummary{Valid: w.facts.Contract != nil, Problem: w.facts.ContractProblem, Digest: w.facts.ContractDigest},
 		Clean:    w.facts.Clean, IgnoreCase: w.ignoreCase, Dirty: []treeDoc{}, Stage: st.Stage(), Rounds: st.StageRounds(), FailedStreak: st.FailedStreak(),
-		OpenEscalations: []core.Escalation{}, Checks: []checkStatus{}, StoredFiles: w.storedFiles(),
+		CampaignSteps: st.CampaignSteps(), OpenEscalations: []core.Escalation{}, Checks: []checkStatus{}, StoredFiles: w.storedFiles(),
 		GateOpen: w.gate().Open, Next: w.actionDoc(a),
+	}
+	if w.facts.Contract != nil {
+		d.CampaignBudget = w.facts.Contract.Thresholds().SuspendAfter
+	}
+	if e, ok := st.Suspension(); ok {
+		d.Suspended = e.ID
 	}
 	if why, run := w.ledgerUnusable(); why != "" && w.ledgerMissing {
 		d.Ledger.Problem = why + ": run " + run
@@ -357,7 +370,15 @@ func writeStatus(b *strings.Builder, w *world, d statusDoc) {
 			rounds = append(rounds, fmt.Sprintf("%d %s by %s", r.Number, r.Verdict, r.Reviewer))
 		}
 	}
-	fmt.Fprintf(b, "Rounds:       %s; failed streak %d\n", orNone(strings.Join(rounds, ", ")), d.FailedStreak)
+	fmt.Fprintf(b, "Rounds:       %s\n", orNone(strings.Join(rounds, ", ")))
+	campaign := fmt.Sprintf("%s since the last GREEN verdict or resumption; %s issued", plural(d.FailedStreak, "failed step"), plural(d.CampaignSteps, "packet"))
+	if d.CampaignBudget > 0 {
+		campaign += fmt.Sprintf(" of a budget of %d", d.CampaignBudget)
+	}
+	if d.Suspended != "" {
+		campaign = fmt.Sprintf("SUSPENDED by %s, awaiting governance; %s", d.Suspended, campaign)
+	}
+	fmt.Fprintf(b, "Campaign:     %s\n", campaign)
 	packet := "none"
 	if op := d.OpenPacket; op != nil {
 		packet = fmt.Sprintf("%s, %s for the %s, round %d", op.Packet, op.Action, op.Role, op.Round)

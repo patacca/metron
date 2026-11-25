@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 )
 
 // Commands are pure functions from state, facts and arguments to the drafts
@@ -75,6 +76,9 @@ func RecordEvidence(s State, f Facts, results []Evidence) ([]Draft, error) {
 	if !f.Clean {
 		return nil, refuse(LayerTransition, "the working tree has changes outside .metron/: commit or discard them, then run the checks")
 	}
+	if e, suspended := s.suspension(); suspended {
+		return nil, refuse(LayerTransition, "the campaign is suspended (%s) and records nothing until governance decides: resolve %s to resume", e.ID, e.ID)
+	}
 	var ps problems
 	if len(results) == 0 {
 		ps.add("", "there is no check result to record")
@@ -111,8 +115,21 @@ func RecordEvidence(s State, f Facts, results []Evidence) ([]Draft, error) {
 		return nil, err
 	}
 	drafts := make([]Draft, len(results))
+	var failed []string
 	for i, ev := range results {
 		drafts[i] = Draft{Type: EventEvidenceRecorded, Data: ev}
+		if !ev.Passed {
+			failed = append(failed, ev.Requirement)
+		}
+	}
+	// A recording with a failure is a failed step, like a round without
+	// GREEN, so that checks which never pass reach someone who can decide.
+	if len(failed) > 0 {
+		what := fmt.Sprintf("the %s of %s on candidate %s", pick(len(failed), "check", "checks"), strings.Join(failed, ", "), f.Candidate.Digest)
+		for i, e := range s.stalls(f.Contract.Thresholds(), len(s.rounds), "", what) {
+			e.ID = seqID("E", len(s.escalations)+i+1)
+			drafts = append(drafts, Draft{Type: EventEscalationRaised, Data: e})
+		}
 	}
 	return drafts, nil
 }
@@ -190,11 +207,11 @@ func PlanPacket(s State, f Facts) (PacketPlan, error) {
 			}
 		}
 	case StepAudit:
-		r, ok := s.base()
-		if !ok {
-			return PacketPlan{}, refuse(LayerTransition, "no round has a verdict, so no escalation can be open for an audit")
+		// An audit before any round has a verdict names round 0: the checks
+		// kept failing before a review could start.
+		if r, ok := s.base(); ok {
+			p.Round = r.Number
 		}
-		p.Round = r.Number
 		for _, e := range s.escalations {
 			if e.Open && e.Owner == RoleAuditor {
 				p.Escalations = append(p.Escalations, e)
@@ -248,12 +265,18 @@ func IssuePacket(s State, f Facts, p Packet, digest string) ([]Draft, error) {
 	for _, e := range p.Escalations {
 		escalations = append(escalations, e.ID)
 	}
-	return append(drafts, Draft{Type: EventPacketIssued, Data: PacketIssued{
+	drafts = append(drafts, Draft{Type: EventPacketIssued, Data: PacketIssued{
 		Packet: p.ID, Role: p.Role, Action: p.Action, Round: p.Round, Candidate: p.Candidate, Base: p.Base,
 		Contract: p.ContractDigest, Protocol: ProtocolVersion, Digest: digest,
 		Subjects: p.Subjects, Backlog: p.Backlog, RootCauseRequired: p.RootCauseRequired,
 		Escalations: escalations, Adjudicable: p.Adjudicable,
-	}}), nil
+	}})
+	// The packet that uses up the campaign budget is the last one issued
+	// without a decision by governance.
+	if e, ok := s.exhausted(f.Contract.Thresholds(), p); ok {
+		drafts = append(drafts, Draft{Type: EventEscalationRaised, Data: e})
+	}
+	return drafts, nil
 }
 
 // Resolve discharges a governance-owned escalation with governance's decision.

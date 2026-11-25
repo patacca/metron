@@ -80,8 +80,11 @@ type checkDoc struct {
 	// Recorded is true when the results were recorded in the ledger.
 	Recorded bool `json:"recorded"`
 	// Problem says why nothing was recorded.
-	Problem string     `json:"problem,omitempty"`
-	Next    *actionDoc `json:"next,omitempty"`
+	Problem string `json:"problem,omitempty"`
+	// EscalationsRaised lists the escalations a recording with a failure
+	// raised: it is a failed step, and enough of them call for an audit.
+	EscalationsRaised []string   `json:"escalations_raised"`
+	Next              *actionDoc `json:"next,omitempty"`
 	// limit is how long each command could run.
 	limit time.Duration
 }
@@ -115,7 +118,7 @@ func runCheck(c *ctx, args []string) error {
 	if err := before.candidate(); err != nil {
 		return err
 	}
-	d := checkDoc{Schema: "metron.check/v1", Candidate: before.facts.Candidate, Results: []checkResult{}, limit: limit}
+	d := checkDoc{Schema: "metron.check/v1", Candidate: before.facts.Candidate, Results: []checkResult{}, EscalationsRaised: []string{}, limit: limit}
 	// Refuse before running anything when the results could not be recorded.
 	if a := core.Next(before.state, before.facts); a.Step == core.StepRepairLedger || a.Step == core.StepPinContract {
 		d.Problem = a.Reason
@@ -173,6 +176,11 @@ func runCheck(c *ctx, args []string) error {
 				return err
 			}
 			d.Recorded = true
+			for _, e := range events {
+				if e.Type == core.EventEscalationRaised {
+					d.EscalationsRaised = append(d.EscalationsRaised, decode[core.EscalationRaised](e).ID)
+				}
+			}
 		}
 	}
 	if d.Problem != "" {
@@ -232,7 +240,12 @@ func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok
 		}
 		switch {
 		case d.Recorded:
-			fmt.Fprintf(&b, "Recorded %s for commit %s (candidate %s).\n", plural(len(events), "result"), short(d.Candidate.Commit), d.Candidate.Digest)
+			fmt.Fprintf(&b, "Recorded %s for commit %s (candidate %s).\n", plural(len(d.Results), "result"), short(d.Candidate.Commit), d.Candidate.Digest)
+			for _, e := range events {
+				if e.Type == core.EventEscalationRaised {
+					fmt.Fprintf(&b, "  escalation raised: %s\n", describe(e))
+				}
+			}
 		case d.Problem != "":
 			fmt.Fprintf(&b, "%s.\n", upper(d.Problem))
 		}

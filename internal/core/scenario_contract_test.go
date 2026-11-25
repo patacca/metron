@@ -66,7 +66,9 @@ func TestScenarioStageChange(t *testing.T) {
 
 	h.contract = stageTwoContract()
 	h.must(Pin(h.state, h.facts(), "enter controlled validation", "gov"))
-	if h.state.Stage() != StageControlledValidation || len(h.state.StageRounds()) != 0 || h.state.FailedStreak() != 0 {
+	// The gate looks only at the rounds of the new stage, but the stage
+	// change is not a new campaign: the failed steps stay counted.
+	if h.state.Stage() != StageControlledValidation || len(h.state.StageRounds()) != 0 || h.state.FailedStreak() != 2 {
 		t.Fatalf("stage %s, rounds %d, streak %d", h.state.Stage(), len(h.state.StageRounds()), h.state.FailedStreak())
 	}
 	// Findings carry over.

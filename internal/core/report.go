@@ -152,6 +152,9 @@ type AuditorBody struct {
 	// ContractRecommendations are suggestions for governance. They change
 	// nothing by themselves.
 	ContractRecommendations []string `json:"contract_recommendations,omitempty"`
+	// Suspend asks for the campaign to be suspended until governance decides,
+	// and says why. It keeps the gate closed and stops every role.
+	Suspend string `json:"suspend,omitempty"`
 }
 
 // EscalationResolution is an auditor's analysis and conclusion for one

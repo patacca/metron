@@ -82,7 +82,8 @@ func newView(p core.Packet) (*view, error) {
 	if p.Role != role {
 		return nil, fmt.Errorf("packet %s has action %q but role %q; that action belongs to the %s", p.ID, p.Action, p.Role, role)
 	}
-	if p.Round < 1 {
+	// An audit can be due before any round has a verdict; it names round 0.
+	if p.Round < 1 && (p.Action != core.StepAudit || p.Round != 0) {
 		return nil, fmt.Errorf("packet %s has round %d, but rounds are numbered from 1; the packet is malformed", p.ID, p.Round)
 	}
 

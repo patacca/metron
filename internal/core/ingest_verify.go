@@ -49,6 +49,7 @@ func (in *ingestion) verifierEvents(b VerifierBody) {
 	// confirmed counts the confirmed fixes of blocking findings: what the
 	// batch repaired of what the gate depends on.
 	confirmed := 0
+	var rejected []string
 	for _, v := range b.Verifications {
 		if v.Result == VerificationConfirmed {
 			if in.find(v.Finding).Tier.Blocking() {
@@ -56,6 +57,7 @@ func (in *ingestion) verifierEvents(b VerifierBody) {
 			}
 			in.add(EventFindingFixConfirmed, FindingFixConfirmed{ID: v.Finding, Packet: pk.Packet, Evidence: v.Evidence})
 		} else {
+			rejected = append(rejected, v.Finding)
 			in.add(EventFindingFixRejected, FindingFixRejected{ID: v.Finding, Packet: pk.Packet, Evidence: v.Evidence,
 				RootCauseRequired: in.find(v.Finding).Recurrences+1 >= in.th.RootCauseAfter})
 		}
@@ -74,5 +76,11 @@ func (in *ingestion) verifierEvents(b VerifierBody) {
 		in.raise(EscalationRegressionSpiral, fmt.Sprintf("verification %s found %s and confirmed %s", pk.Packet,
 			count(len(blocking), "blocking regression", "blocking regressions"),
 			count(confirmed, "fix of a blocking finding", "fixes of blocking findings")), blocking, nil, nil)
+	}
+	// A verification that rejects a fix or finds a blocking regression is a
+	// failed step, like a round without GREEN.
+	if len(rejected) > 0 || len(blocking) > 0 {
+		in.stall(fmt.Sprintf("verification %s, which rejected %s and found %s", pk.Packet,
+			count(len(rejected), "fix", "fixes"), count(len(blocking), "blocking regression", "blocking regressions")))
 	}
 }

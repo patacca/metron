@@ -134,6 +134,8 @@ func TestScenarioRootCauseRequired(t *testing.T) {
 		if got := d[1].Data.(FindingFixRejected).RootCauseRequired; got != (attempt == 2) {
 			t.Fatalf("attempt %d: root_cause_required %t", attempt, got)
 		}
+		// The RED round and two rejections are three failed steps.
+		h.drain()
 	}
 	if f, _ := lookup(h.state, "F-0001"); f.Recurrences != 2 || !f.RootCauseRequired || f.Status != StatusOpen {
 		t.Fatalf("finding %+v", f)
@@ -286,7 +288,7 @@ func TestScenarioFixCommittedBeforePacket(t *testing.T) {
 func TestScenarioNonConvergenceBeyondThreshold(t *testing.T) {
 	h := newHarness(t)
 	lenient := testContract()
-	lenient.Convergence = &Convergence{RootCauseAfter: 2, ConvergenceAuditAfter: 4, ProcessAuditAfter: 5}
+	lenient.Convergence = &Convergence{RootCauseAfter: 2, ConvergenceAuditAfter: 4, ProcessAuditAfter: 5, SuspendAfter: 20}
 	h.contract = lenient
 	h.must(Pin(h.state, h.facts(), "lenient", "gov"))
 	h.checks(true)
@@ -311,7 +313,7 @@ func TestScenarioNonConvergenceBeyondThreshold(t *testing.T) {
 		}
 	}
 	strict := testContract()
-	strict.Convergence = &Convergence{RootCauseAfter: 2, ConvergenceAuditAfter: 2, ProcessAuditAfter: 5}
+	strict.Convergence = &Convergence{RootCauseAfter: 2, ConvergenceAuditAfter: 2, ProcessAuditAfter: 5, SuspendAfter: 20}
 	h.contract = strict
 	h.must(Pin(h.state, h.facts(), "strict", "gov"))
 	for i, want := range [][]EscalationKind{
@@ -336,7 +338,7 @@ func TestScenarioNonConvergenceBeyondThreshold(t *testing.T) {
 func TestScenarioNonConvergenceAndProcessAudit(t *testing.T) {
 	h := newHarness(t)
 	h.checks(true)
-	for round := 1; round <= 6; round++ {
+	for round := 1; round <= 5; round++ {
 		rp := h.packet()
 		if rp.Round != round {
 			t.Fatalf("round %d, want %d", rp.Round, round)
@@ -355,12 +357,32 @@ func TestScenarioNonConvergenceAndProcessAudit(t *testing.T) {
 		if h.state.FailedStreak() != round {
 			t.Fatalf("streak %d after round %d", h.state.FailedStreak(), round)
 		}
-		h.drain()
+		if round < 5 {
+			h.drain()
+		}
+	}
+	// Governance resolves the evidence gap; the auditor discharges the
+	// process audit, which suspends the campaign.
+	h.must(Resolve(h.state, h.facts(), h.expect(StepAdjudicate).Escalations[0], "evidence supplied", "gov"))
+	ap := h.packet()
+	if k := raisedKinds(h.accept(ap, "aud-1", AuditorBody{Resolutions: resolutions(ap, "the contract cannot be verified at this stage")})); !slices.Equal(k, []EscalationKind{EscalationSuspension}) {
+		t.Fatalf("discharging the process audit raised %v", k)
+	}
+	a := h.expect(StepAdjudicate)
+	if e, ok := h.state.Suspension(); !ok || !slices.Equal(a.Escalations, []string{e.ID}) || a.Owner != RoleGovernance {
+		t.Fatalf("action %+v", a)
+	}
+	if _, err := PlanPacket(h.state, h.facts()); err == nil {
+		t.Fatal("a packet was planned while the campaign is suspended")
+	}
+	if h.state.FailedStreak() != 5 {
+		t.Fatalf("streak %d before governance decides", h.state.FailedStreak())
+	}
+	h.must(Resolve(h.state, h.facts(), a.Escalations[0], "resume: REQ-2 is now verifiable", "gov"))
+	if h.state.FailedStreak() != 0 || h.state.CampaignSteps() != 0 {
+		t.Fatalf("streak %d and steps %d after the resumption", h.state.FailedStreak(), h.state.CampaignSteps())
 	}
 	h.accept(h.packet(), "rev-1", green(h.contract))
-	if h.state.FailedStreak() != 0 {
-		t.Fatalf("streak %d after GREEN", h.state.FailedStreak())
-	}
 	h.expect(StepNone)
 }
 

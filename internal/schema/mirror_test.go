@@ -414,7 +414,7 @@ func TestEnumerations(t *testing.T) {
 		core.ReopenRegression, core.ReopenInvalidVerification, core.ReopenRequirementChanged, core.ReopenContractConflict}))
 	kinds := []core.EscalationKind{core.EscalationDispute, core.EscalationContradiction, core.EscalationComponentChurn,
 		core.EscalationRegressionSpiral, core.EscalationNonConvergence, core.EscalationProcessAudit,
-		core.EscalationContractGap, core.EscalationEvidenceGap}
+		core.EscalationContractGap, core.EscalationEvidenceGap, core.EscalationSuspension}
 	check("escalationKind", enumOf(defs("escalationKind")), sorted(kinds))
 	for _, k := range kinds {
 		if k.Owner() == "" {

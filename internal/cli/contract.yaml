@@ -36,7 +36,7 @@ project:
 # controlled-validation, pilot, production or continuous-improvement. Each
 # stage adds review domains that the requirements below must cover, and
 # coverage is cumulative (`metron protocol` lists them). Pinning a different
-# stage later restarts the count of consecutive failed rounds.
+# stage later does not start a new campaign: failed steps stay counted.
 stage: prototype
 
 # The concrete activity a GREEN gate permits, precise enough that anyone can
@@ -125,12 +125,21 @@ not_applicable: []
 calibrations: []
 
 # Optional: the thresholds of the convergence safeguards, the only tunable
-# values. Without this member the defaults apply, as if it read:
+# values. When this member is present it states all four. Without it the
+# defaults apply, as if it read:
 #   convergence:
 #     root_cause_after: 2         # rejected fixes and reopenings of a finding
 #                                 # before its next fix needs a root cause
-#     convergence_audit_after: 3  # consecutive rounds without GREEN before a
-#                                 # convergence analysis
-#     process_audit_after: 5      # consecutive rounds without GREEN before an
-#                                 # independent process audit, and at each
-#                                 # multiple
+#     convergence_audit_after: 3  # failed steps without a GREEN verdict
+#                                 # before a convergence analysis. A failed
+#                                 # step is a review that does not end GREEN,
+#                                 # a verification that rejects a fix or
+#                                 # finds a blocking regression, or a check
+#                                 # run with a failure
+#     process_audit_after: 5      # failed steps without a GREEN verdict
+#                                 # before an independent process audit,
+#                                 # after which the campaign is suspended
+#                                 # until you resume it
+#     suspend_after: 20           # packets a campaign may issue, whatever
+#                                 # their outcome, before it is suspended
+#                                 # until you resume it

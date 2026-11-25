@@ -296,13 +296,14 @@ const (
 	EscalationProcessAudit     EscalationKind = "process-audit"
 	EscalationContractGap      EscalationKind = "contract-gap"
 	EscalationEvidenceGap      EscalationKind = "evidence-gap"
+	EscalationSuspension       EscalationKind = "suspension"
 )
 
 // Owner returns the role that must discharge an escalation of this kind, or
 // the empty role if k is not an escalation kind.
 func (k EscalationKind) Owner() Role {
 	switch k {
-	case EscalationContractGap, EscalationEvidenceGap:
+	case EscalationContractGap, EscalationEvidenceGap, EscalationSuspension:
 		return RoleGovernance
 	case EscalationDispute, EscalationContradiction, EscalationComponentChurn,
 		EscalationRegressionSpiral, EscalationNonConvergence, EscalationProcessAudit:

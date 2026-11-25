@@ -40,6 +40,10 @@ func (s *State) onFindingOpened(data []byte) error {
 		ID: p.ID, Status: StatusOpen, Tier: p.Input.Tier, Round: p.Round, Source: p.Source, Input: p.Input,
 	})
 	s.record(&s.findings[len(s.findings)-1], EventFindingOpened, p.Packet, s.examined(p.Packet), "")
+	// A blocking regression makes its verification a failed step.
+	if p.Source == RoleVerifier && p.Input.Tier.Blocking() {
+		s.fail()
+	}
 	return nil
 }
 
@@ -104,6 +108,7 @@ func (s *State) onFixRejected(data []byte) error {
 	f.Recurrences++
 	f.RootCauseRequired = f.RootCauseRequired || p.RootCauseRequired
 	s.record(f, EventFindingFixRejected, p.Packet, s.examined(p.Packet), p.Evidence)
+	s.fail()
 	return nil
 }
 

@@ -340,9 +340,10 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 ## Convergence thresholds
 
 - Root-cause analysis: required for a finding's next fix once its rejected fixes and reopenings reach 2.
-- Convergence analysis: once per streak, when consecutive rounds without GREEN reach 3.
-- Independent process audit: each time the count of consecutive rounds without GREEN reaches a multiple of 5.
-- A streak of rounds without GREEN ends with a GREEN verdict, and its count restarts when a pin changes the stage.
+- Convergence analysis: once per streak, when the failed steps without a GREEN verdict reach 3. A failed step is a review that does not end GREEN, a verification that rejects a fix or finds a blocking regression, or a run of the checks with a failure.
+- Independent process audit: each time the failed steps without a GREEN verdict reach a multiple of 5. Once it is discharged, the campaign is suspended until governance resumes it.
+- Campaign budget: the campaign is suspended once it has issued 20 packets without an approval, whatever the outcome of each step.
+- The count of failed steps restarts with a GREEN verdict or when governance resumes a suspended campaign. A pin does not restart it, whether or not it changes the stage.
 
 ## Findings to fix or dispute
 

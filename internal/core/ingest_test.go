@@ -469,7 +469,7 @@ func TestAuditorRules(t *testing.T) {
 func TestIngestEventOrder(t *testing.T) {
 	h := newHarness(t)
 	c := testContract()
-	c.Convergence = &Convergence{RootCauseAfter: 1, ConvergenceAuditAfter: 2, ProcessAuditAfter: 4}
+	c.Convergence = &Convergence{RootCauseAfter: 1, ConvergenceAuditAfter: 2, ProcessAuditAfter: 4, SuspendAfter: 20}
 	h.contract = c
 	h.must(Pin(h.state, h.facts(), "faster escalation", "gov"))
 	h.checks(true)

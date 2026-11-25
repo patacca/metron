@@ -95,7 +95,6 @@ var invalidFixtures = map[string][]string{
 	"report/resolution-missing-conclusion":            {"/body/resolutions/0"},
 	"report/resolution-bad-escalation-id":             {"/body/resolutions/0/escalation"},
 	"report/auditor-without-resolutions":              {"/body"},
-	"event/escalation-raised-without-packet":          {"/data"},
 	"event/packet-issued-bad-base":                    {"/data/base", "/data/base/commit"},
 	"packet/history-unknown-event":                    {"/findings/0/history/0/event"},
 	"packet/history-missing-round":                    {"/findings/0/history/0"},

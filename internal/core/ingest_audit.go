@@ -66,6 +66,9 @@ func (in *ingestion) checkAuditor(b AuditorBody) {
 			in.sem.add("/body/adjudications", "finding %s has no decision: uphold, withdraw or reclassify every adjudicable finding", id)
 		}
 	}
+	if b.Suspend != "" && blank(b.Suspend) {
+		in.sem.add("/body/suspend", "suspend is blank: say why governance must decide before the campaign continues, or remove the member")
+	}
 	statements(&in.sem, "/body/directives", b.Directives, "directive")
 	statements(&in.sem, "/body/contract_recommendations", b.ContractRecommendations, "recommendation")
 }
@@ -126,4 +129,5 @@ func (in *ingestion) auditorEvents(b AuditorBody) {
 			}
 		}
 	}
+	in.suspend(b)
 }

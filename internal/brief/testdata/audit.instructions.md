@@ -83,23 +83,31 @@ further fixes to it must take.
 A verification found at least one blocking regression and no fewer
 blocking regressions than the fixes of blocking findings it confirmed: the
 fixes are breaking things at least as fast as they repair them, and
-incremental patching has stopped working. Assess whether it should be suspended in favour of redesigning the
-affected area. Look at the regressions, the fixes that caused them, and the
-coupling that lets one change break another. Your conclusion says whether
-patching may continue and on what conditions, or what must be redesigned
-first; a directive makes that binding.
+incremental patching has stopped working. Assess whether it should stop in favour of redesigning the affected
+area. Look at the regressions, the fixes that caused them, and the coupling
+that lets one change break another. Your conclusion says whether patching may
+continue and on what conditions, or what must be redesigned first; a
+directive makes that binding. If the redesign is a decision governance has
+to take before any more work is done, ask for the campaign to be suspended
+(see below).
 
 ### `process-audit`: `E-0010`
 
-The number of consecutive rounds that ended without a GREEN verdict has
-reached a multiple of 5: the earlier
-safeguards, including any convergence analysis and its directives, have not
-brought the loop to a decision. Audit the process itself, independently of
-earlier audits: whether the contract is fit for this stage, whether each role
-is doing its job as the protocol defines it, whether earlier directives were
-followed and whether they helped, and whether the stage the contract targets
-is the right one. Do not take an earlier audit's conclusions as given; check
-them.
+The count of failed steps without a GREEN verdict has reached a multiple of
+5: the earlier safeguards, including any convergence analysis and
+its directives, have not brought the loop to a decision. Audit the process
+itself, independently of earlier audits: whether the contract is fit for this
+stage, whether each role is doing its job as the protocol defines it, whether
+earlier directives were followed and whether they helped, and whether the
+stage the contract targets is the right one. Do not take an earlier audit's
+conclusions as given; check them.
+
+This audit ends the unattended part of the campaign. When Metron accepts
+your report it suspends the campaign, and nothing continues until governance
+has read your conclusion and decided: to resume, to amend the contract first,
+or to leave the campaign suspended. Write the conclusion for that reader. Say
+what is going wrong, what you recommend, and what would have to be true for
+resuming to be worth it.
 
 ## Adjudication
 
@@ -151,6 +159,19 @@ criterion, a missing requirement, an unrealistic envelope or a requirement
 that cannot be verified at this stage, recommend the change in
 `contract_recommendations`. Governance decides; a recommendation changes
 nothing by itself.
+
+## Suspending the campaign
+
+You can ask for the campaign to be suspended by giving the reason in
+`suspend`. Metron then stops the loop: the gate stays closed, no packet is
+issued and no check is recorded until governance resolves the suspension. Use
+it when continuing would waste work or do harm until governance has decided
+something only it can decide: an area has to be redesigned, the contract
+cannot be met as written, a finding that should block has nothing in the
+contract to stand on, or the evidence a requirement needs cannot exist at
+this stage. Do not use it to avoid a decision that is yours, such as an
+adjudication. A suspension is not a verdict on the candidate: it approves
+nothing and rejects nothing.
 
 ## How to investigate
 
@@ -211,3 +232,4 @@ The body has these members:
 | `adjudications` | One entry per adjudicable finding, with `finding` (its `F-` identifier), `decision` (`uphold`, `withdraw` or `reclassify`), `tier` (the new tier; present for, and only for, `reclassify`) and `rationale` (why, with the evidence you checked). Left out when there is nothing to adjudicate. |
 | `directives` | Optional. Binding guidance for every later packet, one statement per entry. |
 | `contract_recommendations` | Optional. Changes to the contract you recommend to governance, one per entry, each with its reason. |
+| `suspend` | Optional. Why the campaign must be suspended until governance decides, written for governance. Leave it out to let the loop continue. |

@@ -87,17 +87,21 @@ type Convergence struct {
 	// RootCauseAfter is the recurrence count at which a finding's next fix
 	// must include a root-cause analysis.
 	RootCauseAfter int `json:"root_cause_after"`
-	// ConvergenceAuditAfter is the number of consecutive rounds without GREEN
-	// that triggers a convergence analysis.
+	// ConvergenceAuditAfter is the number of failed steps without a GREEN
+	// verdict that triggers a convergence analysis.
 	ConvergenceAuditAfter int `json:"convergence_audit_after"`
-	// ProcessAuditAfter is the number of consecutive rounds without GREEN
-	// that triggers an independent process audit, and again at each multiple.
+	// ProcessAuditAfter is the number of failed steps without a GREEN verdict
+	// that triggers an independent process audit, and again at each
+	// multiple. Discharging that audit suspends the campaign.
 	ProcessAuditAfter int `json:"process_audit_after"`
+	// SuspendAfter is the campaign budget: the number of packets a campaign
+	// may issue, whatever their outcome, before it is suspended.
+	SuspendAfter int `json:"suspend_after"`
 }
 
 // DefaultConvergence returns the protocol's default thresholds.
 func DefaultConvergence() Convergence {
-	return Convergence{RootCauseAfter: 2, ConvergenceAuditAfter: 3, ProcessAuditAfter: 5}
+	return Convergence{RootCauseAfter: 2, ConvergenceAuditAfter: 3, ProcessAuditAfter: 5, SuspendAfter: 20}
 }
 
 // Thresholds returns the contract's convergence thresholds, or the defaults if

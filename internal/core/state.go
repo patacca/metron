@@ -29,14 +29,20 @@ type State struct {
 	evidence    []Evidence
 	decisions   []Decision
 	actors      []actor
-	// streak counts the consecutive rounds of the current stage that ended
-	// without GREEN, and convergenceRaised whether a non-convergence
-	// escalation was raised during it.
+	// streak counts the failed steps since the last GREEN verdict or the last
+	// resumption by governance, and convergenceRaised whether a
+	// non-convergence escalation was raised during it.
 	streak            int
 	convergenceRaised bool
-	// churn tracks, for the current stage, the rounds in which each
+	// steps counts the packets issued in the current campaign: since the
+	// ledger began, the last approval or the last resumption by governance.
+	steps int
+	// churn tracks, for the current campaign, the rounds in which each
 	// component was named in a fix.
 	churn []churn
+	// counted is set once the batch of events being folded has been counted
+	// as a failed step, and midBatch while more events of that batch follow.
+	counted, midBatch bool
 }
 
 // Round is one review round.
@@ -81,7 +87,8 @@ type churn struct {
 }
 
 // Replay folds events, in order, into a new State. Like Apply it ignores
-// Seq, Prev and Hash; verifying the chain is the store's job.
+// Seq, Prev and Hash; verifying the chain is the store's job. It reads More
+// to tell where one command's events end.
 func Replay(events []Event) (State, error) {
 	var s State
 	for i, e := range events {
@@ -124,6 +131,12 @@ func (s *State) apply(e Event) error {
 		return fmt.Errorf("the ledger must begin with %s", EventLedgerInitialized)
 	}
 	s.applied++
+	// A failed step is one command, however many of its events record a
+	// failure: one verification that rejects three fixes fails once.
+	if !s.midBatch {
+		s.counted = false
+	}
+	s.midBatch = e.More > 0
 	switch e.Type {
 	case EventLedgerInitialized:
 		return s.onInitialized(e.Data)

@@ -168,7 +168,8 @@
         "non-convergence",
         "process-audit",
         "contract-gap",
-        "evidence-gap"
+        "evidence-gap",
+        "suspension"
       ]
     },
     "requirementStatus": {

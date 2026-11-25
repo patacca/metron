@@ -2,7 +2,8 @@
 
 Metron is a convergent engineering review framework. It decides whether a
 specific commit of a repository is approved for a specific lifecycle stage, and
-it keeps the review process that leads to that decision from looping forever.
+it bounds how long the review process that leads to that decision can run
+without a decision by the repository's owner.
 
 This document is the normative design. Where code and this document disagree,
 one of them has a bug. Trust assumptions are in [trust-model.md](trust-model.md).
@@ -12,7 +13,7 @@ one of them has a bug. Trust assumptions are in [trust-model.md](trust-model.md)
 | Principle | Meaning in Metron |
 | --- | --- |
 | Safety | The gate never opens while a mandatory requirement is violated or unverified. Every failure mode closes the gate. |
-| Liveness | When the mandatory requirements are satisfied there is always a finite path to an open gate. Possible improvements never block. |
+| Liveness | Every state names one action that someone can perform, and a campaign never runs unattended without bound: within the limits the contract sets, the gate opens or the next action belongs to governance. Possible improvements never block. Whether a campaign reaches GREEN depends on engineering judgments, which Metron does not make (section 10). |
 | Proportionality | A finding blocks only if it is tied to a contract requirement or an unacceptable risk. Over-engineering is itself reviewable. |
 | Empiricism | Decisions cite evidence. What cannot be decided without real-world data is a calibration, not a blocker. |
 | Independence | Iteration counts, effort and deadlines change the investigation procedure, never the approval threshold. |
@@ -30,7 +31,7 @@ depends on an agent harness or workflow engine.
 | --- | --- | --- |
 | Metron | The next permitted action, whether a report is acceptable, ledger state, escalations, the gate outcome | Make engineering judgments |
 | Agents and humans in a role | Engineering judgments: findings, fixes, verifications, audits | Write ledger state, change the contract, open the gate |
-| Orchestrators | When and how to execute the action Metron names | Choose a different action, skip one, or override an outcome |
+| Orchestrators | When and how to execute the action Metron names | Choose a different action, skip one, override an outcome, or continue past an action that belongs to governance |
 | Governance (repository owner) | The acceptance contract and its amendments | Bypass the gate conditions |
 
 All execution modes (manual packet exchange, a harness calling the CLI, an
@@ -200,7 +201,7 @@ nothing can be reviewed against an unpinned contract.
 | `risks.accepted` | no | Residual risks governance has accepted; never blocking |
 | `not_applicable` | no | Domains waived for this stage, each with a rationale |
 | `calibrations` | no | Provisional parameters, the evidence needed, and when to reassess |
-| `convergence` | no | Thresholds; defaults 2, 3 and 5 |
+| `convergence` | no | Thresholds; defaults 2, 3, 5 and 20. When present it states all four |
 
 A **requirement** has an `id` (`REQ-n`), a `domain`, a `statement` (what must
 hold), a `criterion` (the acceptance boundary: how anyone decides it holds), an
@@ -214,6 +215,12 @@ A `command` is run by a POSIX shell (`sh -c`) from the repository root, on
 every platform, so that the same command text means the same thing wherever a
 result is recorded. On Windows, Metron uses the `sh` found on `PATH`, and
 otherwise the one that ships with Git.
+
+Every run is bounded. A command still running after the limit given to
+`metron check --timeout`, 30 minutes unless stated, is stopped together with
+what it started, and recorded as a failed result with exit status 124. A check
+that hangs is therefore a failed step like any other (section 10), not a
+campaign that waits for ever.
 
 There are no gate settings. The gate conditions are fixed (section 11).
 
@@ -240,7 +247,7 @@ the reviewer looks at: the reviewer always assesses all 18 domains.
    forbids unknown members.
 3. Semantic: identifiers are unique and well-formed, text members are not
    blank, at least one requirement is applicable, stage coverage holds, a
-   waived domain has no applicable requirement, and the thresholds are
+   waived domain has no applicable requirement, and the four thresholds are
    positive with the convergence threshold below the process-audit one.
 
 **Digests.** Two digests are computed and both are recorded when pinning:
@@ -265,9 +272,11 @@ set. Pinning the digest that is
 already pinned is refused. A finding that was disputed can be disputed again
 after a new pin, because the contract it is judged against has changed.
 
-When a pin changes `stage`, the count of consecutive failed rounds, the
-non-convergence flag and the component-churn counts restart; round numbers and
-findings carry over.
+A pin that changes `stage` is a new question for the gate, which then looks
+only at the rounds held since. It is not a new campaign: round numbers and
+findings carry over, and so does everything the loop has counted towards an
+escalation (section 10). Amending the contract never erases the record of a
+loop that is not converging.
 
 ## 7. Ledger
 
@@ -355,7 +364,7 @@ report, so the loss of a file never closes the gate for good.
 | `finding.fix-confirmed` / `finding.fix-rejected` | A verifier's result |
 | `finding.reopened` | A resolved finding was reopened, with a reason |
 | `finding.withdrawn` / `finding.reclassified` | An auditor adjudication |
-| `escalation.raised` / `escalation.resolved` | A convergence safeguard fired or was discharged |
+| `escalation.raised` / `escalation.resolved` | A convergence safeguard fired or was discharged; resolving a `suspension` resumes the campaign |
 | `directive.issued` | Binding guidance from an audit, carried into later packets |
 
 **Finding state machine**
@@ -397,6 +406,15 @@ the finding events in the order the report lists them, reopenings before new
 findings; `verdict.recorded`; `directive.issued` in report order;
 `escalation.resolved` in identifier order; `escalation.raised`, ordered by
 kind as listed in section 10 and then by subject.
+
+Two other commands can raise an escalation. Recording check results yields
+the `evidence.recorded` events in contract order, then the escalations of the
+failure streak if a check failed. Issuing a packet yields `packet.voided` for
+a stale open packet, `round.opened` for a review, `packet.issued`, and then a
+`suspension` if that packet uses up the campaign budget.
+
+A command's events form one batch (`more`). A batch that records a failure
+counts as one failed step, however many of its events record one.
 
 ## 8. The review loop
 
@@ -443,8 +461,9 @@ changes none of that.
 A **round** is one independent, read-only, full-scope review of one candidate.
 Issuing a review packet opens a new round. Rounds are numbered from 1 across
 the whole ledger, so a round number identifies one review unambiguously. A
-round whose packet was voided has no verdict and is skipped when counting
-consecutive failures. Fixing and verifying happen between rounds:
+round whose packet was voided has no verdict and is not a failed step, though
+its packet counts against the campaign budget (section 10). Fixing and
+verifying happen between rounds:
 
 ```
 review ──RED──▶ fix ──▶ verify ──all confirmed──▶ review (new candidate)
@@ -585,31 +604,100 @@ the digest of its canonical JSON form.
   finding that stands on the contract. A finding never blocks on an auditor's
   word alone.
 - May issue directives. May recommend, but not make, contract changes.
+- May ask, in `suspend`, for the campaign to be suspended until governance
+  decides, with the reason.
 
 ## 10. Convergence safeguards
 
-Safeguards change the investigation procedure. They never lower the bar and
-never open the gate. Each raises an escalation; any open escalation keeps the
-gate closed and takes priority in `metron next`.
+Safeguards change the investigation procedure, and in the end they stop it.
+They never lower the bar and never open the gate. Each raises an escalation;
+any open escalation keeps the gate closed and takes priority in `metron next`.
 
 | Kind | Raised when | Owner | Discharged by |
 | --- | --- | --- | --- |
 | `dispute` | An implementer disputes a finding | auditor | Adjudication |
 | `contradiction` | A finding declares that it reverses an earlier resolution | auditor | Adjudication |
-| `component-churn` | The same component is fixed in 3 distinct rounds of a stage; raised once per component per stage | auditor | Component-level audit |
+| `component-churn` | The same component is fixed in 3 distinct rounds of a campaign; raised once per component per campaign | auditor | Component-level audit |
 | `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes of blocking findings it confirms | auditor | Redesign assessment |
-| `non-convergence` | Consecutive rounds without GREEN reach 3; raised once per streak | auditor | Convergence analysis |
-| `process-audit` | Every 5th consecutive round ends without GREEN | auditor | Independent process audit |
+| `non-convergence` | The failure streak reaches 3; raised once per streak | auditor | Convergence analysis |
+| `process-audit` | The failure streak reaches a multiple of 5 | auditor | Independent process audit. Discharging it raises a `suspension` |
 | `contract-gap` | A reviewer reports a risk the contract does not cover | governance | `metron resolve`, after amending the contract or dismissing with a rationale |
 | `evidence-gap` | A verdict is `INDETERMINATE` | governance | `metron resolve`, after supplying evidence or amending the contract |
+| `suspension` | A process audit is discharged; an auditor asks for it; or the campaign issues its 20th packet without an approval | governance | `metron resolve`: the decision to resume |
 
 One safeguard is not an escalation: when a finding's recurrence count reaches
 2, it is flagged **root-cause-required**, and the next fix for it must include
 a root-cause analysis.
 
-The thresholds 2, 3 and 5 are defaults and the only tunable values.
-Escalation resolutions and audit directives are carried into every later
-packet.
+The thresholds 2, 3, 5 and 20 are defaults and the only tunable values:
+`root_cause_after`, `convergence_audit_after`, `process_audit_after` and
+`suspend_after`. Escalation resolutions and audit directives are carried into
+every later packet.
+
+**Campaigns.** A campaign is the work towards one approval. It begins with the
+ledger, with the first round opened after an approval, or when governance
+resumes a suspended campaign. It ends in one of two ways: **approved**, when
+the gate opens, or **suspended**, when a `suspension` is open. Nothing else
+ends it, and nothing else begins one: not a pin, not a change of stage, not a
+new candidate, not the discharge of an audit.
+
+**The failure streak** counts failed steps. A failed step is a command whose
+events record a failure:
+
+- a review whose verdict is not GREEN;
+- a verification that rejects a fix or reports a blocking regression;
+- a check recording in which a check failed, a check stopped for exceeding its
+  time limit included.
+
+The streak restarts at zero with a GREEN verdict and when governance resumes a
+suspended campaign. Steps that succeed in between (a confirmed fix, a passing
+check, a discharged audit) leave it where it is: they are progress on a
+finding, not on the campaign. Because the streak counts every kind of step, a
+loop that never reaches a second review, such as a fix rejected again and
+again or a check that cannot pass, is seen as soon as one that fails round
+after round. Failing checks can make an audit due before any round has a
+verdict; its packet then names round 0.
+
+**The campaign budget** counts every packet issued in the campaign, whatever
+becomes of it: answered, or voided before anyone answered. It is what bounds
+a campaign whose individual steps keep succeeding, or whose packets are never
+answered. The packet that uses the budget up is issued together with the
+suspension. Its role may still answer it, and then nothing more is issued.
+
+**Suspension** is termination without approval. While a `suspension` is open:
+
+- the gate is closed, even if the last verdict is GREEN;
+- `metron next` names `adjudicate`, owned by governance (section 8, row 4);
+- no packet is issued and no check result is recorded. Only the report of a
+  packet that was already open is still accepted.
+
+Only governance ends it, with `metron resolve`: an explicit decision to
+resume, usually after doing what the audit found necessary, such as amending
+the contract. Resuming begins a new campaign: the failure streak, the budget
+and the component-churn counts start again. Governance may also leave the
+campaign suspended, which is how a campaign that cannot converge ends.
+Pinning a contract does not resume anything.
+
+**What this guarantees, and what it does not.** Whatever the roles do:
+
+- *Safety.* The gate opens only when all five conditions of section 11 hold.
+- *No approval through exhaustion.* No count, budget or time limit opens the
+  gate or lowers a threshold. Running out of budget suspends.
+- *A next action.* Every state names exactly one action and its owner, and a
+  report or command that performs it as the protocol describes is accepted.
+- *Bounded unattended execution.* An orchestrator that performs the actions
+  `metron next` names reaches an open gate or an action owned by governance
+  after at most `suspend_after` packets, and after at most
+  `process_audit_after` failed steps and the audits they raise.
+
+Metron cannot guarantee that a campaign reaches GREEN. That takes a candidate
+that can meet the contract, a contract that can be met, and roles that judge
+well; none of these is something a deterministic program can establish. A
+suspended campaign is therefore not a failure of the process: it is the
+process stopping where only a decision can help. What Metron does not see at
+all is a role that never reports, or whose reports are all rejected: a
+rejected report changes nothing, so an orchestrator must bound its own
+retries of one packet.
 
 ## 11. The gate
 
@@ -640,10 +728,10 @@ A GREEN gate approves one candidate for one stage and the activity named in
 | `metron contract` | Validate the contract and show whether it matches the pinned digest |
 | `metron contract pin -m <reason>` | Governance: authorize the current contract |
 | `metron next` | Print the single next permitted action and the command that performs it |
-| `metron check` | Run the applicable requirements' check commands on the candidate and record the results |
+| `metron check [--timeout <duration>]` | Run the applicable requirements' check commands on the candidate, each within the time limit, and record the results. A recording with a failure is a failed step (section 10) |
 | `metron packet [-o file] [--format json\|prompt\|skeleton]` | Issue, or return again, the packet for the next action: as JSON, as a self-contained prompt, or as a report skeleton to fill in |
 | `metron ingest <file\|->` | Validate and ingest a role report |
-| `metron resolve <E-id> -m <decision>` | Governance: discharge a governance-owned escalation |
+| `metron resolve <E-id> -m <decision>` | Governance: discharge a governance-owned escalation. Resolving a `suspension` resumes the campaign |
 | `metron gate` | Evaluate the gate |
 | `metron status`, `metron findings [--backlog\|--all]`, `metron log` | Read-only views of the ledger. `findings` lists what is unresolved, the non-blocking backlog, or everything |
 | `metron fsck` | Verify the ledger's hash chain and replay, every event against the event schema, and every stored file against the ledger |
@@ -673,10 +761,22 @@ Exit status is part of the public interface:
 | 3 | Environment or internal error: I/O, git unavailable, ledger corrupt, lock held |
 
 For `metron gate` the distinction matters to an orchestrator: 1 means the
-gate was evaluated and is closed, so the loop continues; 3 means it could not
-be evaluated, because the ledger is missing, unreadable or fails verification,
-so someone has to intervene. `metron next` and `metron status` report a ledger
+gate was evaluated and is closed; 3 means it could not be evaluated, because
+the ledger is missing, unreadable or fails verification, so someone has to
+intervene. A closed gate does not mean the loop continues. Whether it does is
+for `metron next` to say. `metron next` and `metron status` report a ledger
 problem as their result and exit 0; `metron fsck` exits 1 when it finds one.
+
+**The orchestrator's stop rule.** An orchestrator runs the action `metron
+next` names and stops in two cases: the step is `none`, because the gate is
+open, or the `owner` is `governance`, because the next action is a decision
+only the repository's owner can make (`repair-ledger`, `pin-contract`,
+`adjudicate`). It does not perform a governance action itself, and it does not
+look for another action to run instead. Metron enforces its side of this: while
+governance owns the next action no packet is issued, and while the campaign is
+suspended no check is recorded either, so `metron packet` and `metron check`
+exit 1. A campaign stopped for governance has not been approved, and it must
+not be reported as if it had.
 
 ## 13. Code layout
 

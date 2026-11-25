@@ -24,9 +24,18 @@ func (s State) Stage() Stage {
 // StageRounds returns the rounds of the current stage, numbered from 1.
 func (s State) StageRounds() []Round { return slices.Clone(s.stageRounds()) }
 
-// FailedStreak returns the number of consecutive rounds of the current stage
-// that ended without GREEN.
+// FailedStreak returns the number of failed steps since the last GREEN
+// verdict or the last resumption by governance: verdicts other than GREEN,
+// verifications that rejected a fix or found a blocking regression, and
+// check recordings with a failure.
 func (s State) FailedStreak() int { return s.streak }
+
+// CampaignSteps returns the number of packets issued in the current
+// campaign, which the contract's suspend_after bounds.
+func (s State) CampaignSteps() int { return s.steps }
+
+// Suspension returns the open suspension, if the campaign is suspended.
+func (s State) Suspension() (Escalation, bool) { return s.suspension() }
 
 // Packets returns every issued packet in identifier order.
 func (s State) Packets() []PacketRecord { return slices.Clone(s.packets) }

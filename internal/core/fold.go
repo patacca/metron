@@ -50,11 +50,11 @@ func (s *State) onPinned(data []byte) error {
 	for i := range s.findings {
 		s.findings[i].Disputed = false
 	}
+	// A new stage is a new question for the gate, which then looks only at
+	// the rounds held since. It is not a new campaign: what the loop has
+	// accumulated towards an escalation stays.
 	if cur, ok := s.pin(); !ok || cur.Stage != p.Stage {
 		s.epochStart = len(s.rounds)
-		s.streak = 0
-		s.convergenceRaised = false
-		s.churn = nil
 	}
 	s.pins = append(s.pins, p)
 	return nil
@@ -81,6 +81,9 @@ func (s *State) onEvidence(data []byte) error {
 		return fmt.Errorf("passed is %t but the exit code is %d", p.Passed, p.ExitCode)
 	}
 	s.evidence = append(s.evidence, p)
+	if !p.Passed {
+		s.fail()
+	}
 	return nil
 }
 
@@ -110,6 +113,10 @@ func (s *State) onRoundOpened(data []byte) error {
 		return fmt.Errorf("round %d opened; the next round is %d", p.Round, len(s.rounds)+1)
 	case !validCandidate(p.Candidate):
 		return fmt.Errorf("the candidate cannot be identified: %s", candidateProblem(p.Candidate))
+	}
+	// The first round after an approval begins a new campaign.
+	if s.approved() {
+		s.steps, s.churn = 0, nil
 	}
 	s.rounds = append(s.rounds, Round{Number: p.Round, Stage: p.Stage, Candidate: p.Candidate, Contract: p.Contract})
 	return nil
@@ -169,7 +176,10 @@ func (s *State) onPacketIssued(data []byte) error {
 		if err := s.danglingRound(); err != nil {
 			return err
 		}
-		if p.Round < 1 || p.Round > n || s.rounds[p.Round-1].Verdict == "" {
+		// An audit can be due before any round has a verdict, when the
+		// checks keep failing; it then names round 0.
+		_, reviewed := s.base()
+		if before := p.Action == StepAudit && p.Round == 0 && !reviewed; !before && (p.Round < 1 || p.Round > n || s.rounds[p.Round-1].Verdict == "") {
 			return fmt.Errorf("%s packet %s names round %d, which has no verdict", p.Action, p.Packet, p.Round)
 		}
 		if p.Base != nil && *p.Base != s.rounds[p.Round-1].Candidate {
@@ -177,6 +187,7 @@ func (s *State) onPacketIssued(data []byte) error {
 		}
 	}
 	s.packets = append(s.packets, PacketRecord{PacketIssued: p, Open: true})
+	s.steps++
 	return nil
 }
 
@@ -283,9 +294,48 @@ func (s *State) onVerdict(data []byte) error {
 		s.streak = 0
 		s.convergenceRaised = false
 	} else {
-		s.streak++
+		s.fail()
 	}
 	return nil
+}
+
+// fail counts the batch of events being folded as one failed step.
+func (s *State) fail() {
+	if !s.counted {
+		s.counted = true
+		s.streak++
+	}
+}
+
+// approved reports whether the campaign has ended in approval, as far as the
+// ledger alone can tell: the latest round is GREEN, no escalation is open,
+// and no blocking finding is unresolved or carried by that round's candidate.
+func (s State) approved() bool {
+	n := len(s.rounds)
+	if n == 0 || s.rounds[n-1].Verdict != VerdictGreen {
+		return false
+	}
+	for _, e := range s.escalations {
+		if e.Open {
+			return false
+		}
+	}
+	for _, x := range s.findings {
+		if x.Tier.Blocking() && (x.Status.Unresolved() || x.carriedBy(s.rounds[n-1].Candidate.Digest)) {
+			return false
+		}
+	}
+	return true
+}
+
+// suspension returns the open suspension, if the campaign is suspended.
+func (s State) suspension() (Escalation, bool) {
+	for _, e := range s.escalations {
+		if e.Open && e.Kind == EscalationSuspension {
+			return e, true
+		}
+	}
+	return Escalation{}, false
 }
 
 func (s *State) onEscalationRaised(data []byte) error {
@@ -307,8 +357,8 @@ func (s *State) onEscalationRaised(data []byte) error {
 	case p.Round < 0:
 		return fmt.Errorf("round %d is negative", p.Round)
 	}
-	if i := s.packetIndex(p.Packet); i < 0 || s.packets[i].Report == nil || !slices.Contains(raisers(p.Kind), s.packets[i].Action) {
-		return fmt.Errorf("a %s escalation is not raised by the report for packet %q", p.Kind, p.Packet)
+	if err := s.raiser(p); err != nil {
+		return err
 	}
 	for _, id := range p.Findings {
 		if s.findingIndex(id) < 0 {
@@ -352,12 +402,39 @@ func raisers(k EscalationKind) []Step {
 	switch k {
 	case EscalationDispute, EscalationComponentChurn:
 		return []Step{StepFix}
-	case EscalationContradiction:
+	case EscalationContradiction, EscalationNonConvergence, EscalationProcessAudit:
 		return []Step{StepReview, StepVerify}
 	case EscalationRegressionSpiral:
 		return []Step{StepVerify}
+	case EscalationSuspension:
+		return []Step{StepAudit}
 	}
 	return []Step{StepReview}
+}
+
+// raiser checks what raised an escalation. A report raises it, with two
+// exceptions: a failed check recording, which names no packet, raises the
+// escalations of the failure streak, and the packet that uses up the campaign
+// budget raises a suspension when it is issued.
+func (s State) raiser(p EscalationRaised) error {
+	if p.Packet == "" {
+		if p.Kind == EscalationNonConvergence || p.Kind == EscalationProcessAudit {
+			return nil
+		}
+		return fmt.Errorf("a %s escalation names the packet whose report raised it", p.Kind)
+	}
+	i := s.packetIndex(p.Packet)
+	if i < 0 {
+		return fmt.Errorf("a %s escalation names packet %q, which does not exist", p.Kind, p.Packet)
+	}
+	pk := s.packets[i]
+	if p.Kind == EscalationSuspension && pk.Open && i == len(s.packets)-1 {
+		return nil
+	}
+	if pk.Report == nil || !slices.Contains(raisers(p.Kind), pk.Action) {
+		return fmt.Errorf("a %s escalation is not raised by the report for packet %q", p.Kind, p.Packet)
+	}
+	return nil
 }
 
 // adjudicable reports whether the findings of an escalation of kind k are
@@ -398,6 +475,11 @@ func (s *State) onEscalationResolved(data []byte) error {
 	}
 	e.Open = false
 	e.Resolution = p.Resolution
+	// Resolving a suspension is governance's decision to resume: the
+	// campaign starts over with nothing counted against it.
+	if e.Kind == EscalationSuspension {
+		s.streak, s.convergenceRaised, s.steps, s.churn = 0, false, 0, nil
+	}
 	if adjudicable(e.Kind) {
 		for _, id := range e.Findings {
 			s.record(&s.findings[s.findingIndex(id)], EventEscalationResolved, p.Packet, s.examined(p.Packet), p.Resolution)

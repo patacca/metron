@@ -25,7 +25,7 @@ var update = flag.Bool("update", false, "rewrite the golden files in testdata/ f
 var escalationKindsInOrder = []core.EscalationKind{
 	core.EscalationDispute, core.EscalationContradiction, core.EscalationComponentChurn,
 	core.EscalationRegressionSpiral, core.EscalationNonConvergence, core.EscalationProcessAudit,
-	core.EscalationContractGap, core.EscalationEvidenceGap,
+	core.EscalationContractGap, core.EscalationEvidenceGap, core.EscalationSuspension,
 }
 
 func TestGolden(t *testing.T) {
@@ -336,7 +336,8 @@ func TestRefusesInconsistentPackets(t *testing.T) {
 		{"role does not match action", core.StepReview, func(p *core.Packet) { p.Role = core.RoleVerifier }},
 		{"review in round 0", core.StepReview, func(p *core.Packet) { p.Round = 0 }},
 		{"fix in round 0", core.StepFix, func(p *core.Packet) { p.Round = 0 }},
-		{"audit in round 0", core.StepAudit, func(p *core.Packet) { p.Round = 0 }},
+		{"verify in round 0", core.StepVerify, func(p *core.Packet) { p.Round = 0 }},
+		{"audit in a negative round", core.StepAudit, func(p *core.Packet) { p.Round = -1 }},
 		{"applicable list differs from contract", core.StepReview, func(p *core.Packet) { p.ApplicableRequirements = p.ApplicableRequirements[1:] }},
 		{"evidence for a later requirement", core.StepReview, func(p *core.Packet) {
 			p.Evidence = append(p.Evidence, passed("REQ-11", "true", p.Candidate.Digest))
@@ -536,5 +537,22 @@ func TestNormalize(t *testing.T) {
 		if got := normalize(tt.in); got != tt.want {
 			t.Errorf("normalize(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+// An audit can be due before any round has a verdict, when the checks keep
+// failing; its packet names round 0 and is briefed like any other.
+func TestAuditBeforeAnyRound(t *testing.T) {
+	p := minimal(core.StepAudit)
+	p.Round = 0
+	text, err := Instructions(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "before any review round has a verdict") || strings.Contains(text, "round 0") {
+		t.Fatalf("the brief does not describe an audit before any round:\n%s", text[:400])
+	}
+	if _, err := Prompt(p, packetDigest); err != nil {
+		t.Fatal(err)
 	}
 }

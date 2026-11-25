@@ -23,6 +23,8 @@
   "stage": "prototype",
   "rounds": [],
   "failed_streak": 0,
+  "campaign_steps": 0,
+  "campaign_budget": 20,
   "open_packet": null,
   "findings": {
     "open": 0,

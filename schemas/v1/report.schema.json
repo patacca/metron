@@ -393,6 +393,9 @@
         },
         "contract_recommendations": {
           "$ref": "defs.schema.json#/$defs/textList"
+        },
+        "suspend": {
+          "$ref": "defs.schema.json#/$defs/text"
         }
       },
       "required": [

@@ -128,6 +128,7 @@ func TestRejectedFixCannotBeClaimedOnAnEarlierRejectedCandidate(t *testing.T) {
 			h.checks(true)
 		}
 		h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
+		h.drain()
 	}
 	reject(h.commit(true))
 	first := h.tree

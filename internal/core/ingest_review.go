@@ -308,13 +308,7 @@ func (in *ingestion) reviewerEvents(b ReviewerBody) {
 	in.add(EventVerdictRecorded, VerdictRecorded{Round: pk.Round, Verdict: b.Verdict, Candidate: pk.Candidate.Digest,
 		Contract: pk.Contract, Reviewer: in.r.Author.ID, Requirements: results})
 	if b.Verdict != VerdictGreen {
-		streak := in.s.streak + 1
-		if streak >= in.th.ConvergenceAuditAfter && !in.s.convergenceRaised {
-			in.raise(EscalationNonConvergence, fmt.Sprintf("%s of stage %s ended without GREEN", count(streak, "round", "consecutive rounds"), in.c.Stage), nil, nil, nil)
-		}
-		if streak%in.th.ProcessAuditAfter == 0 {
-			in.raise(EscalationProcessAudit, fmt.Sprintf("%s of stage %s ended without GREEN", count(streak, "round", "consecutive rounds"), in.c.Stage), nil, nil, nil)
-		}
+		in.stall(fmt.Sprintf("the review of round %d, which ended %s", pk.Round, b.Verdict))
 	}
 	for _, g := range b.ContractGaps {
 		in.raise(EscalationContractGap, g.Title+": "+g.Description, nil, nil, nil)

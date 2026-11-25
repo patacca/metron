@@ -48,9 +48,17 @@ func next(s State, f Facts) Action {
 			Reason: fmt.Sprintf("packet %s (%s) is open and still valid: the %s submits its report", op.Packet, op.Action, op.Role)}
 	}
 	if ids := s.openEscalations(RoleGovernance); len(ids) > 0 {
-		return Action{Step: StepAdjudicate, Owner: RoleGovernance, Escalations: ids,
-			Reason: fmt.Sprintf("%s %s a governance decision: amend the contract and pin it, or dismiss with a rationale, then resolve %s",
-				strings.Join(ids, ", "), pick(len(ids), "awaits", "await"), pick(len(ids), "it", "each"))}
+		reason := fmt.Sprintf("%s %s a governance decision: amend the contract and pin it, or dismiss with a rationale, then resolve %s",
+			strings.Join(ids, ", "), pick(len(ids), "awaits", "await"), pick(len(ids), "it", "each"))
+		if e, suspended := s.suspension(); suspended {
+			others := slices.DeleteFunc(slices.Clone(ids), func(id string) bool { return id == e.ID })
+			reason = fmt.Sprintf("the campaign is suspended by %s (%s) and no role may continue: governance decides whether to resume it, to amend the contract and pin it first, or to leave it suspended; resolving %s resumes it",
+				e.ID, e.Reason, e.ID)
+			if len(others) > 0 {
+				reason += fmt.Sprintf("; %s also %s a governance decision", strings.Join(others, ", "), pick(len(others), "awaits", "await"))
+			}
+		}
+		return Action{Step: StepAdjudicate, Owner: RoleGovernance, Escalations: ids, Reason: reason}
 	}
 	if !f.Clean {
 		return Action{Step: StepCommitChanges, Owner: RoleImplementer,

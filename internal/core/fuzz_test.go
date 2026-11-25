@@ -45,7 +45,7 @@ func contractVariant(n int) Contract {
 	case 2:
 		c = stageTwoContract()
 	case 3:
-		c.Convergence = &Convergence{RootCauseAfter: 1, ConvergenceAuditAfter: 2, ProcessAuditAfter: 3}
+		c.Convergence = &Convergence{RootCauseAfter: 1, ConvergenceAuditAfter: 2, ProcessAuditAfter: 3, SuspendAfter: 6}
 	case 4:
 		c.Requirements = slices.Clone(c.Requirements)
 		c.Requirements[0].Command = "go test -race ./..."
@@ -451,6 +451,7 @@ func (s *sim) check(prev State) {
 			s.t.Fatalf("finding %s went from %+v to %+v", x.ID, x, y)
 		}
 	}
+	s.blockingInvariant()
 	g := Gate(s.state, f)
 	a := Next(s.state, f)
 	if !reflect.DeepEqual(g, Gate(s.state, f)) || !reflect.DeepEqual(a, Next(s.state, f)) {

@@ -78,6 +78,8 @@
     }
   ],
   "failed_streak": 0,
+  "campaign_steps": 4,
+  "campaign_budget": 20,
   "open_packet": null,
   "findings": {
     "open": 0,

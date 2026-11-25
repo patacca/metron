@@ -812,7 +812,6 @@
         "kind",
         "owner",
         "round",
-        "packet",
         "reason"
       ],
       "additionalProperties": false

@@ -2,7 +2,8 @@ Ledger:       .metron/state, 8 events, verified
 Contract:     valid and pinned, sha256:433f1f7a6e70f2d459369446f7ee08b9fb1533f8c27604edbd8d413eaed4d6ed
 Stage:        prototype
 Candidate:    commit fd86662859ae, sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898, tree clean
-Rounds:       1 RED by rev-1; failed streak 1
+Rounds:       1 RED by rev-1
+Campaign:     1 failed step since the last GREEN verdict or resumption; 1 packet issued of a budget of 20
 Open packet:  none
 Findings:     1 open, 0 claimed, 0 resolved, 0 withdrawn; blocking: F-0001; backlog: none
 Escalations:  none

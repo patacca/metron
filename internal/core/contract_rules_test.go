@@ -15,7 +15,7 @@ func TestValidateContract(t *testing.T) {
 		{"valid", func(c *Contract) {}, nil},
 		{"valid at controlled-validation with waivers", func(c *Contract) { *c = stageTwoContract() }, nil},
 		{"valid with thresholds", func(c *Contract) {
-			c.Convergence = &Convergence{RootCauseAfter: 1, ConvergenceAuditAfter: 2, ProcessAuditAfter: 4}
+			c.Convergence = &Convergence{RootCauseAfter: 1, ConvergenceAuditAfter: 2, ProcessAuditAfter: 4, SuspendAfter: 9}
 		}, nil},
 		{"valid waiver beyond coverage", func(c *Contract) {
 			c.NotApplicable = []Waiver{{Domain: DomainPerformance, Rationale: "not yet"}}
@@ -70,9 +70,9 @@ func TestValidateContract(t *testing.T) {
 			c.Calibrations = []Calibration{{ID: "CAL-1", Parameter: "p", EvidenceNeeded: "e", ReassessWhen: "r"}, {ID: "CAL-1"}}
 		}, []string{"/calibrations/1/id", "/calibrations/1/parameter", "/calibrations/1/evidence_needed", "/calibrations/1/reassess_when"}},
 		{"thresholds not positive", func(c *Contract) { c.Convergence = &Convergence{} }, []string{
-			"/convergence/root_cause_after", "/convergence/convergence_audit_after", "/convergence/process_audit_after", "/convergence"}},
+			"/convergence/root_cause_after", "/convergence/convergence_audit_after", "/convergence/process_audit_after", "/convergence/suspend_after", "/convergence"}},
 		{"convergence not below process audit", func(c *Contract) {
-			c.Convergence = &Convergence{RootCauseAfter: 2, ConvergenceAuditAfter: 5, ProcessAuditAfter: 5}
+			c.Convergence = &Convergence{RootCauseAfter: 2, ConvergenceAuditAfter: 5, ProcessAuditAfter: 5, SuspendAfter: 20}
 		}, []string{"/convergence"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -222,12 +222,16 @@
         },
         "process_audit_after": {
           "$ref": "defs.schema.json#/$defs/count"
+        },
+        "suspend_after": {
+          "$ref": "defs.schema.json#/$defs/count"
         }
       },
       "required": [
         "root_cause_after",
         "convergence_audit_after",
-        "process_audit_after"
+        "process_audit_after",
+        "suspend_after"
       ],
       "additionalProperties": false
     }

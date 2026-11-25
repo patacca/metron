@@ -108,6 +108,9 @@ func ValidateContract(c Contract) error {
 		if cv.ProcessAuditAfter < 1 {
 			ps.add("/convergence/process_audit_after", "process_audit_after is %d: it must be positive", cv.ProcessAuditAfter)
 		}
+		if cv.SuspendAfter < 1 {
+			ps.add("/convergence/suspend_after", "suspend_after is %d: it must be positive", cv.SuspendAfter)
+		}
 		if cv.ConvergenceAuditAfter >= cv.ProcessAuditAfter {
 			ps.add("/convergence", "convergence_audit_after (%d) must be below process_audit_after (%d)",
 				cv.ConvergenceAuditAfter, cv.ProcessAuditAfter)

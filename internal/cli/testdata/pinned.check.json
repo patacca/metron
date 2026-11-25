@@ -15,6 +15,7 @@
   ],
   "passed": true,
   "recorded": true,
+  "escalations_raised": [],
   "next": {
     "step": "review",
     "owner": "reviewer",

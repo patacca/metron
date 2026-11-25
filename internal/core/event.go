@@ -209,8 +209,10 @@ type EscalationRaised struct {
 	Kind  EscalationKind `json:"kind"`
 	Owner Role           `json:"owner"`
 	Round int            `json:"round"`
-	// Packet is the packet whose report raised it.
-	Packet       string   `json:"packet"`
+	// Packet is the packet whose report raised it or, for a suspension that
+	// the campaign budget raises, the packet whose issue used the budget up.
+	// It is empty for an escalation raised by a failed check recording.
+	Packet       string   `json:"packet,omitempty"`
 	Reason       string   `json:"reason"`
 	Findings     []string `json:"findings,omitempty"`
 	Components   []string `json:"components,omitempty"`

@@ -79,6 +79,7 @@
   "convergence": {
     "root_cause_after": 1.5,
     "convergence_audit_after": 3,
-    "process_audit_after": 5
+    "process_audit_after": 5,
+    "suspend_after": 20
   }
 }

@@ -44,7 +44,7 @@ state, the contract or the gate outcome.
 | Principle | Rule | Why |
 | --- | --- | --- |
 | Safety | The gate never opens while a mandatory requirement is violated or unverified. Every failure mode closes the gate. | A gate that opens by default when something goes wrong (a crash, a timeout, a malformed report) approves exactly the cases nobody looked at. |
-| Liveness | When the mandatory requirements are satisfied there is always a finite path to an open gate. Possible improvements never block. | A process that can be blocked forever by "it could be better" stops being used, and then it protects nothing. |
+| Liveness | Every state names one action that someone can perform, and a campaign never runs unattended without bound: within the limits the contract sets, the gate opens or the next action belongs to governance. Possible improvements never block. | A process that can be blocked forever by "it could be better" stops being used, and one that can run forever without anyone deciding wastes the effort it was meant to direct. Reaching GREEN cannot be promised: it depends on engineering judgments, which no program makes. |
 | Proportionality | A finding blocks only if it is tied to a contract requirement or an unacceptable risk. Over-engineering is itself reviewable. | Blocking needs a standard that exists before the review, or the standard is whatever the reviewer prefers. Unnecessary complexity is a cost, not a safe default. |
 | Empiricism | Decisions cite evidence. What cannot be decided without real-world data is a calibration, not a blocker. | Arguments without evidence cannot be checked and so cannot converge. Some questions can only be settled by running the system. |
 | Independence | Iteration counts, effort and deadlines change the investigation procedure, never the approval threshold. | A bar that drops after enough failed rounds rewards persistence instead of quality; one that rises does the opposite. Both make the verdict depend on history instead of on the candidate. |
@@ -55,8 +55,8 @@ state, the contract or the gate outcome.
 | --- | --- | --- |
 | Metron | The next permitted action, whether a report is acceptable, ledger state, escalations, the gate outcome | Make engineering judgments |
 | Roles (`implementer`, `reviewer`, `verifier`, `auditor`) | Engineering judgments: findings, fixes, verifications, audits | Write ledger state, change the contract, open the gate |
-| Orchestrators | When and how to carry out the action Metron names | Choose a different action, skip one, or override an outcome |
-| `governance` (the repository owner) | The acceptance contract and its amendments; governance-owned escalations | Bypass the gate conditions |
+| Orchestrators | When and how to carry out the action Metron names | Choose a different action, skip one, override an outcome, or continue past an action that belongs to governance |
+| `governance` (the repository owner) | The acceptance contract and its amendments; governance-owned escalations; whether a suspended campaign resumes | Bypass the gate conditions |
 
 The four working roles divide the work so that no one marks their own
 homework:
@@ -114,7 +114,7 @@ repository, and they are spelled exactly as shown.
 | Reopen reasons | `new-evidence`, `regression`, `invalid-verification`, `requirement-changed`, `contract-conflict` | Section 11 |
 | Verification results | `confirmed`, `rejected` | Section 10 |
 | Adjudication decisions | `uphold`, `withdraw`, `reclassify` | Section 10 |
-| Escalation kinds | `dispute`, `contradiction`, `component-churn`, `regression-spiral`, `non-convergence`, `process-audit`, `contract-gap`, `evidence-gap` | Section 12 |
+| Escalation kinds | `dispute`, `contradiction`, `component-churn`, `regression-spiral`, `non-convergence`, `process-audit`, `contract-gap`, `evidence-gap`, `suspension` | Section 12 |
 
 The **review domains** are the aspects of a system every review examines.
 Every review assesses all eighteen, whatever the stage, because a defect does
@@ -165,7 +165,7 @@ reviewer rather than the candidate.
 | `risks.accepted` | Residual risks governance has accepted, `ACC-n`. They never block |
 | `not_applicable` | Domains waived for this stage, each with a rationale |
 | `calibrations` | Provisional parameters, `CAL-n`, with the evidence needed to settle them and when to reassess |
-| `convergence` | The thresholds of the convergence safeguards; defaults 2, 3 and 5 |
+| `convergence` | The thresholds of the convergence safeguards; defaults 2, 3, 5 and 20 |
 
 A **requirement** has a `domain`, a `statement` of what must hold, a
 `criterion` that says how anyone can decide that it holds, an optional
@@ -205,9 +205,11 @@ change without invalidating a review while any change of meaning cannot.
 While the file's meaning differs from the pinned one, everything that
 depends on the contract waits for governance. A new pin voids the open
 packet and invalidates any verdict issued under the old contract, because
-that verdict answered a different question. When a pin changes the stage,
-the count of consecutive failed rounds restarts, because the new stage is a
-new question; round numbers and findings carry over.
+that verdict answered a different question. A pin, whether or not it
+changes the stage, starts nothing over: round numbers and findings carry
+over, and so does everything the loop has counted towards an escalation
+(section 12). Amending the contract is often the right answer to a loop that
+does not converge, but it is not a way to erase the record of one.
 
 ## 6. Lifecycle-aware acceptance
 
@@ -458,7 +460,10 @@ governance amends the contract.
 
 It may issue directives, which are binding guidance carried into every later
 packet, and it may recommend contract changes to governance. It cannot make
-them, and it does not lower the standard to end a loop.
+them, and it does not lower the standard to end a loop. When the loop should
+not continue until governance has decided something, for instance because
+the affected area has to be redesigned or the contract cannot be met as
+written, the auditor asks for the campaign to be suspended and says why.
 
 ## 11. Review continuity
 
@@ -529,7 +534,8 @@ are aimed at a symptom.
 Some loops do not converge: the same component is patched round after
 round, fixes cause more defects than they resolve, or reviewers and
 implementers disagree without a way to settle it. The protocol detects these
-patterns and changes the investigation procedure. It never lowers the bar
+patterns, changes the investigation procedure and, when that does not help,
+stops the loop and hands the decision to governance. It never lowers the bar
 and never opens the gate. Each safeguard raises an escalation; any open
 escalation keeps the gate closed and takes priority over the ordinary loop.
 
@@ -537,19 +543,60 @@ escalation keeps the gate closed and takes priority over the ordinary loop.
 | --- | --- | --- | --- |
 | `dispute` | An implementer disputes a finding | `auditor` | Adjudication |
 | `contradiction` | A finding declares that it reverses an earlier resolution | `auditor` | Adjudication |
-| `component-churn` | The same component is fixed in 3 distinct rounds | `auditor` | Component-level audit |
+| `component-churn` | The same component is fixed in 3 distinct rounds of a campaign | `auditor` | Component-level audit |
 | `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes of blocking findings it confirms | `auditor` | Redesign assessment |
-| `non-convergence` | Consecutive rounds without GREEN reach 3; raised once per streak | `auditor` | Convergence analysis |
-| `process-audit` | Every 5th consecutive round ends without GREEN | `auditor` | Independent process audit |
+| `non-convergence` | The failure streak reaches 3; raised once per streak | `auditor` | Convergence analysis |
+| `process-audit` | The failure streak reaches a multiple of 5 | `auditor` | Independent process audit, after which the campaign is suspended |
 | `contract-gap` | A reviewer reports a risk the contract does not cover | `governance` | `metron resolve`, after amending the contract or dismissing the gap with a rationale |
 | `evidence-gap` | A verdict is `INDETERMINATE` | `governance` | `metron resolve`, after supplying evidence or amending the contract |
+| `suspension` | A process audit is discharged; an auditor asks for it; or the campaign issues its 20th packet without an approval | `governance` | `metron resolve`: the decision to resume |
 
-The thresholds for root-cause analysis (2), convergence analysis (3) and the
-process audit (5) are defaults that the contract may change; they are the
-only tunable values. A streak of consecutive rounds without GREEN ends with
-a GREEN verdict or with a pin that changes the stage. Escalation resolutions,
-whether by an auditor or by governance, and audit directives are carried into
-every later packet, each with the packet it came from, and bind every role.
+The thresholds for root-cause analysis (2), convergence analysis (3), the
+process audit (5) and the campaign budget (20) are defaults that the contract
+may change; they are the only tunable values. Escalation resolutions, whether
+by an auditor or by governance, and audit directives are carried into every
+later packet, each with the packet it came from, and bind every role.
+
+### Campaigns, failed steps and the budget
+
+A **campaign** is the work towards one approval. It begins with the ledger,
+with the first review after an approval, or when governance resumes a
+suspended campaign, and it ends approved or suspended. A pin, a change of
+stage, a new candidate or a discharged audit neither ends a campaign nor
+begins one.
+
+A **failed step** is a review that does not end GREEN, a verification that
+rejects a fix or reports a blocking regression, or a run of the mandatory
+checks in which one failed or had to be stopped. The **failure streak** counts
+failed steps since the last GREEN verdict or the last resumption. A step that
+succeeds in between, such as a confirmed fix, does not end the streak: it is
+progress on one finding, not on the campaign. Because every kind of step
+counts, a fix that is rejected five times in a row is noticed as soon as five
+failed reviews are.
+
+The **campaign budget** counts every packet issued in the campaign, whatever
+becomes of it. It bounds the campaigns the streak does not see: ones whose
+steps keep succeeding without an approval ever following, and ones whose
+packets are voided before anyone answers them.
+
+### Suspension
+
+A suspended campaign has stopped without approval. The gate is closed, even
+if the last verdict is GREEN; Metron issues no packet and records no check;
+the only thing still accepted is the report of a packet that was already
+open. Nothing resumes it except governance, which resolves the `suspension`
+with its decision and reasons, usually after acting on what the process audit
+found: amending the contract, changing the stage it targets, or accepting
+that the work is not ready. Resuming begins a new campaign with nothing
+counted against it. Governance may also leave it suspended; that is how a
+campaign that cannot converge ends.
+
+This is the difference between a bounded process and a successful one.
+Metron guarantees that a campaign cannot run unattended beyond the limits in
+the contract, and that running out of them never approves anything. It cannot
+guarantee that a campaign ends GREEN: that takes a candidate that can meet the
+contract, a contract that can be met, and roles that judge well. A suspension
+is the process stopping at the point where only a decision can help.
 
 One more safeguard is built into the loop itself: an unchanged candidate
 cannot be resubmitted in the hope of a different verdict. A RED verdict rests
@@ -615,6 +662,12 @@ review ──RED──▶ fix ──▶ verify ──all confirmed──▶ revi
    ├──INDETERMINATE──▶ adjudicate (governance supplies evidence or amends the contract)
    └──GREEN──▶ gate
 ```
+
+Whoever runs the loop, a person or an orchestrator, performs the action
+`metron next` names and stops in two cases: the step is `none`, because the
+gate is open, or the owner is `governance`. A governance action is a decision
+of the repository's owner, never a step to automate, and a campaign waiting
+for one has not been approved.
 
 Each action is carried out through a **packet**: a JSON document holding
 everything the role needs, including the contract, the candidate, the

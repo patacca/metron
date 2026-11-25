@@ -489,10 +489,16 @@ var cmdResolve = &command{
 	synopsis: "resolve <E-id> -m <decision>",
 	summary:  "Discharge a governance-owned escalation (governance)",
 	about: `Resolve records governance's decision on a governance-owned escalation
-(contract-gap or evidence-gap) and discharges it: after amending and pinning the
-contract, after supplying the missing evidence, or when dismissing it with a
-rationale. It records the git identity (user.name and user.email) of whoever
-resolves it. Auditor-owned escalations are discharged by an audit report.`,
+(contract-gap, evidence-gap or suspension) and discharges it: after amending
+and pinning the contract, after supplying the missing evidence, or when
+dismissing it with a rationale. It records the git identity (user.name and
+user.email) of whoever resolves it. Auditor-owned escalations are discharged
+by an audit report.
+
+Resolving a suspension is the decision to resume a suspended campaign: the
+count of failed steps and the campaign budget start again. Until then metron
+issues no packet and records no check, and the gate stays closed. Leaving a
+suspension unresolved is how a campaign that cannot converge ends.`,
 	run: runResolve,
 }
 
