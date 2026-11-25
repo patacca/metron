@@ -1,0 +1,78 @@
+metron check                                 exit 0
+    next: review (reviewer)
+metron packet: P-0001 review                 exit 0
+    next: submit-report (reviewer) packet P-0001
+ingest review: RED                           exit 0  opened F-0001 (T1)
+    next: fix (implementer) findings F-0001
+metron packet: P-0002 fix                    exit 0
+    next: submit-report (implementer) packet P-0002
+git: commit c1, hullo and broken             exit 0
+    next: submit-report (implementer) packet P-0002
+ingest fix: claim c1                         exit 0
+    next: run-checks (implementer) requirements REQ-1
+metron check --json                          exit 1  raised E-0001 (non-convergence)
+    next: audit (auditor) escalations E-0001
+metron packet: P-0003 audit                  exit 0
+    next: submit-report (auditor) packet P-0003
+ingest audit: carry on                       exit 0
+    next: run-checks (implementer) requirements REQ-1
+git: commit c2, remove broken                exit 0
+    next: fix (implementer) findings F-0001
+metron packet: P-0004 fix                    exit 0
+    next: submit-report (implementer) packet P-0004
+ingest fix: claim c1 and c2                  exit 0
+    next: run-checks (implementer) requirements REQ-1
+metron check                                 exit 0
+    next: verify (verifier) findings F-0001
+metron packet: P-0005 verify                 exit 0
+    next: submit-report (verifier) packet P-0005
+ingest verify: rejected                      exit 0  raised E-0002 (process-audit)
+    next: audit (auditor) escalations E-0002
+metron packet: P-0006 audit                  exit 0
+    next: submit-report (auditor) packet P-0006
+ingest audit: carry on                       exit 0  raised E-0003 (suspension)
+    next: adjudicate (governance) escalations E-0003
+metron gate                                  exit 1
+    next: adjudicate (governance) escalations E-0003
+metron packet                                exit 1
+    next: adjudicate (governance) escalations E-0003
+metron check                                 exit 1
+    next: adjudicate (governance) escalations E-0003
+ingest review: RED, again                    exit 0
+    next: adjudicate (governance) escalations E-0003
+metron contract pin -m amend                 exit 0
+    next: adjudicate (governance) escalations E-0003
+metron resolve E-0003 -m resume              exit 0
+    next: fix (implementer) findings F-0001
+metron packet: P-0007 fix                    exit 0
+    next: submit-report (implementer) packet P-0007
+git: commit c3, hallo                        exit 0
+    next: submit-report (implementer) packet P-0007
+ingest fix: claim c3                         exit 0
+    next: run-checks (implementer) requirements REQ-1
+metron check                                 exit 0
+    next: verify (verifier) findings F-0001
+metron packet: P-0008 verify                 exit 0
+    next: submit-report (verifier) packet P-0008
+ingest verify: rejected                      exit 0
+    next: fix (implementer) findings F-0001
+metron packet: P-0009 fix                    exit 0
+    next: submit-report (implementer) packet P-0009
+git: commit c4, hello                        exit 0
+    next: submit-report (implementer) packet P-0009
+ingest fix: claim c4 without a root cause    exit 1
+    next: submit-report (implementer) packet P-0009
+ingest fix: claim c4                         exit 0
+    next: run-checks (implementer) requirements REQ-1
+metron check                                 exit 0
+    next: verify (verifier) findings F-0001
+metron packet: P-0010 verify                 exit 0
+    next: submit-report (verifier) packet P-0010
+ingest verify: confirmed                     exit 0
+    next: review (reviewer)
+metron packet: P-0011 review                 exit 0
+    next: submit-report (reviewer) packet P-0011
+ingest review: GREEN                         exit 0
+    next: none
+metron gate                                  exit 0
+    next: none

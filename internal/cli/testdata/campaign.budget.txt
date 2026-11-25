@@ -1,0 +1,28 @@
+metron check                                 exit 0
+    next: review (reviewer)
+metron packet: P-0001 review                 exit 0
+    next: submit-report (reviewer) packet P-0001
+git: commit hello under the reviewer         exit 0
+    next: run-checks (implementer) requirements REQ-1
+metron check                                 exit 0
+    next: review (reviewer)
+metron packet: P-0002 review                 exit 0
+    next: submit-report (reviewer) packet P-0002
+ingest review: RED                           exit 0  opened F-0001 (T1)
+    next: fix (implementer) findings F-0001
+metron packet: P-0003 fix                    exit 0
+    next: submit-report (implementer) packet P-0003
+ingest fix: dispute                          exit 0  raised E-0001 (dispute)
+    next: audit (auditor) escalations E-0001
+metron packet: P-0004 audit                  exit 0  raised E-0002 (suspension)
+    next: submit-report (auditor) packet P-0004
+ingest audit: uphold                         exit 0
+    next: adjudicate (governance) escalations E-0002
+metron packet                                exit 1
+    next: adjudicate (governance) escalations E-0002
+metron check                                 exit 1
+    next: adjudicate (governance) escalations E-0002
+metron gate                                  exit 1
+    next: adjudicate (governance) escalations E-0002
+metron resolve E-0002 -m resume              exit 0
+    next: fix (implementer) findings F-0001
