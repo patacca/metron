@@ -135,11 +135,11 @@ func (s *sim) converges() {
 	// is one correction cycle, a review, and at most two suspensions of a
 	// small budget on the way.
 	bound := 40 + 4*open
-	for steps := 0; s.cooperate(); steps++ {
+	for steps, prev := 0, s.state; s.cooperate(); steps, prev = steps+1, s.state {
 		if steps > bound {
 			s.t.Fatalf("cooperating roles did not open the gate in %d steps; next is %+v", bound, s.next())
 		}
-		s.check(s.state)
+		s.check(prev)
 	}
 	if !s.gate().Open {
 		s.t.Fatalf("next is none but the gate is closed: %+v", s.gate())
@@ -165,8 +165,9 @@ func (s *sim) stalls() {
 			if steps > bound {
 				s.t.Fatalf("%d steps of roles that never converge and no action owned by governance; next is %+v", bound, s.next())
 			}
+			prev := s.state
 			s.obstruct()
-			s.check(s.state)
+			s.check(prev)
 			if r, _ := s.state.latestRound(); s.gate().Open && (r.Number > before || r.Verdict != VerdictGreen) {
 				s.t.Fatalf("the gate opened on round %d (%s) although no verdict was GREEN since round %d", r.Number, r.Verdict, before)
 			}

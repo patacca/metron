@@ -201,6 +201,11 @@ func (in *ingestion) implementerEvents(b ImplementerBody) {
 	var paths, findings []string
 	for i, fx := range b.Fixes {
 		for _, path := range changed[i] {
+			// A path that is all white space names nothing a person can
+			// audit, and an escalation's subjects are text.
+			if blank(path) {
+				continue
+			}
 			rounds, done := in.s.churnRounds(path)
 			n := len(rounds)
 			if !slices.Contains(rounds, pk.Round) {

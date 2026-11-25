@@ -75,6 +75,9 @@ func (s *State) onFixClaimed(data []byte) error {
 	if !ValidDigest(p.Candidate) {
 		return fmt.Errorf("candidate digest %q is malformed", p.Candidate)
 	}
+	if len(p.Paths) == 0 {
+		return fmt.Errorf("the fix of %s lists no changed path: a fix changes the candidate", p.ID)
+	}
 	fix := p.Fix
 	f.Status = StatusClaimed
 	f.Fix = &fix

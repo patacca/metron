@@ -495,21 +495,26 @@ func (s *sim) check(prev State) {
 
 func commandSeeds() [][]byte {
 	happy := []byte{opChecks, 0, opPacket, 0, opAct, 0}
-	red := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opChecks, 0, opPacket, 0, opAct, 0}
+	red := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opChecks, 0, opPacket, 0, opAct, 0, opChecks, 0, opPacket, 0, opAct, 0}
 	var churn []byte
 	for range 4 {
-		churn = append(churn, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opChecks, 0)
+		churn = append(churn, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opChecks, 0, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opChecks, 0)
 	}
 	dispute := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0}
 	withdraw := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 1, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0}
 	indeterminate := []byte{opChecks, 0, opPacket, 0, opAct, 2, opResolve, 0, opPacket, 0, opAct, 0}
 	repin := []byte{opChecks, 0, opPacket, 0, opAct, 0, opContract, 1, opPin, 0, opPacket, 0, opContract, 3, opPin, 0, opPacket, 0, opAct, 0}
 	stage := []byte{opChecks, 0, opPacket, 0, opAct, 1, opContract, 2, opPin, 0, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opChecks, 0, opPacket, 0, opAct, 0}
-	spiral := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opPacket, 0, opAct, 4, opPacket, 0, opAct, 0}
+	spiral := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opChecks, 0, opPacket, 0, opAct, 4, opPacket, 0, opAct, 0}
+	// Rejected fixes, audits and a budget small enough to suspend the campaign.
+	rejected := []byte{opContract, 3, opPin, 0, opChecks, 0, opPacket, 0, opAct, 1}
+	for range 4 {
+		rejected = append(rejected, opPacket, 0, opAct, 0, opChecks, 0, opPacket, 0, opAct, 2, opPacket, 0, opAct, 4)
+	}
 	lost := []byte{opChecks, 0, opPacket, 0, opLose, 0, opAct, 0, opPacket, 0, opAct, 0}
 	revert := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opCheckout, 0, opChecks, 0, opPacket, 0, opCheckout, 1, opChecks, 0, opPacket, 0, opAct, 0}
 	misc := []byte{opTree, 0, opChecks, 0, opTree, 1, opChecks, 2, opPacket, 1, opPacket, 2, opPacket, 0, opImpostor, 0x19, opReingest, 1, opAct, 0, opReingest, 0, opReingest, 1, opCommit, 1, opPin, 1}
-	return [][]byte{happy, red, churn, dispute, withdraw, indeterminate, repin, stage, spiral, misc, revert, lost}
+	return [][]byte{happy, red, churn, dispute, withdraw, indeterminate, repin, stage, spiral, rejected, misc, revert, lost}
 }
 
 func FuzzCommands(f *testing.F) {

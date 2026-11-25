@@ -114,12 +114,18 @@ func RecordEvidence(s State, f Facts, results []Evidence) ([]Draft, error) {
 	if err := ps.err(LayerSemantic); err != nil {
 		return nil, err
 	}
-	drafts := make([]Draft, len(results))
+	// The events come out in contract order, whatever order the results
+	// were given in.
+	var drafts []Draft
 	var failed []string
-	for i, ev := range results {
-		drafts[i] = Draft{Type: EventEvidenceRecorded, Data: ev}
-		if !ev.Passed {
-			failed = append(failed, ev.Requirement)
+	for _, r := range applicable {
+		i, ok := seen[r.ID]
+		if !ok {
+			continue
+		}
+		drafts = append(drafts, Draft{Type: EventEvidenceRecorded, Data: results[i]})
+		if !results[i].Passed {
+			failed = append(failed, r.ID)
 		}
 	}
 	// A recording with a failure is a failed step, like a round without

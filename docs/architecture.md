@@ -822,7 +822,7 @@ G = C ∧ B ∧ E ∧ I ∧ V
 | | Condition | Evaluated as |
 | --- | --- | --- |
 | C | Acceptance criteria satisfied | Every applicable requirement is `satisfied` in the reviewer report of the latest round |
-| B | No blockers | No unresolved T0 or T1 finding, no T0 or T1 finding carried by this candidate (section 7), and no open escalation |
+| B | No blockers | No unresolved T0 or T1 finding, no T0 or T1 finding carried by this candidate (section 7), no claimed fix awaiting verification, and no open escalation |
 | E | Automated evidence sufficient | Every applicable requirement with a `command` has a passing result recorded for this candidate and this command text |
 | I | Integrity | The current candidate digest equals the reviewed one; the tree is clean; the contract digest equals the pinned one; the ledger verifies and was written under this protocol version; the report carrying the verdict is stored intact |
 | V | Independent verdict | The latest round's verdict is `GREEN`, issued for this candidate under this contract digest, by an author who never acted as implementer |

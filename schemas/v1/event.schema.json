@@ -681,8 +681,9 @@
         "paths": {
           "type": "array",
           "items": {
-            "$ref": "defs.schema.json#/$defs/text"
-          }
+            "type": "string"
+          },
+          "minItems": 1
         }
       },
       "required": [
@@ -708,7 +709,10 @@
           "$ref": "defs.schema.json#/$defs/text"
         },
         "scope": {
-          "$ref": "defs.schema.json#/$defs/fixScope"
+          "type": "string",
+          "enum": [
+            "proportionate"
+          ]
         },
         "scope_evidence": {
           "$ref": "defs.schema.json#/$defs/text"

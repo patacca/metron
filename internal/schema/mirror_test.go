@@ -423,6 +423,7 @@ func TestEnumerations(t *testing.T) {
 			t.Errorf("test lists %q as an escalation kind but core disagrees", k)
 		}
 	}
+	check("fixScope", enumOf(defs("fixScope")), []string{core.ScopeExcessive, core.ScopeProportionate})
 	check("requirementStatus", enumOf(defs("requirementStatus")),
 		[]string{core.RequirementSatisfied, core.RequirementUnverified, core.RequirementViolated})
 	check("author kind", enumOf(prop(defs("author"), "kind")), []string{core.AuthorAgent, core.AuthorHuman})

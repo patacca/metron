@@ -154,3 +154,41 @@ func TestEveryClaimStandsOnTheVerifiedCandidate(t *testing.T) {
 		t.Fatalf("verify packet subjects %v on %s; F-0001 recorded on %v", vp.Subjects, vp.Candidate.Digest, x.RecordedOn())
 	}
 }
+
+// A fix that awaits verification keeps the gate closed whatever the tier of
+// its finding, as Next says there is a verification to do. Only a ledger that
+// did not come from these commands holds a claim on a non-blocking finding.
+func TestClaimedFixOfAnyTierKeepsTheGateClosed(t *testing.T) {
+	h := newHarness(t)
+	h.checks(true)
+	h.accept(h.packet(), "rev-1", review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated},
+		blocker("crash", "REQ-1"), improvement("long")))
+	fp := h.packet()
+	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{h.repair("F-0001")}})
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.packet(), "rev-1", green(h.contract))
+	h.expect(StepNone)
+	h.seal([]Draft{{Type: EventFindingFixClaimed, Data: FindingFixClaimed{ID: "F-0002", Round: 1, Packet: fp.ID,
+		Candidate: h.candidate().Digest, Fix: fix("F-0002", h.history[len(h.history)-1].Hash), Paths: []string{"src/v1.go"}}}})
+	if a, g := h.next(), h.gate(); a.Step != StepVerify || g.Open {
+		t.Fatalf("next %s with the gate open %t", a.Step, g.Open)
+	}
+}
+
+// Check results are recorded in contract order, whatever order they come in.
+func TestEvidenceIsRecordedInContractOrder(t *testing.T) {
+	h := newHarness(t)
+	c := testContract()
+	c.Requirements = slices.Clone(c.Requirements)
+	c.Requirements[1].Command = "go vet ./..."
+	h.contract = c
+	h.must(Pin(h.state, h.facts(), "two checks", "gov"))
+	f := h.facts()
+	ev := func(req, cmd string) Evidence {
+		return Evidence{Requirement: req, Command: cmd, Candidate: f.Candidate.Digest, Passed: true, OutputDigest: digestOf("out")}
+	}
+	d := h.must(RecordEvidence(h.state, f, []Evidence{ev("REQ-2", "go vet ./..."), ev("REQ-1", "go test ./...")}))
+	if len(d) != 2 || d[0].Data.(Evidence).Requirement != "REQ-1" || d[1].Data.(Evidence).Requirement != "REQ-2" {
+		t.Fatalf("drafts %+v", d)
+	}
+}

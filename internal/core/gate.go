@@ -68,6 +68,8 @@ func Gate(s State, f Facts) GateResult {
 		switch {
 		case x.Status.Unresolved() && x.Tier.Blocking():
 			b = append(b, fmt.Sprintf("%s (%s) is %s", x.ID, x.Tier, x.Status))
+		case x.Status == StatusClaimed:
+			b = append(b, fmt.Sprintf("%s (%s) has a claimed fix that awaits verification", x.ID, x.Tier))
 		case x.carriedBy(f.Candidate.Digest):
 			b = append(b, fmt.Sprintf("%s (%s) was recorded on this candidate, and the fix that resolved it was confirmed on another", x.ID, x.Tier))
 		}
