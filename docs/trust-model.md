@@ -21,6 +21,9 @@ What it provides:
 - Post-hoc detection of a read-only role modifying the candidate.
 - Declared role identities, recorded with every report.
 - A gate that fails closed on any inconsistency it can observe.
+- A bound on unattended runs for an orchestrator that follows `metron next`:
+  within the contract's limits it reaches an open gate or a step owned by
+  governance, and no count, budget or time limit ever opens the gate.
 
 What it does not provide:
 
@@ -43,10 +46,35 @@ What it does not provide:
   does not defend against local git configuration set up to make git consider
   different content identical, such as a clean filter, nor against ignored
   files that change what a check does.
+- **Contained checks.** When a check runs past its time limit, Metron kills
+  the check's process group on Unix-like systems, and its process tree on
+  Windows (with `taskkill`, or the shell alone if that fails). A process that
+  leaves the group or the tree, for example by starting a new session or
+  daemonizing, is not killed: it can keep running and keep using resources,
+  and it can still change files, including the working tree after the result
+  was recorded and ignored files a later check reads.
+- **Complete commit accounting after a rewrite.** Every commit since the
+  reviewed one must be listed under a fix, but Metron can list those commits
+  only while the reviewed commit still exists in the repository. Once history
+  has been rewritten and that commit is gone, only the commits a report names
+  are examined.
 - **Protected evaluation.** Whoever runs `metron gate` can also run a modified
   binary. The exit status is only as trustworthy as the environment it ran in.
 - **Role isolation.** An agent with shell access can request any packet and
   submit any report.
+- **Binding governance decisions.** Pinning a contract and resolving an
+  escalation record the git identity of whoever ran the command, and anyone
+  with a shell can set that identity. Resuming a suspended campaign with
+  `metron resolve` is therefore cooperative: Metron records the decision but
+  cannot tell whether governance made it. An orchestrator that ignores the
+  stop rule gets no packet issued while governance owns the next step, and no
+  check recorded while the campaign is suspended, but nothing stops it from
+  running `metron resolve` itself. Binding these decisions to governance's
+  credential belongs to authenticated mode.
+- **Withholding history from a reviewer.** A review packet does not name its
+  round, the earlier verdicts or who gave them. A reviewer that can read the
+  repository finds them in the ledger, or with `metron status` and `metron
+  log`.
 
 No keys are needed and none are managed.
 
@@ -63,6 +91,7 @@ required to use the gate against agents that are not trusted.
 | Protected gate evaluation | The gate runs in the trusted environment, from a known binary |
 | Checks on the candidate itself | Check commands run in the trusted environment on a fresh checkout of the candidate commit, not in a working tree someone else configured |
 | Role isolation | Implementation and review roles run with separate credentials and cannot act for each other |
+| Governance authority | Pinning a contract and resolving an escalation, including resuming a suspended campaign, require governance's credential |
 
 ### The authentication boundary
 
