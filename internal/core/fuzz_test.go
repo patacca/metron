@@ -420,6 +420,17 @@ func (s *sim) check(prev State) {
 			s.t.Fatalf("round %d is numbered %d", i+1, r.Number)
 		}
 	}
+	latest := len(s.state.Rounds())
+	for _, x := range s.state.Findings() {
+		for i, e := range x.History {
+			if e.Round > latest || (i > 0 && e.Round < x.History[i-1].Round) {
+				s.t.Fatalf("%s history entry %d (%s) is in round %d; latest round %d, previous entry %+v", x.ID, i, e.Event, e.Round, latest, x.History[max(i-1, 0)])
+			}
+			if p, _ := s.state.Packet(e.Packet); p.Action == StepReview && e.Round != p.Round {
+				s.t.Fatalf("%s %s is recorded in round %d, its review packet in round %d", x.ID, e.Event, e.Round, p.Round)
+			}
+		}
+	}
 	for _, x := range prev.Findings() {
 		y, ok := s.state.Finding(x.ID)
 		if !ok || y.Recurrences < x.Recurrences || (x.RootCauseRequired && !y.RootCauseRequired) ||

@@ -78,8 +78,8 @@ func contractProblem(s State, f Facts) string {
 	if err := ValidateContract(*f.Contract); err != nil {
 		var r *Rejection
 		errors.As(err, &r)
-		return fmt.Sprintf("the contract is invalid (%d problems, first: %s %s): fix it, then pin it",
-			len(r.Problems), r.Problems[0].Path, r.Problems[0].Message)
+		return fmt.Sprintf("the contract is invalid (%s, first: %s %s): fix it, then pin it",
+			count(len(r.Problems), "problem", "problems"), r.Problems[0].Path, r.Problems[0].Message)
 	}
 	if !validDigest(f.ContractDigest) {
 		return fmt.Sprintf("the contract digest %q is malformed", f.ContractDigest)

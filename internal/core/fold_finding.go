@@ -172,12 +172,13 @@ func (s *State) onReclassified(data []byte) error {
 	return nil
 }
 
-// record appends a step to a finding's history, at the current round of the
-// stage. It clips the history first so that a state sharing its backing array
-// is never touched.
+// record appends a step to a finding's history, at the number of the latest
+// round in the ledger (rounds are numbered 1..n, so that is n, or 0 before
+// any round). It clips the history first so that a state sharing its backing
+// array is never touched.
 func (s *State) record(f *Finding, event EventType, packet, note string) {
 	f.History = append(slices.Clip(f.History), FindingEvent{
-		Event: event, Round: len(s.stageRounds()), Packet: packet, Note: note,
+		Event: event, Round: len(s.rounds), Packet: packet, Note: note,
 	})
 }
 

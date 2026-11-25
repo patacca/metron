@@ -422,6 +422,9 @@ func TestScenarioRegressionSpiral(t *testing.T) {
 			var want []EscalationKind
 			if tc.spiral {
 				want = []EscalationKind{EscalationRegressionSpiral}
+				if r := d[len(d)-1].Data.(EscalationRaised).Reason; r != "verification P-0003 found 1 blocking regression and confirmed 1 fix" {
+					t.Fatalf("reason %q", r)
+				}
 			}
 			if got := raisedKinds(d); !slices.Equal(got, want) {
 				t.Fatalf("raised %v, want %v", got, want)
@@ -515,6 +518,49 @@ func TestScenarioStageChange(t *testing.T) {
 	}
 	if n := len(h.state.Rounds()); n != 3 {
 		t.Fatalf("%d rounds across stages, want 3", n)
+	}
+}
+
+func TestScenarioHistoryRoundsAcrossStages(t *testing.T) {
+	h := newHarness(t)
+	h.checks(true)
+	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
+	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
+	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.checks(true)
+	h.accept(h.packet(), "rev-1", red(h.contract, "crash again"))
+
+	h.contract = stageTwoContract()
+	h.must(Pin(h.state, h.facts(), "enter controlled validation", "gov"))
+	before := map[string]int{}
+	for _, f := range h.state.Findings() {
+		before[f.ID] = len(f.History)
+	}
+	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0002", h.commit(true))}})
+	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"))
+	h.checks(true)
+	b := review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated, "REQ-4": RequirementViolated}, blocker("loss", "REQ-4"))
+	b.Reopen = []Reopen{{Finding: "F-0001", Reason: ReopenRegression, Justification: "it is back"}}
+	rp := h.packet()
+	if rp.Round != 3 {
+		t.Fatalf("the first review of the second stage is round %d, want 3", rp.Round)
+	}
+	h.accept(rp, "rev-1", b)
+
+	// Steps between rounds happen in round 2, the latest; the review steps in
+	// round 3.
+	want := map[string][]int{"F-0001": {3}, "F-0002": {2, 2}, "F-0003": {3}}
+	for _, f := range h.state.Findings() {
+		var got []int
+		for _, e := range f.History[before[f.ID]:] {
+			got = append(got, e.Round)
+			if p, _ := h.state.Packet(e.Packet); p.Action == StepReview && e.Round != p.Round {
+				t.Fatalf("%s %s is recorded in round %d, its review packet in round %d", f.ID, e.Event, e.Round, p.Round)
+			}
+		}
+		if !slices.Equal(got, want[f.ID]) {
+			t.Fatalf("%s rounds in the second stage %v, want %v", f.ID, got, want[f.ID])
+		}
 	}
 }
 

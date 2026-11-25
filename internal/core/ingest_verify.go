@@ -67,6 +67,7 @@ func (in *ingestion) verifierEvents(b VerifierBody) {
 		}
 	}
 	if len(blocking) > 0 && len(blocking) >= confirmed {
-		in.raise(EscalationRegressionSpiral, fmt.Sprintf("verification %s found %d blocking regressions and confirmed %d fixes", pk.Packet, len(blocking), confirmed), blocking, nil, nil)
+		in.raise(EscalationRegressionSpiral, fmt.Sprintf("verification %s found %s and confirmed %s", pk.Packet,
+			count(len(blocking), "blocking regression", "blocking regressions"), count(confirmed, "fix", "fixes")), blocking, nil, nil)
 	}
 }

@@ -86,6 +86,14 @@ func ptr(parts ...any) string {
 
 func blank(s string) bool { return strings.TrimSpace(s) == "" }
 
+// count writes n with the singular or the plural noun, as English needs.
+func count(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
 func lowerHex(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
