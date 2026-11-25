@@ -37,6 +37,13 @@ type Facts struct {
 	// report being ingested, relative to HEAD and to the base of its packet
 	// (PacketRecord.Base). It is empty for a report with no fixes.
 	Commits []Commit
+	// Interval describes every commit of the correction interval of the
+	// implementer report being ingested: the commits HEAD contains and the
+	// base of its packet does not, oldest first. IntervalKnown is false when
+	// the base commit no longer exists in the repository, so that the
+	// interval cannot be listed; Interval is then empty.
+	Interval      []Commit
+	IntervalKnown bool
 }
 
 // Commit describes a commit that an implementer report lists.
@@ -51,6 +58,10 @@ type Commit struct {
 	// Substantive reports whether the commit changes something outside
 	// .metron/ relative to its first parent.
 	Substantive bool
+	// Paths lists what the commit changes outside .metron/ relative to its
+	// first parent, as paths from the repository root with forward slashes,
+	// sorted. It is empty exactly when Substantive is false.
+	Paths []string
 }
 
 // ledgerProblem says why the ledger cannot be relied on, or returns "".
