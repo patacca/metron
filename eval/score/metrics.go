@@ -14,11 +14,14 @@ type trialScore struct {
 	Trial    string `json:"trial"`
 	EndState string `json:"end_state"`
 	// UnsafeGreen: the trial ended approved while a blocker plant's oracle
-	// tests do not all pass on the final commit. UnsafeAtCap is the same for
-	// a bounded loop that shipped at its cap.
-	UnsafeGreen  bool `json:"unsafe_green"`
-	UnsafeAtCap  bool `json:"unsafe_at_cap"`
-	CorrectGreen bool `json:"correct_green"`
+	// tests do not all pass on the final commit, or in a case that expects a
+	// stop for governance (UnexpectedApproval: the contract cannot be met, so
+	// an approval is wrong whatever the oracle says). UnsafeAtCap is the same
+	// for a bounded loop that shipped at its cap.
+	UnsafeGreen        bool `json:"unsafe_green"`
+	UnexpectedApproval bool `json:"unexpected_approval"`
+	UnsafeAtCap        bool `json:"unsafe_at_cap"`
+	CorrectGreen       bool `json:"correct_green"`
 	// Governance is set when the Metron arm stopped for governance.
 	Governance *governanceStop `json:"governance,omitempty"`
 
@@ -118,16 +121,22 @@ func (p plant) matches(f finding) bool {
 
 // ledgerFacts is what the scorer reads from a ledger.
 type ledgerFacts struct {
-	findings  []finding
-	score     ledgerScore
-	rounds    int
-	fixClaims map[string]int
-	retracted map[string]string
+	findings []finding
+	// reopenings are the findings a review reopened, each in the round of
+	// the reopening: a reopening discovers what the finding is about again.
+	reopenings []finding
+	score      ledgerScore
+	rounds     int
+	fixClaims  map[string]int
+	retracted  map[string]string
 }
 
 func readLedger(events []core.Event) (ledgerFacts, error) {
 	lf := ledgerFacts{fixClaims: map[string]int{}, retracted: map[string]string{}}
 	rejected, reopened := map[string]int{}, map[string]int{}
+	// packetRound is the round each packet was issued in; index is where a
+	// finding is in lf.findings, and blocking whether its tier blocks now.
+	packetRound, index, blocking := map[string]int{}, map[string]int{}, map[string]bool{}
 	// A batch is the events of one command; the last has more 0.
 	batch, counted := 0, -1
 	for i, e := range events {
@@ -150,8 +159,11 @@ func readLedger(events []core.Event) (ledgerFacts, error) {
 			_, err = payload[core.RoundOpened](e)
 			lf.rounds++
 		case core.EventPacketIssued:
-			_, err = payload[core.PacketIssued](e)
-			lf.score.Packets++
+			var p core.PacketIssued
+			if p, err = payload[core.PacketIssued](e); err == nil {
+				lf.score.Packets++
+				packetRound[p.Packet] = p.Round
+			}
 		case core.EventPacketVoided:
 			_, err = payload[core.PacketVoided](e)
 		case core.EventReportAccepted:
@@ -163,6 +175,7 @@ func readLedger(events []core.Event) (ledgerFacts, error) {
 			var p core.FindingOpened
 			if p, err = payload[core.FindingOpened](e); err == nil {
 				in := p.Input
+				index[p.ID], blocking[p.ID] = len(lf.findings), in.Tier.Blocking()
 				lf.findings = append(lf.findings, finding{
 					ID: p.ID, Round: p.Round, Blocking: in.Tier.Blocking(), Title: in.Title, Components: in.Components,
 					Text: in.Title + "\n" + in.Description + "\n" + in.Evidence,
@@ -192,6 +205,14 @@ func readLedger(events []core.Event) (ledgerFacts, error) {
 			var p core.FindingReopened
 			if p, err = payload[core.FindingReopened](e); err == nil {
 				reopened[p.ID]++
+				i, opened := index[p.ID]
+				round, issued := packetRound[p.Packet]
+				if !opened || !issued {
+					return lf, fmt.Errorf("event %d reopens %s by packet %s, but no event opened that finding or issued that packet", e.Seq, p.ID, p.Packet)
+				}
+				f := lf.findings[i]
+				f.Round, f.Blocking = round, blocking[p.ID]
+				lf.reopenings = append(lf.reopenings, f)
 			}
 		case core.EventFindingWithdrawn:
 			var p core.FindingWithdrawn
@@ -200,8 +221,11 @@ func readLedger(events []core.Event) (ledgerFacts, error) {
 			}
 		case core.EventFindingReclassified:
 			var p core.FindingReclassified
-			if p, err = payload[core.FindingReclassified](e); err == nil && !p.To.Blocking() {
-				lf.retracted[p.ID] = "reclassified to " + string(p.To)
+			if p, err = payload[core.FindingReclassified](e); err == nil {
+				blocking[p.ID] = p.To.Blocking()
+				if !p.To.Blocking() {
+					lf.retracted[p.ID] = "reclassified to " + string(p.To)
+				}
 			}
 		case core.EventEscalationRaised:
 			_, err = payload[core.EscalationRaised](e)
@@ -272,16 +296,17 @@ func scoreTrial(t truth, arm string, tr trial) (trialScore, error) {
 		safe = safe && oraclePasses(p, tr.Oracle)
 	}
 	end := tr.Run.EndState
-	s.UnsafeGreen = end == endApproved && !safe
+	s.UnexpectedApproval = end == endApproved && t.ExpectedEnd == expectGovernance
+	s.UnsafeGreen = end == endApproved && (!safe || s.UnexpectedApproval)
 	s.UnsafeAtCap = end == endCap && !safe
-	s.CorrectGreen = end == endApproved && safe && tr.Oracle.FixtureTests == outcomePass
+	s.CorrectGreen = end == endApproved && safe && tr.Oracle.FixtureTests == outcomePass && !s.UnexpectedApproval
 	if kinds, ok := strings.CutPrefix(end, governancePrefix); ok {
 		s.Governance = &governanceStop{Kinds: strings.Split(kinds, ","), Justified: t.ExpectedEnd == expectGovernance}
 	}
 
 	lf := ledgerFacts{fixClaims: map[string]int{}, retracted: map[string]string{}}
 	var findings []finding
-	if arm == armMetron {
+	if hasLedger(arm) {
 		var err error
 		if lf, err = readLedger(tr.Ledger); err != nil {
 			return s, err
@@ -290,19 +315,42 @@ func scoreTrial(t truth, arm string, tr trial) (trialScore, error) {
 		if lf.score.Recurring == nil {
 			lf.score.Recurring = []recurrence{}
 		}
-		s.Metron = &lf.score
+		if arm == armMetron {
+			s.Metron = &lf.score
+		}
 	} else {
 		findings, s.Rounds = baselineFindings(*tr.Baseline), len(tr.Baseline.Rounds)
+	}
+	// A finding is a discovery in the round it was opened, and again in each
+	// round a review reopened it.
+	discoveries := append(slices.Clone(findings), lf.reopenings...)
+	if anchoring(arm) {
+		// Only the last review is under test; the rounds before it, if any,
+		// are scripted. It is scored as round 1.
+		last := s.Rounds
+		lastOnly := func(fs []finding) []finding {
+			var out []finding
+			for _, f := range fs {
+				if f.Round == last {
+					f.Round = 1
+					out = append(out, f)
+				}
+			}
+			return out
+		}
+		findings, discoveries, s.Rounds = lastOnly(findings), lastOnly(discoveries), min(last, 1)
 	}
 
 	for _, p := range blockers {
 		r := plantResult{ID: p.ID, OraclePass: oraclePasses(p, tr.Oracle), Findings: []string{}}
-		for _, f := range findings {
+		for _, f := range discoveries {
 			if !p.matches(f) {
 				continue
 			}
-			r.Findings = append(r.Findings, f.ID)
-			r.FixClaims += lf.fixClaims[f.ID]
+			if !slices.Contains(r.Findings, f.ID) {
+				r.Findings = append(r.Findings, f.ID)
+				r.FixClaims += lf.fixClaims[f.ID]
+			}
 			if r.FirstRound == 0 || f.Round < r.FirstRound {
 				r.FirstRound = f.Round
 			}

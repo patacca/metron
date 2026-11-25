@@ -278,12 +278,14 @@ func TestProcessRegressionsChangesAndCost(t *testing.T) {
 			{reportAccepted("P-0003", core.RoleVerifier), rejected("F-0001", core.ScopeExcessive),
 				opened("F-0002", 1, core.RoleVerifier, core.TierMaterial, "The fix broke deletion", []string{"shop/store.py"}, "")},
 			{claimed("F-0001")},
-			{rejected("F-0001", core.ScopeProportionate), reopened("F-0001")},
+			{rejected("F-0001", core.ScopeProportionate)},
+			reviewIssued(2, "P-0004"),
+			{reportAccepted("P-0004", core.RoleReviewer), reopened("F-0001", "P-0004")},
 		},
 	})
 	ts, s := f.scoreOne("shop", armMetron)
 	m := ts.Metron
-	if m == nil || m.Packets != 3 || m.Reports != 3 || m.EvidenceBatches != 2 || m.VerifierFindings != 1 || m.ExcessiveFixes != 1 {
+	if m == nil || m.Packets != 4 || m.Reports != 4 || m.EvidenceBatches != 2 || m.VerifierFindings != 1 || m.ExcessiveFixes != 1 {
 		t.Fatalf("ledger counts %+v", m)
 	}
 	if len(m.Recurring) != 1 || m.Recurring[0] != (recurrence{Finding: "F-0001", FixRejected: 2, Reopened: 1}) {
@@ -292,7 +294,7 @@ func TestProcessRegressionsChangesAndCost(t *testing.T) {
 	if p1 := ts.Plants[0]; p1.FixClaims != 2 || !slices.Equal(p1.Findings, []string{"F-0001"}) || p1.OraclePass != true {
 		t.Fatalf("P1 %+v: one finding, fixed twice", p1)
 	}
-	if ts.Rounds != 1 || ts.OmpRuns != 2 || ts.Checks != 2 || ts.Seconds != 77 || ts.InputTokens != 3000 || ts.OutputTokens != 300 {
+	if ts.Rounds != 2 || ts.OmpRuns != 2 || ts.Checks != 2 || ts.Seconds != 77 || ts.InputTokens != 3000 || ts.OutputTokens != 300 {
 		t.Fatalf("process and cost %+v", ts)
 	}
 	if ts.FixtureTests != outcomeFail || !slices.Equal(ts.DecoyOracleFailures, []string{"test_D1", "test_D9"}) {
@@ -301,7 +303,7 @@ func TestProcessRegressionsChangesAndCost(t *testing.T) {
 	if ts.LinesChanged != 16 || !slices.Equal(ts.FilesOutsidePlants, []string{"shop/util.py", "tests/test_store.py"}) {
 		t.Fatalf("changes: %d lines, outside %v", ts.LinesChanged, ts.FilesOutsidePlants)
 	}
-	if s.Packets != 3 || s.Reports != 3 || s.EvidenceBatches != 2 || s.RecurringFindings != 1 || s.VerifierFindings != 1 ||
+	if s.Packets != 4 || s.Reports != 4 || s.EvidenceBatches != 2 || s.RecurringFindings != 1 || s.VerifierFindings != 1 ||
 		s.ExcessiveFixes != 1 || s.FixtureFailures != 1 || s.DecoyOracleFailures != 2 || s.LinesChanged != 16 ||
 		s.FilesOutsidePlants != 2 || s.Seconds != 77 || s.OmpRuns != 2 || s.Checks != 2 || s.InputTokens != 3000 || s.OutputTokens != 300 {
 		t.Fatalf("summary %+v", s)
@@ -388,6 +390,15 @@ func TestRefusals(t *testing.T) {
 		{name: "an unknown arm", setup: func(f *fixture) { f.add(spec{arm: "solo", name: "1", end: endApproved}) }, want: `"solo" is not an arm`},
 		{name: "an end state the arm does not record", setup: func(f *fixture) { f.add(spec{arm: armMetron, name: "1", end: endCap}) }, want: "not one the metron arm records"},
 		{name: "an empty governance kind", setup: func(f *fixture) { f.add(spec{arm: armMetron, name: "1", end: "governance:"}) }, want: "not one the metron arm records"},
+		{name: "an anchoring review without a verdict", setup: func(f *fixture) { f.add(spec{arm: armAnchoringFresh, name: "1", end: "reviewed:MAYBE"}) },
+			want: "not one the anchoring-fresh arm records"},
+		{name: "an anchoring trial that claims an approval", setup: func(f *fixture) { f.add(spec{arm: armAnchoringLedger, name: "1", end: endApproved}) },
+			want: "not one the anchoring-ledger arm records"},
+		{name: "a reopening by a packet never issued", setup: func(f *fixture) {
+			f.add(spec{arm: armMetron, name: "1", end: endRoleFailure, ledger: [][]core.Draft{reviewIssued(1, "P-0001"),
+				{opened("F-0001", 1, core.RoleReviewer, core.TierCritical, "The cascade", []string{"shop/store.py"}, "")},
+				{reopened("F-0001", "P-0009")}}})
+		}, want: "no event opened that finding or issued that packet"},
 		{name: "a trial filed under another name", setup: func(f *fixture) {
 			dir := f.add(spec{arm: armMetron, name: "1", end: endApproved})
 			if err := os.Rename(dir, filepath.Join(filepath.Dir(dir), "2")); err != nil {

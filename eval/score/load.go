@@ -21,6 +21,9 @@ const (
 	armMetron       = "metron"
 	armUnrestricted = "unrestricted"
 	armBounded      = "bounded"
+	// The anchoring arms run one review on a prepared state and stop.
+	armAnchoringLedger = "anchoring-ledger"
+	armAnchoringFresh  = "anchoring-fresh"
 
 	endApproved      = "approved"
 	endNotReady      = "not-ready"
@@ -28,6 +31,7 @@ const (
 	endRoleFailure   = "role-failure"
 	endDriverCap     = "driver-cap"
 	governancePrefix = "governance:"
+	reviewedPrefix   = "reviewed:"
 
 	expectApproved   = "approved"
 	expectGovernance = "governance"
@@ -48,7 +52,18 @@ const (
 )
 
 // arms lists the arms in the order the report shows them.
-var arms = []string{armMetron, armUnrestricted, armBounded}
+var arms = []string{armMetron, armUnrestricted, armBounded, armAnchoringLedger, armAnchoringFresh}
+
+// hasLedger reports whether an arm records a Metron ledger.
+func hasLedger(arm string) bool {
+	return arm == armMetron || anchoring(arm)
+}
+
+// anchoring reports whether an arm is one of the anchoring arms, whose
+// ledger ends with the one review under test.
+func anchoring(arm string) bool {
+	return arm == armAnchoringLedger || arm == armAnchoringFresh
+}
 
 // truth is a case's truth.json. A variant names its base and inherits the
 // base's plants and decoys unless it lists its own.
@@ -189,7 +204,7 @@ type trial struct {
 	Run      runRecord
 	Oracle   oracleRecord
 	Diff     diffRecord
-	Ledger   []core.Event    // the Metron arm
+	Ledger   []core.Event    // the Metron and anchoring arms
 	Baseline *baselineRecord // the baselines
 }
 
@@ -289,7 +304,7 @@ func loadTrial(dir, caseName, arm, name string) (trial, error) {
 	if added != tr.Diff.Added || deleted != tr.Diff.Deleted {
 		return tr, fmt.Errorf("%s: diff.json totals %d/%d do not match its files, %d/%d", dir, tr.Diff.Added, tr.Diff.Deleted, added, deleted)
 	}
-	if arm == armMetron {
+	if hasLedger(arm) {
 		data, err := os.ReadFile(filepath.Join(dir, "ledger.jsonl"))
 		if err != nil {
 			return tr, err
@@ -326,6 +341,11 @@ func validEnd(arm, end string) bool {
 		return end == endApproved || end == endNotReady || end == endRoleFailure
 	case armBounded:
 		return end == endApproved || end == endCap || end == endRoleFailure
+	case armAnchoringLedger, armAnchoringFresh:
+		if verdict, ok := strings.CutPrefix(end, reviewedPrefix); ok {
+			return core.Verdict(verdict).Valid()
+		}
+		return end == endRoleFailure
 	}
 	return false
 }

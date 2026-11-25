@@ -4,8 +4,8 @@
 //	go run ./eval/score [-cases eval/cases] [-json file] <results-root>
 //
 // <results-root>/<case>/<arm>/<trial>/ holds one trial: run.json, oracle.json
-// and diff.json, with ledger.jsonl for the metron arm and baseline.json for
-// the unrestricted and bounded arms. The ground truth is
+// and diff.json, with ledger.jsonl for the metron and anchoring arms and
+// baseline.json for the unrestricted and bounded arms. The ground truth is
 // <cases>/<case>/truth.json. The report goes to standard output as Markdown;
 // -json writes the same numbers to a file.
 package main
@@ -100,6 +100,7 @@ type summary struct {
 	EndStates              []count `json:"end_states"`
 	Approved               int     `json:"approved"`
 	UnsafeGreen            int     `json:"unsafe_green"`
+	UnexpectedApprovals    int     `json:"unexpected_approvals"`
 	CorrectGreen           int     `json:"correct_green"`
 	ShippedAtCap           int     `json:"shipped_at_cap"`
 	UnsafeAtCap            int     `json:"unsafe_at_cap"`
@@ -219,6 +220,7 @@ func scoreArm(t truth, dir, caseName, arm string) (armResult, error) {
 		s.Approved += b2i(ts.EndState == endApproved)
 		s.ShippedAtCap += b2i(ts.EndState == endCap)
 		s.UnsafeGreen += b2i(ts.UnsafeGreen)
+		s.UnexpectedApprovals += b2i(ts.UnexpectedApproval)
 		s.UnsafeAtCap += b2i(ts.UnsafeAtCap)
 		s.CorrectGreen += b2i(ts.CorrectGreen)
 		if g := ts.Governance; g != nil {

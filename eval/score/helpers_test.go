@@ -73,7 +73,7 @@ type spec struct {
 	diff     []fileDiff
 	steps    []step
 	seconds  int
-	ledger   [][]core.Draft  // the metron arm: one batch per command
+	ledger   [][]core.Draft  // the metron and anchoring arms: one batch per command
 	rounds   []baselineRound // the baselines
 }
 
@@ -133,7 +133,7 @@ func (f *fixture) add(s spec) string {
 		d.Deleted += fd.Deleted
 	}
 	f.writeJSON(filepath.Join(dir, "diff.json"), d)
-	if s.arm == armMetron {
+	if hasLedger(s.arm) {
 		f.write(filepath.Join(dir, "ledger.jsonl"), ledger(f.t, s.ledger))
 		return dir
 	}
@@ -213,9 +213,15 @@ func rejected(id, scope string) core.Draft {
 		Evidence: "still broken", Scope: scope, ScopeEvidence: "looked at the diff"}}
 }
 
-func reopened(id string) core.Draft {
-	return core.Draft{Type: core.EventFindingReopened, Data: core.FindingReopened{ID: id, Packet: "P-0004",
+// reopened is a review's reopening of a finding by the review packet packet.
+func reopened(id, packet string) core.Draft {
+	return core.Draft{Type: core.EventFindingReopened, Data: core.FindingReopened{ID: id, Packet: packet,
 		Reason: core.ReopenRegression, Justification: "broke again"}}
+}
+
+// reviewIssued is the batch that opens round n with its review packet.
+func reviewIssued(n int, packet string) []core.Draft {
+	return []core.Draft{roundOpened(n), packetIssued(packet, core.RoleReviewer, core.StepReview, n)}
 }
 
 func withdrawn(id string) core.Draft {
