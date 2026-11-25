@@ -441,15 +441,24 @@ towards its recurrence.
 
 The auditor discharges every escalation named in its packet, and no other,
 with one resolution each: an analysis and a conclusion. Each escalation asks
-its own question, and a single answer for all of them would let one be
-passed over. It gives a decision for every finding the packet
-lists as adjudicable, and for no other: `uphold` (the finding stands as
-recorded), `withdraw` (the finding is wrong and leaves the process), or
-`reclassify` (the finding is real but its tier is wrong, and the decision
-gives the new tier). It may issue directives, which are binding guidance
-carried into every later packet, and it may recommend contract changes to
-governance. It cannot make them, and it does not lower the standard to end
-a loop.
+its own question, and a single answer for all of them would let one be passed
+over. It gives a decision for every finding the packet lists as adjudicable,
+and for no other: `uphold` (the finding stands as recorded), `withdraw` (the
+finding is wrong and leaves the process), or `reclassify` (the finding is
+real but its tier is wrong, and the decision gives the new tier).
+Reclassification changes the tier and nothing else, so an audit can make a
+finding blocking only if the finding, as recorded, already has everything
+section 7 asks of a blocking finding: a citation of an applicable requirement
+or an unacceptable risk of the pinned contract, the reason it must be
+resolved before this stage, how a fix can be verified and, in the
+improvement-prone domains, its proportionality. Where any of that is missing
+the auditor upholds the finding at its tier and says why it should block; a
+reviewer then opens a blocking finding that stands on the contract, or
+governance amends the contract.
+
+It may issue directives, which are binding guidance carried into every later
+packet, and it may recommend contract changes to governance. It cannot make
+them, and it does not lower the standard to end a loop.
 
 ## 11. Review continuity
 

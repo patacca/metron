@@ -204,3 +204,89 @@ func TestFindingHistoryRecordsCandidates(t *testing.T) {
 		t.Fatalf("recorded on %v, want %v", on, []string{x, y})
 	}
 }
+
+// D2. An audit can make a finding blocking only if the finding, as recorded,
+// already meets every rule of a blocking finding under the pinned contract.
+func TestReclassificationToBlockingNeedsWhatABlockingFindingNeeds(t *testing.T) {
+	bare := improvement("bare")
+	bare.Contradicts = "F-0001"
+	uncited := eligible("uncited", "F-0001")
+	uncited.Requirement = ""
+	noRationale := eligible("no rationale", "F-0001")
+	noRationale.BlockingRationale = ""
+	noVerification := eligible("no verification", "F-0001")
+	noVerification.Verification = ""
+	disproportionate := eligible("disproportionate", "F-0001")
+	disproportionate.Domain = DomainMaintainability
+	proportionate := disproportionate
+	proportionate.Key = "proportionate"
+	proportionate.Proportionality = &Proportionality{ProposedChange: "split it", RegressionRisk: "none", DeferralCost: "grows"}
+	risk := eligible("risk", "F-0001")
+	risk.Requirement, risk.Risk = "", "RISK-1"
+
+	for _, tc := range []struct {
+		name    string
+		finding FindingInput
+		tier    Tier
+		refused bool
+	}{
+		{"cites nothing", bare, TierMaterial, true},
+		{"no requirement and no risk", uncited, TierMaterial, true},
+		{"no blocking rationale", noRationale, TierCritical, true},
+		{"no verification", noVerification, TierMaterial, true},
+		{"no proportionality in an improvement-prone domain", disproportionate, TierMaterial, true},
+		{"meets every rule", eligible("ok", "F-0001"), TierMaterial, false},
+		{"meets every rule, with proportionality", proportionate, TierCritical, false},
+		{"cites an unacceptable risk", risk, TierMaterial, false},
+		{"to another non-blocking tier", bare, TierPreference, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.checks(true)
+			h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
+			h.fixAndVerify("F-0001")
+			h.checks(true)
+			h.accept(h.packet(), "rev-2", review(h.contract, VerdictGreen, nil, tc.finding))
+			ap := h.packet()
+			body := AuditorBody{Resolutions: resolutions(ap, "decided"),
+				Adjudications: []Adjudication{{Finding: "F-0002", Decision: DecisionReclassify, Tier: tc.tier, Rationale: "it is material"}}}
+			if !tc.refused {
+				h.accept(ap, "aud-1", body)
+				if f, _ := lookup(h.state, "F-0002"); f.Tier != tc.tier {
+					t.Fatalf("tier %s, want %s", f.Tier, tc.tier)
+				}
+				return
+			}
+			if ps := h.refused(ap, "aud-1", body, LayerSemantic); !hasProblem(ps, "/body/adjudications/0/tier") {
+				t.Fatalf("problems %+v", ps)
+			}
+			// The auditor can still uphold it; it then stays where it is.
+			body.Adjudications[0] = Adjudication{Finding: "F-0002", Decision: DecisionUphold, Rationale: "real, but nothing in the contract makes it mandatory"}
+			h.accept(ap, "aud-1", body)
+			if f, _ := lookup(h.state, "F-0002"); f.Tier.Blocking() {
+				t.Fatalf("F-0002 became %s", f.Tier)
+			}
+			h.expect(StepNone)
+		})
+	}
+
+	// A blocking finding whose requirement the pinned contract no longer has
+	// cannot be moved between blocking tiers either.
+	t.Run("citation no longer in the contract", func(t *testing.T) {
+		h := newHarness(t)
+		h.checks(true)
+		h.accept(h.packet(), "rev-1", review(h.contract, VerdictRed, map[string]string{"REQ-3": RequirementViolated}, blocker("layers", "REQ-3")))
+		c := testContract()
+		c.Requirements = append(c.Requirements[:2:2], c.Requirements[3])
+		c.NotApplicable = []Waiver{{Domain: DomainArchitecture, Rationale: "the layering is accepted as it is"}}
+		h.contract = c
+		h.must(Pin(h.state, h.facts(), "REQ-3 dropped", "gov"))
+		h.accept(h.packet(), "impl-1", ImplementerBody{Disputes: []Dispute{{Finding: "F-0001", Rationale: "the requirement is gone"}}})
+		ap := h.packet()
+		body := AuditorBody{Resolutions: resolutions(ap, "decided"),
+			Adjudications: []Adjudication{{Finding: "F-0001", Decision: DecisionReclassify, Tier: TierCritical, Rationale: "worse than thought"}}}
+		if ps := h.refused(ap, "aud-1", body, LayerSemantic); !hasProblem(ps, "/body/adjudications/0/tier") {
+			t.Fatalf("problems %+v", ps)
+		}
+	})
+}

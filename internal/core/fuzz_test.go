@@ -264,6 +264,12 @@ func (s *sim) reviewer(p Packet, param byte) ReviewerBody {
 		x := improvement("reversal")
 		x.Tier, x.EvidenceNeeded, x.ReassessWhen = TierCalibration, "load data", "after the pilot"
 		x.Contradicts = resolved[0].ID
+		if bit(param, 3) {
+			// Everything a blocking finding needs, so that an audit may
+			// reclassify it to a blocking tier.
+			x.Domain, x.Requirement = DomainFunctionalCorrectness, req[0]
+			x.BlockingRationale, x.Verification = "the demo depends on it", "a regression test"
+		}
 		findings = append(findings, x)
 	}
 	reopen := bit(param, 4) && len(resolved) > 0

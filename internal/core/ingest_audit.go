@@ -1,6 +1,9 @@
 package core
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // Ingestion of auditor reports.
 
@@ -45,6 +48,11 @@ func (in *ingestion) checkAuditor(b AuditorBody) {
 		case DecisionReclassify:
 			if !a.Tier.Valid() {
 				in.sem.add(p+"/tier", "%q is not a tier: a reclassification names the new tier", a.Tier)
+			} else if a.Tier.Blocking() && in.exists(a.Finding) {
+				if lacks := in.lacksToBlock(in.find(a.Finding).Input); len(lacks) > 0 {
+					in.sem.add(p+"/tier", "finding %s cannot become %s, because as recorded it does not meet the rules of a blocking finding (%s): uphold it at its tier and say why it should block, so that a reviewer opens a blocking finding against the contract, and recommend a contract change if nothing in the contract covers it",
+						a.Finding, a.Tier, strings.Join(lacks, "; "))
+				}
 			}
 		default:
 			in.sem.add(p+"/decision", "%q is not %s, %s or %s", a.Decision, DecisionUphold, DecisionWithdraw, DecisionReclassify)
@@ -60,6 +68,21 @@ func (in *ingestion) checkAuditor(b AuditorBody) {
 	}
 	statements(&in.sem, "/body/directives", b.Directives, "directive")
 	statements(&in.sem, "/body/contract_recommendations", b.ContractRecommendations, "recommendation")
+}
+
+// lacksToBlock says what a recorded finding lacks to be a blocking finding
+// under the pinned contract. An audit changes a finding's tier and nothing
+// else, so it can make blocking only what already has all of it.
+func (in *ingestion) lacksToBlock(fi FindingInput) []string {
+	var lacks []string
+	if !in.citesContract(fi) {
+		lacks = append(lacks, "it cites neither an applicable requirement nor an unacceptable risk of the pinned contract")
+	}
+	for _, g := range blockingGaps(fi) {
+		what, _, _ := strings.Cut(g.message, ":")
+		lacks = append(lacks, what)
+	}
+	return lacks
 }
 
 func (in *ingestion) auditorTransition(b AuditorBody) {

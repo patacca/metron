@@ -372,7 +372,9 @@ report, so the loss of a file never closes the gate for good.
 
 A finding is **unresolved** while `open` or `claimed`. Its **recurrence count**
 is the number of `fix-rejected` plus `reopened` events it has received.
-Reclassification changes the tier and nothing else.
+Reclassification changes the tier and nothing else, so it can make blocking
+only a finding that, as recorded, already meets every rule of a blocking
+finding under the pinned contract (section 9).
 
 Each step in a finding's history names the candidate it was made on: the one
 the reviewer, verifier or auditor examined, or the one a fix was claimed on. A
@@ -575,6 +577,13 @@ the digest of its canonical JSON form.
   one entry each, and for no other escalation.
 - Gives a decision (`uphold`, `withdraw` or `reclassify`) for every finding the
   packet lists as adjudicable, and for no other finding.
+- Reclassifies a finding to T0 or T1 only if the finding as recorded cites an
+  applicable requirement or an unacceptable risk of the pinned contract and
+  states its blocking rationale, its verification and, in the domains that
+  require it, its proportionality. An audit cannot supply what the finding
+  lacks: it upholds the finding at its tier, and a reviewer opens a blocking
+  finding that stands on the contract. A finding never blocks on an auditor's
+  word alone.
 - May issue directives. May recommend, but not make, contract changes.
 
 ## 10. Convergence safeguards

@@ -110,7 +110,16 @@ You must decide on exactly these findings, and on no other:
   fixed.
 - `withdraw`: the finding is wrong and leaves the process for good.
 - `reclassify`: the problem is real but its tier is not; give the tier the
-  evidence supports, which must differ from the current one.
+  evidence supports, which must differ from the current one. Reclassifying
+  changes the tier and nothing else, so you can move a finding to `T0` or
+  `T1` only if it already has, as recorded, everything a blocking finding
+  needs: a `requirement` or `risk` of the pinned contract that it cites, a
+  `blocking_rationale`, a `verification` and, in the improvement-prone
+  domains, a `proportionality` statement. Metron refuses the reclassification
+  otherwise. You cannot add what is missing: uphold the finding at its tier,
+  say in your rationale why it should block, and a reviewer can open a
+  blocking finding that stands on the contract. If nothing in the contract
+  covers it, recommend the contract change.
 
 Judge a finding by the standard its tier requires. A blocking finding must
 cite an applicable requirement or an unacceptable risk that it actually

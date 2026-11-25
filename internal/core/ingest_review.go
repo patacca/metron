@@ -197,24 +197,8 @@ func (in *ingestion) checkFinding(p string, fi FindingInput, keys map[string]str
 		if fi.Requirement == "" && fi.Risk == "" {
 			in.sem.add(p, "a blocking finding cites neither a requirement nor a risk: cite an applicable requirement or an unacceptable risk, or report the concern in contract_gaps")
 		}
-		if blank(fi.BlockingRationale) {
-			in.sem.add(p+"/blocking_rationale", "the blocking rationale is blank: say why it must be resolved before this stage")
-		}
-		if blank(fi.Verification) {
-			in.sem.add(p+"/verification", "the verification is blank: say how a fix can be verified")
-		}
-		if fi.Domain.NeedsProportionality() {
-			if pr := fi.Proportionality; pr == nil {
-				in.sem.add(p+"/proportionality", "a blocking %s finding needs a proportionality statement: give the proposed change, its regression risk and the cost of deferring it", fi.Domain)
-			} else {
-				for _, m := range []struct{ name, value string }{
-					{"proposed_change", pr.ProposedChange}, {"regression_risk", pr.RegressionRisk}, {"deferral_cost", pr.DeferralCost},
-				} {
-					if blank(m.value) {
-						in.sem.add(p+"/proportionality/"+m.name, "%s is blank: state it", m.name)
-					}
-				}
-			}
+		for _, g := range blockingGaps(fi) {
+			in.sem.add(p+"/"+g.member, "%s", g.message)
 		}
 	}
 	switch fi.Tier {
@@ -250,6 +234,39 @@ func (in *ingestion) checkFinding(p string, fi FindingInput, keys map[string]str
 	if fi.Contradicts != "" && !in.exists(fi.Contradicts) {
 		in.sem.add(p+"/contradicts", "finding %q does not exist: name a finding of this ledger", fi.Contradicts)
 	}
+}
+
+// gap is one thing a finding lacks to be a blocking one: the member that
+// would hold it and what to write there.
+type gap struct{ member, message string }
+
+// blockingGaps lists what a finding lacks, beyond a citation of the
+// contract, to meet the rules of a blocking finding: why it must be resolved
+// before this stage, how a fix can be verified and, in the improvement-prone
+// domains, the proportionality of the change.
+func blockingGaps(fi FindingInput) []gap {
+	var gaps []gap
+	if blank(fi.BlockingRationale) {
+		gaps = append(gaps, gap{"blocking_rationale", "the blocking rationale is blank: say why it must be resolved before this stage"})
+	}
+	if blank(fi.Verification) {
+		gaps = append(gaps, gap{"verification", "the verification is blank: say how a fix can be verified"})
+	}
+	if !fi.Domain.NeedsProportionality() {
+		return gaps
+	}
+	pr := fi.Proportionality
+	if pr == nil {
+		return append(gaps, gap{"proportionality", fmt.Sprintf("a blocking %s finding needs a proportionality statement: give the proposed change, its regression risk and the cost of deferring it", fi.Domain)})
+	}
+	for _, m := range []struct{ name, value string }{
+		{"proposed_change", pr.ProposedChange}, {"regression_risk", pr.RegressionRisk}, {"deferral_cost", pr.DeferralCost},
+	} {
+		if blank(m.value) {
+			gaps = append(gaps, gap{"proportionality/" + m.name, m.name + " is blank: state it"})
+		}
+	}
+	return gaps
 }
 
 func (in *ingestion) reviewerTransition(b ReviewerBody) {
