@@ -770,7 +770,8 @@ finding, not on the campaign. Because the streak counts every kind of step, a
 loop that never reaches a second review, such as a fix rejected again and
 again or a check that cannot pass, is seen as soon as one that fails round
 after round. Failing checks can make an audit due before any round has a
-verdict; its packet then names no round.
+verdict; its packet then names no round, and the escalation records round
+0.
 
 **The campaign budget** counts every packet issued in the campaign, whatever
 becomes of it: answered, or voided before anyone answered. It is what bounds
