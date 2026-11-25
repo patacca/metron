@@ -274,7 +274,7 @@ open until a report for it is accepted.
 ### {{.ID}}: {{.Input.Title}}
 
 - Tier `{{.Tier}}`{{if ne .Tier .Input.Tier}}, reclassified from `{{.Input.Tier}}`{{end}}, in `{{.Input.Domain}}`
-- Status `{{.Status}}`; opened in round {{.Round}} by the {{.Source}}; recurrences: {{.Recurrences}}
+- Status `{{.Status}}`; opened {{if .Round}}in round {{.Round}} {{end}}by the {{.Source}}; recurrences: {{.Recurrences}}
 - Established under {{contract .Contract}}
 {{- if .RootCauseRequired}}
 - Root-cause analysis required for its next fix
@@ -355,7 +355,7 @@ Tests: {{.}}
 
 History, oldest first:
 {{range .}}
-- {{if .Round}}Round {{.Round}}{{else}}Before any round{{end}}, `{{.Event}}`{{with .Packet}} in packet `{{.}}`{{end}}{{with .Candidate}}, on {{candidate .}}{{end}}{{with .Note}}: {{.}}{{end}}
+- {{if .Round}}Round {{.Round}}, {{end}}`{{.Event}}`{{with .Packet}} in packet `{{.}}`{{end}}{{with .Candidate}}, on {{candidate .}}{{end}}{{with .Note}}: {{.}}{{end}}
 {{- end}}
 {{- end}}
 {{- end}}

@@ -465,7 +465,6 @@
         "id",
         "status",
         "tier",
-        "round",
         "contract",
         "source",
         "recurrences",
@@ -570,8 +569,7 @@
         }
       },
       "required": [
-        "event",
-        "round"
+        "event"
       ],
       "additionalProperties": false
     },

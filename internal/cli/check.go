@@ -124,6 +124,8 @@ func runCheck(c *ctx, args []string) error {
 		d.Problem = a.Reason
 	} else if !before.facts.Clean {
 		d.Problem = "the working tree is not clean, so the candidate is not a commit: make it clean as listed below, then run the checks"
+	} else if e, suspended := before.state.Suspension(); suspended {
+		d.Problem = fmt.Sprintf("the campaign is suspended (%s) and records nothing until governance decides", e.ID)
 	}
 	if d.Problem != "" {
 		d.Next = before.actionDoc(before.next())
@@ -243,7 +245,7 @@ func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok
 			fmt.Fprintf(&b, "Recorded %s for commit %s (candidate %s).\n", plural(len(d.Results), "result"), short(d.Candidate.Commit), d.Candidate.Digest)
 			for _, e := range events {
 				if e.Type == core.EventEscalationRaised {
-					fmt.Fprintf(&b, "  escalation raised: %s\n", describe(e))
+					fmt.Fprintf(&b, "  %s\n", describe(e))
 				}
 			}
 		case d.Problem != "":

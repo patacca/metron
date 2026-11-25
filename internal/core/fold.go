@@ -114,10 +114,6 @@ func (s *State) onRoundOpened(data []byte) error {
 	case !validCandidate(p.Candidate):
 		return fmt.Errorf("the candidate cannot be identified: %s", candidateProblem(p.Candidate))
 	}
-	// The first round after an approval begins a new campaign.
-	if s.approved() {
-		s.steps, s.churn = 0, nil
-	}
 	s.rounds = append(s.rounds, Round{Number: p.Round, Stage: p.Stage, Candidate: p.Candidate, Contract: p.Contract})
 	return nil
 }
@@ -309,11 +305,14 @@ func (s *State) fail() {
 }
 
 // approved reports whether the campaign has ended in approval, as far as the
-// ledger alone can tell: the latest round is GREEN, no escalation is open,
-// and no blocking finding is unresolved or carried by that round's candidate.
+// ledger alone can tell: the latest round is a GREEN round of the current
+// stage under the pinned contract, no escalation is open, and no blocking
+// finding is unresolved or carried by that round's candidate. These are the
+// gate conditions that do not depend on the working tree.
 func (s State) approved() bool {
 	n := len(s.rounds)
-	if n == 0 || s.rounds[n-1].Verdict != VerdictGreen {
+	pin, pinned := s.pin()
+	if n == 0 || n <= s.epochStart || !pinned || s.rounds[n-1].Verdict != VerdictGreen || s.rounds[n-1].Contract != pin.Digest {
 		return false
 	}
 	for _, e := range s.escalations {

@@ -166,12 +166,29 @@ func (h *harness) unlisted() []string {
 	return out
 }
 
-// repair commits a change and returns a fix for id that lists every commit
-// since the reviewed one that no fix accounts for yet, that commit included.
+// repair commits a change and returns a complete fix for id.
 func (h *harness) repair(id string, components ...string) Fix {
 	h.commit(true)
+	return h.restate(id, components...)
+}
+
+// restate returns a fix for id that lists every commit since the reviewed
+// one that no fix accounts for yet and, when a fix for id was claimed before,
+// the commits of that claim that are still part of the candidate.
+func (h *harness) restate(id string, components ...string) Fix {
 	fx := fix(id, "", components...)
 	fx.Commits = h.unlisted()
+	f, ok := lookup(h.state, id)
+	base, reviewed := h.state.base()
+	if !ok || !reviewed || f.Status != StatusClaimed || f.Fix == nil {
+		return fx
+	}
+	interval, _ := h.interval(base.Candidate.Commit)
+	for _, c := range f.Fix.Commits {
+		if slices.ContainsFunc(interval, func(ic Commit) bool { return ic.Hash == c }) && !slices.Contains(fx.Commits, c) {
+			fx.Commits = append(fx.Commits, c)
+		}
+	}
 	return fx
 }
 

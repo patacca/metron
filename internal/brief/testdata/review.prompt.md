@@ -557,7 +557,7 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 ### F-0001: Retries stop after the fifth failed attempt
 
 - Tier `T1`, in `reliability`
-- Status `resolved`; opened in round 1 by the reviewer; recurrences: 0
+- Status `resolved`; opened by the reviewer; recurrences: 0
 - Established under contract `sha256:9999999999999999999999999999999999999999999999999999999999999999`, which is not the pinned one: check in the pinned contract that what it cites still says what the finding relies on
 - Components: `internal/delivery/retry.go`
 - Requirement: `REQ-8`
@@ -581,14 +581,14 @@ Tests: Extended TestSubscriberRecovery to a one-hour simulated outage.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
-- Round 1, `finding.fix-claimed` in packet `P-0002`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: Retry until one hour has elapsed since the first attempt.
-- Round 1, `finding.fix-confirmed` in packet `P-0004`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: TestSubscriberRecovery passes with a one-hour simulated outage; the loop now compares elapsed time, not attempts.
+- `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+- `finding.fix-claimed` in packet `P-0002`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: Retry until one hour has elapsed since the first attempt.
+- `finding.fix-confirmed` in packet `P-0004`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: TestSubscriberRecovery passes with a one-hour simulated outage; the loop now compares elapsed time, not attempts.
 
 ### F-0002: Each accepted event is written with its own fsync
 
 - Tier `T2`, reclassified from `T1`, in `performance`
-- Status `open`; opened in round 1 by the reviewer; recurrences: 0
+- Status `open`; opened by the reviewer; recurrences: 0
 - Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/store/append.go`
@@ -616,15 +616,15 @@ Deferral rationale: The envelope's load is an eighth of the measured capacity.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
-- Round 1, `escalation.raised` in packet `P-0002`: the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk
-- Round 1, `escalation.resolved` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
-- Round 1, `finding.reclassified` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
+- `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+- `escalation.raised` in packet `P-0002`: the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk
+- `escalation.resolved` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- `finding.reclassified` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
 
 ### F-0003: The 5-minute backoff cap may delay recovery for long outages
 
 - Tier `T3`, in `reliability`
-- Status `open`; opened in round 1 by the reviewer; recurrences: 0
+- Status `open`; opened by the reviewer; recurrences: 0
 - Established under the pinned contract
 - Components: `internal/delivery/retry.go`
 - Related: `F-0001`
@@ -641,12 +641,12 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+- `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
 
 ### F-0004: An event acknowledged before its append is synced can be lost on a crash
 
 - Tier `T1`, in `data-integrity`
-- Status `resolved`; opened in round 1 by the reviewer; recurrences: 3
+- Status `resolved`; opened by the reviewer; recurrences: 3
 - Established under the pinned contract
 - Root-cause analysis required for its next fix
 - Components: `internal/store/append.go` and `internal/delivery/accept.go`
@@ -673,21 +673,21 @@ Tests: TestCrashRecovery now kills the process at every write boundary on both e
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
-- Round 1, `finding.fix-claimed` in packet `P-0002`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: Retry the append when the sync fails.
-- Round 1, `finding.fix-rejected` in packet `P-0004`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent.
-- Round 1, `finding.fix-claimed` in packet `P-0005`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: Sync before returning from append on the single-event endpoint.
-- Round 1, `finding.fix-confirmed` in packet `P-0006`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: TestCrashRecovery passes 20 runs with a kill between write and sync.
-- Round 2, `finding.reopened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs.
-- Round 2, `finding.fix-claimed` in packet `P-0008`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Wait for the sync in the batch endpoint as well.
-- Round 2, `finding.fix-rejected` in packet `P-0010`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10.
-- Round 2, `finding.fix-claimed` in packet `P-0011`, on this candidate: Acknowledge only after the append is synced.
-- Round 2, `finding.fix-confirmed` in packet `P-0012`, on this candidate: TestCrashRecovery passes 100 consecutive runs with a kill at every write boundary, on both endpoints.
+- `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+- `finding.fix-claimed` in packet `P-0002`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: Retry the append when the sync fails.
+- `finding.fix-rejected` in packet `P-0004`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent.
+- `finding.fix-claimed` in packet `P-0005`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: Sync before returning from append on the single-event endpoint.
+- `finding.fix-confirmed` in packet `P-0006`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: TestCrashRecovery passes 20 runs with a kill between write and sync.
+- `finding.reopened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs.
+- `finding.fix-claimed` in packet `P-0008`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Wait for the sync in the batch endpoint as well.
+- `finding.fix-rejected` in packet `P-0010`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10.
+- `finding.fix-claimed` in packet `P-0011`, on this candidate: Acknowledge only after the append is synced.
+- `finding.fix-confirmed` in packet `P-0012`, on this candidate: TestCrashRecovery passes 100 consecutive runs with a kill at every write boundary, on both endpoints.
 
 ### F-0005: internal/store imports internal/delivery for the event type
 
 - Tier `T1`, in `architecture`
-- Status `resolved`; opened in round 2 by the reviewer; recurrences: 0
+- Status `resolved`; opened by the reviewer; recurrences: 0
 - Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/store/event.go`
@@ -716,16 +716,16 @@ Latest fix: Moved Event to internal/event.
 
 History, oldest first:
 
-- Round 2, `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
-- Round 2, `escalation.raised` in packet `P-0008`: the implementer disputes F-0005: the replay tool is not part of the pilot, so the dependency direction blocks nothing at this stage
-- Round 2, `escalation.resolved` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
-- Round 2, `finding.fix-claimed` in packet `P-0011`, on this candidate: Moved Event to internal/event.
-- Round 2, `finding.fix-confirmed` in packet `P-0012`, on this candidate: `go list -deps ./internal/store` no longer lists internal/delivery.
+- `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
+- `escalation.raised` in packet `P-0008`: the implementer disputes F-0005: the replay tool is not part of the pilot, so the dependency direction blocks nothing at this stage
+- `escalation.resolved` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- `finding.fix-claimed` in packet `P-0011`, on this candidate: Moved Event to internal/event.
+- `finding.fix-confirmed` in packet `P-0012`, on this candidate: `go list -deps ./internal/store` no longer lists internal/delivery.
 
 ### F-0006: Constructor takes seven positional parameters
 
 - Tier `T4`, in `simplicity`
-- Status `open`; opened in round 2 by the reviewer; recurrences: 0
+- Status `open`; opened by the reviewer; recurrences: 0
 - Established under the pinned contract
 - Components: `internal/delivery/dispatcher.go`
 
@@ -737,12 +737,12 @@ Impact: Readability only.
 
 History, oldest first:
 
-- Round 2, `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
+- `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
 
 ### F-0007: Signing error message includes the subscriber secret
 
 - Tier `T0`, in `security-privacy`
-- Status `withdrawn`; opened in round 2 by the reviewer; recurrences: 0
+- Status `withdrawn`; opened by the reviewer; recurrences: 0
 - Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/delivery/sign.go`
@@ -760,10 +760,10 @@ Verification: No error path in sign.go formats the key.
 
 History, oldest first:
 
-- Round 2, `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
-- Round 2, `escalation.raised` in packet `P-0008`: the implementer disputes F-0007: the error path is unreachable, since NewSigner rejects every key that could make signing fail
-- Round 2, `escalation.resolved` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
-- Round 2, `finding.withdrawn` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: The error path cannot be reached with any key NewSigner accepts; the mechanism does not occur.
+- `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
+- `escalation.raised` in packet `P-0008`: the implementer disputes F-0007: the error path is unreachable, since NewSigner rejects every key that could make signing fail
+- `escalation.resolved` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
+- `finding.withdrawn` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: The error path cannot be reached with any key NewSigner accepts; the mechanism does not occur.
 
 ## Binding decisions
 

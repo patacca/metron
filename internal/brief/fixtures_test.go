@@ -1,6 +1,10 @@
 package brief
 
-import "github.com/patacca/metron/internal/core"
+import (
+	"slices"
+
+	"github.com/patacca/metron/internal/core"
+)
 
 // The packets below are what Metron would issue at four points in the life of
 // one fictional project. They are built by hand so that the golden files show
@@ -407,6 +411,14 @@ func base(id string, action core.Step, round int, candidate core.Candidate) core
 // the pinned one, except F-0001, which predates it.
 func established(p core.Packet) core.Packet {
 	for i := range p.Findings {
+		// A review packet's findings come without rounds.
+		if p.Action == core.StepReview {
+			p.Findings[i].Round = 0
+			p.Findings[i].History = slices.Clone(p.Findings[i].History)
+			for j := range p.Findings[i].History {
+				p.Findings[i].History[j].Round = 0
+			}
+		}
 		p.Findings[i].Contract = contractDigest
 		if p.Findings[i].ID == "F-0001" && p.Contract.Project.Name == "Courier" {
 			p.Findings[i].Contract = earlierContract

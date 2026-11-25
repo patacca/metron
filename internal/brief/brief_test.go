@@ -595,9 +595,28 @@ func TestFixBriefForLapsedClaims(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"disputing it: `F-0004`.", "You already claimed a fix for `F-0005`", "Claim that fix again"} {
+	for _, want := range []string{"disputing it: `F-0004`.", "A fix for `F-0005` is already claimed.", "it again in this report"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the brief lacks %q", want)
+		}
+	}
+}
+
+// What a reviewer is handed names no round: not the packet's, not an earlier
+// one, not the round a finding was opened in.
+func TestReviewPromptNamesNoRound(t *testing.T) {
+	p := full(core.StepReview)
+	text, err := Prompt(p, packetDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(text, "\n") {
+		lower := strings.ToLower(line)
+		// The brief speaks of rounds in general; no line may number one.
+		for _, bad := range []string{"round 1", "round 2", "round 3", "in round", "reviewer |", "review-agent"} {
+			if strings.Contains(lower, bad) {
+				t.Fatalf("the review prompt names a round or a reviewer: %q", line)
+			}
 		}
 	}
 }

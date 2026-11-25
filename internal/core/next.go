@@ -175,13 +175,18 @@ func (s State) lapsed(candidate string) bool {
 	return candidate != s.claimedOn && slices.ContainsFunc(s.findings, func(x Finding) bool { return x.Status == StatusClaimed })
 }
 
-// toFix returns the findings an implementer must address on the given
-// candidate, in identifier order: the open blocking ones and, when the claims
-// have lapsed, the claimed ones.
+// toFix returns the subjects of a correction on the given candidate, in
+// identifier order, or nothing when no correction is due. One is due while a
+// blocking finding is open or the claims have lapsed, and it covers the whole
+// batch: the open blocking findings and the claimed ones, so that every claim
+// that goes to a verifier was made on the candidate it is verified on.
 func (s State) toFix(candidate string) []string {
-	lapsed := s.lapsed(candidate)
+	due := s.lapsed(candidate) || slices.ContainsFunc(s.findings, func(x Finding) bool { return x.Status == StatusOpen && x.Tier.Blocking() })
+	if !due {
+		return nil
+	}
 	return s.findingIDs(func(x Finding) bool {
-		return x.Status == StatusOpen && x.Tier.Blocking() || x.Status == StatusClaimed && lapsed
+		return x.Status == StatusOpen && x.Tier.Blocking() || x.Status == StatusClaimed
 	})
 }
 
@@ -216,9 +221,12 @@ func (s State) fixReason(ids []string, candidate string) string {
 				list, strings.Join(disputed, ", "), pick(len(disputed), "was", "were"), strings.Join(open, ", ")))
 		}
 	}
-	if n := len(claimed); n > 0 {
+	if n := len(claimed); n > 0 && s.lapsed(candidate) {
 		parts = append(parts, fmt.Sprintf("the %s of %s %s claimed on candidate %s and the candidate is now %s: claim %s again in a report that accounts for every commit since the reviewed one",
 			pick(n, "fix", "fixes"), strings.Join(claimed, ", "), pick(n, "was", "were"), s.claimedOn, candidate, pick(n, "it", "them")))
+	} else if n > 0 {
+		parts = append(parts, fmt.Sprintf("the %s of %s %s already claimed, on this candidate: if the candidate changes, claim %s again in the same report",
+			pick(n, "fix", "fixes"), strings.Join(claimed, ", "), pick(n, "is", "are"), pick(n, "it", "them")))
 	}
 	return strings.Join(parts, "; ")
 }

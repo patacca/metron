@@ -279,19 +279,21 @@ func TestCampaignBudget(t *testing.T) {
 	}
 	h.resume()
 	h.checks(true)
-	h.accept(h.packet(), "rev-1", green(h.contract))
-	h.expect(StepNone)
+	rp := h.packet()
 	if h.state.CampaignSteps() != 1 {
-		t.Fatalf("steps %d after the resumption and one review", h.state.CampaignSteps())
+		t.Fatalf("steps %d after the resumption and one packet", h.state.CampaignSteps())
 	}
 	// An approval ends the campaign: the next one starts with a full budget.
+	h.accept(rp, "rev-1", green(h.contract))
+	h.expect(StepNone)
+	if h.state.CampaignSteps() != 0 {
+		t.Fatalf("steps %d after an approval", h.state.CampaignSteps())
+	}
 	h.commit(true)
 	h.checks(true)
-	h.accept(h.packet(), "rev-1", green(h.contract))
-	if h.state.CampaignSteps() != 1 {
+	if h.packet(); h.state.CampaignSteps() != 1 {
 		t.Fatalf("steps %d in the campaign after an approval", h.state.CampaignSteps())
 	}
-	h.expect(StepNone)
 }
 
 // Packets that are voided before anyone answers them use up the budget too.

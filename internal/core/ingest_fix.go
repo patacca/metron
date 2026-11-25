@@ -51,9 +51,12 @@ func (in *ingestion) checkImplementer(b ImplementerBody) {
 			in.sem.add(p+"/rationale", "the rationale is blank: say why the finding should not block")
 		}
 	}
+	// An open subject is fixed or disputed. One with a claimed fix is left
+	// alone or claimed again; which of the two depends on the candidate, and
+	// is decided with the state.
 	for _, id := range in.pk.Subjects {
-		if _, ok := addressed[id]; !ok {
-			in.sem.add("/body", "blocking finding %s is not addressed: fix or dispute every subject of the packet", id)
+		if _, ok := addressed[id]; !ok && in.find(id).Status != StatusClaimed {
+			in.sem.add("/body", "blocking finding %s is not addressed: fix or dispute every open subject of the packet", id)
 		}
 	}
 }
@@ -119,6 +122,28 @@ func (in *ingestion) implementerTransition(b ImplementerBody) {
 			in.tr.add(ptr("body", "disputes", i, "finding"), "finding %s already has a claimed fix: claim it again with every commit that belongs to it, in fixes", x.ID)
 		case x.Status != StatusOpen:
 			in.tr.add(ptr("body", "disputes", i, "finding"), "finding %s is %s: only an open finding can be disputed", x.ID, x.Status)
+		}
+	}
+	// A claim is about one candidate. On another one, every claimed fix is
+	// claimed again, so that each goes to a verifier as a claim made on the
+	// candidate it is verified on, with the commits it had before.
+	for _, id := range in.pk.Subjects {
+		x := in.find(id)
+		if x.Status != StatusClaimed || x.Fix == nil {
+			continue
+		}
+		i := slices.IndexFunc(b.Fixes, func(fx Fix) bool { return fx.Finding == id })
+		if i < 0 {
+			if in.f.Candidate.Digest != in.s.claimedOn {
+				in.tr.add("/body/fixes", "the fix of %s was claimed on candidate %s and the candidate is now %s: claim it again in this report, with every commit that belongs to it", id, in.s.claimedOn, in.f.Candidate.Digest)
+			}
+			continue
+		}
+		for _, c := range x.Fix.Commits {
+			still := slices.ContainsFunc(in.f.Interval, func(ic Commit) bool { return ic.Hash == c })
+			if still && !slices.Contains(b.Fixes[i].Commits, c) {
+				in.tr.add(ptr("body", "fixes", i, "commits"), "commit %s belonged to the fix of %s when it was claimed before and is still part of the candidate: a fix claimed again lists every commit that belongs to it", c, id)
+			}
 		}
 	}
 	// Every commit that changed the candidate since the reviewed one belongs

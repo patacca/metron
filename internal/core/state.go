@@ -149,6 +149,18 @@ func (s *State) apply(e Event) error {
 		s.counted = false
 	}
 	s.midBatch = e.More > 0
+	if err := s.fold(e); err != nil {
+		return err
+	}
+	// A campaign ends with the command that leaves the ledger showing an
+	// approval. Whatever is issued afterwards belongs to the next one.
+	if !s.midBatch && s.approved() {
+		s.steps, s.churn = 0, nil
+	}
+	return nil
+}
+
+func (s *State) fold(e Event) error {
 	switch e.Type {
 	case EventLedgerInitialized:
 		return s.onInitialized(e.Data)

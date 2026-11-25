@@ -442,8 +442,11 @@ candidate that changes the candidate must be listed under a fix, in this
 report or an earlier accepted one. Metron lists the commits itself and refuses
 a report that leaves one out. A fix is claimed on the candidate it was
 submitted on; if the candidate changes before the verification, the claim has
-lapsed and the implementer makes it again, with the new commits listed. So no
-change reaches the verifier unattributed.
+lapsed and the implementer makes it again, with every commit that belonged
+to it and the new ones. A correction covers the whole batch: when one finding
+is fixed after another fix was already claimed, both are claimed on the
+resulting candidate. So every fix the verifier sees was claimed on the
+candidate it verifies, and no change reaches it unattributed.
 
 A finding can be disputed once, with reasons. A dispute raises a `dispute`
 escalation and an auditor adjudicates it; if the auditor upholds the
@@ -622,8 +625,8 @@ reasoning behind them is still worth reading. They are evidence, not rules.
 ### Campaigns, failed steps and the budget
 
 A **campaign** is the work towards one approval. It begins with the ledger,
-with the first review after an approval, or when governance resumes a
-suspended campaign, and it ends approved or suspended. A pin, a change of
+after an approval, or when governance resumes a suspended campaign, and it
+ends approved or suspended. A pin, a change of
 stage, a new candidate or a discharged audit neither ends a campaign nor
 begins one.
 

@@ -39,7 +39,7 @@ func TestClaimsLapseWhenTheCandidateChanges(t *testing.T) {
 	if ps := h.refused(fp, "impl-1", ImplementerBody{Disputes: []Dispute{{Finding: "F-0001", Rationale: "no"}}}, LayerTransition); !hasProblem(ps, "/body/disputes/0/finding") {
 		t.Fatalf("problems %+v", ps)
 	}
-	if ps := h.refused(fp, "impl-1", ImplementerBody{}, LayerSemantic); !hasProblem(ps, "/body") {
+	if ps := h.refused(fp, "impl-1", ImplementerBody{}, LayerTransition); !hasProblem(ps, "/body/fixes") {
 		t.Fatalf("problems %+v", ps)
 	}
 	again := fix("F-0001", extra)
@@ -78,10 +78,17 @@ func TestCorrectionIsVerifiedAsOneBatch(t *testing.T) {
 	h.accept(ap, "aud-1", AuditorBody{Resolutions: resolutions(ap, "it stands"),
 		Adjudications: []Adjudication{{Finding: "F-0002", Decision: DecisionUphold, Rationale: "reproducible"}}})
 	fp := h.packet()
-	if fp.Action != StepFix || !slices.Equal(fp.Subjects, []string{"F-0002"}) {
-		t.Fatalf("packet after the audit %+v", fp)
+	if fp.Action != StepFix || !slices.Equal(fp.Subjects, []string{"F-0001", "F-0002"}) {
+		t.Fatalf("packet after the audit: %s for %v", fp.Action, fp.Subjects)
 	}
-	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0002", h.commit(true))}})
+	// Fixing the upheld finding changes the candidate, so the fix claimed
+	// before is claimed again with it.
+	again := h.restate("F-0001")
+	second := fix("F-0002", h.commit(true))
+	if ps := h.refused(fp, "impl-1", ImplementerBody{Fixes: []Fix{second}}, LayerTransition); !hasProblem(ps, "/body/fixes") {
+		t.Fatalf("problems %+v", ps)
+	}
+	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{again, second}})
 	vp := h.verifying()
 	if !slices.Equal(vp.Subjects, []string{"F-0001", "F-0002"}) || vp.Candidate != h.candidate() {
 		t.Fatalf("verify packet %+v", vp)

@@ -42,13 +42,9 @@ func (in *ingestion) stall(what string) {
 }
 
 // exhausted returns the suspension that issuing one more packet raises
-// because the campaign has used up its budget, or false. A review after an
-// approval begins a new campaign, with nothing spent.
+// because the campaign has used up its budget, or false.
 func (s State) exhausted(th Convergence, p Packet, round int) (EscalationRaised, bool) {
 	used := s.steps
-	if p.Action == StepReview && s.approved() {
-		used = 0
-	}
 	if _, suspended := s.suspension(); suspended || used+1 < th.SuspendAfter {
 		return EscalationRaised{}, false
 	}

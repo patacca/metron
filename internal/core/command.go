@@ -194,7 +194,7 @@ func PlanPacket(s State, f Facts) (PacketPlan, error) {
 	}
 	switch a.Step {
 	case StepReview:
-		p.Findings = slices.Clone(s.findings)
+		p.Findings = unnumbered(s.findings)
 		if s.verified != nil {
 			v := *s.verified
 			p.Verified = &v
@@ -321,6 +321,21 @@ func Resolve(s State, f Facts, id, decision, by string) ([]Draft, error) {
 	return []Draft{{Type: EventEscalationResolved, Data: EscalationResolved{
 		ID: id, By: RoleGovernance, Actor: by, Resolution: decision,
 	}}}, nil
+}
+
+// unnumbered returns findings without the round they were opened in and
+// without the rounds of their history. The order of the history remains, and
+// each step keeps its packet and its candidate.
+func unnumbered(findings []Finding) []Finding {
+	out := slices.Clone(findings)
+	for i := range out {
+		out[i].Round = 0
+		out[i].History = slices.Clone(out[i].History)
+		for j := range out[i].History {
+			out[i].History[j].Round = 0
+		}
+	}
+	return out
 }
 
 // base returns the most recent round with a verdict, in any stage: the round

@@ -43,12 +43,13 @@ is wrong, by disputing it: {{codes .}}.
 {{- end}}
 {{- with .Claimed}}
 
-You already claimed a fix for {{codes .}}, on an earlier candidate, and the
-candidate has changed since. A claim is about one candidate: the commits made
-after it are in no fix, and nothing is verified until they are. Claim
-{{- if eq (len .) 1}} that fix{{else}} those fixes{{end}} again in this report,
-each with every commit that belongs to it, the ones you listed before
-included. A finding with a claimed fix can no longer be disputed.
+A fix for {{codes .}} is already claimed. A claim is about one candidate, and
+a correction is verified as one batch on one candidate. So if the candidate
+you submit is not the one {{if eq (len .) 1}}that fix was{{else}}those fixes were{{end}} claimed on, because the candidate has
+changed since or because you commit anything now, claim
+{{- if eq (len .) 1}} it{{else}} each{{end}} again in this report, with every commit that
+belongs to it, the ones you listed before included. Metron refuses the report
+otherwise. A finding with a claimed fix can no longer be disputed.
 {{- end}}
 
 This is a correction, not an opportunity. Change what resolving these

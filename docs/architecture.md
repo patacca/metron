@@ -466,10 +466,14 @@ implementer fixes or disputes every open blocking finding; the checks pass on
 the result; then one verification covers every claimed fix. A fix is claimed
 on a candidate. If the candidate changes before the verification, whether
 because a check failed and was corrected or for any other reason, the claims
-have lapsed: row 7 applies again, and the implementer claims each fix again in
-a report that accounts for the new commits. Nothing reaches a verifier with a
-commit that no fix lists. A finding an audit upholds while other fixes are
-already claimed is fixed first, for the same reason.
+have lapsed: row 7 applies again, and the implementer claims each fix again,
+with every commit that belonged to it, in a report that accounts for the new
+commits. A finding an audit upholds while other fixes are already claimed is
+fixed first, and since fixing it changes the candidate, the fixes claimed
+before are claimed again in the same report. So every fix a verifier sees was
+claimed on the candidate it is verified on, passed the rules of section 9 on
+that candidate, and lists all its commits; nothing reaches a verifier with a
+commit that no fix lists.
 
 Row 8 is what keeps an unchanged candidate from being submitted again in the
 hope of a different verdict. A RED verdict rests on the blocking findings its
@@ -534,7 +538,7 @@ What a packet carries depends on the action:
 | Action | Role | Bound to | Subjects | Findings included |
 | --- | --- | --- | --- | --- |
 | `review` | reviewer | The candidate, read-only; names the candidate the fixes were last verified on, if any since the previous verdict | none | Every finding in the ledger |
-| `fix` | implementer | The candidate at issue, with the round's candidate as base | Every open blocking finding and, when the claims have lapsed, every claimed one | Subjects |
+| `fix` | implementer | The candidate at issue, with the round's candidate as base | The whole batch: every open blocking finding and every claimed one | Subjects |
 | `verify` | verifier | The candidate, read-only, with the round's candidate as base | Every claimed finding | Subjects |
 | `audit` | auditor | The candidate, read-only | Every open auditor-owned escalation; the findings of `dispute` and `contradiction` escalations are adjudicable | Every finding in the ledger |
 
@@ -546,9 +550,13 @@ and the evidence or rationale given at the time.
 
 A fix, verify or audit packet names the round it follows and lists the earlier
 rounds of the stage with their verdicts. **A review packet does not**: no round
-number, no earlier verdict, no reviewer identity, in the packet or in its
-brief. They have no use in a reviewer's report, and the Independence principle
-says they must not move the threshold. What a reviewer does get is everything
+number, no earlier verdict, no reviewer identity, in the packet, in its brief
+or in its prompt, and the findings it carries come without the round each
+step belongs to; their order remains. These have no use in a reviewer's
+report, and the Independence principle says they must not move the threshold.
+This is about what a reviewer is handed, not secrecy: in local mode the
+ledger is a file in the repository, and `metron status` shows the rounds to
+whoever asks. What a reviewer does get is everything
 technical: every finding with its full history, the binding and the earlier
 decisions, the check results, and the candidate the fixes were verified on.
 Nothing that limits what a review can conclude is withheld.
@@ -621,9 +629,12 @@ the digest of its canonical JSON form.
 
 **Implementer body**
 
-- Addresses every subject of the packet and nothing else: an open finding
-  with a fix or a dispute, and a finding whose claim has lapsed with its fix,
-  claimed again. Non-blocking findings are not fixed in a correction.
+- Addresses the subjects of the packet and nothing else. An open finding is
+  fixed or disputed. A finding whose fix is already claimed is claimed again,
+  with every commit of the earlier claim that is still part of the candidate,
+  whenever the report is submitted on another candidate than the one the
+  claims stand on; it cannot be disputed. Non-blocking findings are not fixed
+  in a correction.
 - Each fix lists full commit hashes and names at least one component. The
   tree is clean.
 - Every commit made since the round's candidate that changes something
@@ -731,11 +742,18 @@ the reason it no longer binds: context for what was decided and why, not a
 rule. A decision that should outlive a contract change is issued again.
 
 **Campaigns.** A campaign is the work towards one approval. It begins with the
-ledger, with the first round opened after an approval, or when governance
-resumes a suspended campaign. It ends in one of two ways: **approved**, when
-the gate opens, or **suspended**, when a `suspension` is open. Nothing else
-ends it, and nothing else begins one: not a pin, not a change of stage, not a
-new candidate, not the discharge of an audit.
+ledger, after an approval, or when governance resumes a suspended campaign. It
+ends in one of two ways: **approved** or **suspended**, when a `suspension` is
+open. Nothing else ends it, and nothing else begins one: not a pin, not a
+change of stage, not a new candidate, not the discharge of an audit.
+
+The ledger cannot see the working tree, so it takes a campaign as approved
+when a command leaves it showing everything of the gate that does not depend
+on the tree: the latest round is a GREEN round of the current stage under the
+pinned contract, no escalation is open, and no blocking finding is unresolved
+or carried by that round's candidate. A GREEN verdict that leaves an
+escalation open, or that a pin has set aside, approves nothing and ends
+nothing.
 
 **The failure streak** counts failed steps. A failed step is a command whose
 events record a failure:
@@ -752,7 +770,7 @@ finding, not on the campaign. Because the streak counts every kind of step, a
 loop that never reaches a second review, such as a fix rejected again and
 again or a check that cannot pass, is seen as soon as one that fails round
 after round. Failing checks can make an audit due before any round has a
-verdict; its packet then names round 0.
+verdict; its packet then names no round.
 
 **The campaign budget** counts every packet issued in the campaign, whatever
 becomes of it: answered, or voided before anyone answered. It is what bounds

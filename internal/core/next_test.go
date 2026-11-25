@@ -82,10 +82,12 @@ func TestNextReasonText(t *testing.T) {
 		Adjudications: []Adjudication{{Finding: "F-0001", Decision: DecisionUphold, Rationale: "reproducible"}}})
 	// The upheld finding is fixed before anything is verified: a correction
 	// is verified as one batch, on one candidate.
-	if a, want := g.next(), "blocking finding F-0001 is open and was already disputed: fix it"; a.Step != StepFix || a.Reason != want {
+	if a, want := g.next(), "blocking finding F-0001 is open and was already disputed: fix it; the fix of F-0002 is already claimed, on this candidate: if the candidate changes, claim it again in the same report"; a.Step != StepFix || a.Reason != want {
 		t.Fatalf("action %+v, want reason %q", a, want)
 	}
-	g.accept(g.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", g.commit(true))}})
+	gp := g.packet()
+	claimed := g.restate("F-0002")
+	g.accept(gp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", g.commit(true)), claimed}})
 	g.accept(g.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected, "F-0002": VerificationRejected}, "F-0001", "F-0002"))
 	if a, want := g.next(), "blocking findings F-0001, F-0002 are open: fix F-0001, which was already disputed, and fix or dispute F-0002"; a.Reason != want {
 		t.Fatalf("reason\n got %q\nwant %q", a.Reason, want)

@@ -47,8 +47,8 @@ func (s *sim) cooperate() bool {
 			s.commit(true)
 			var b ImplementerBody
 			for _, id := range p.Subjects {
-				fx := fix(id, "")
-				fx.Commits, fx.RootCause = s.unlisted(), "analysed"
+				fx := s.restate(id)
+				fx.RootCause = "analysed"
 				b.Fixes = append(b.Fixes, fx)
 			}
 			s.accept(p, "co-impl", b)
@@ -98,8 +98,8 @@ func (s *sim) obstruct() {
 			s.commit(true)
 			var b ImplementerBody
 			for _, id := range p.Subjects {
-				fx := fix(id, "")
-				fx.Commits, fx.RootCause = s.unlisted(), "analysed"
+				fx := s.restate(id)
+				fx.RootCause = "analysed"
 				b.Fixes = append(b.Fixes, fx)
 			}
 			s.accept(p, "co-impl", b)

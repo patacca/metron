@@ -68,8 +68,9 @@ type Finding struct {
 	// reclassifies the finding.
 	Tier Tier `json:"tier"`
 	// Round is the round in which the finding was opened. Round numbers run
-	// from 1 across the whole ledger.
-	Round int `json:"round"`
+	// from 1 across the whole ledger. A review packet leaves it out, here
+	// and in the history: a reviewer is not told how many reviews there were.
+	Round int `json:"round,omitempty"`
 	// Contract is the digest of the contract the finding was established
 	// under. A requirement or a risk it cites is one of that contract.
 	Contract string `json:"contract"`
@@ -96,7 +97,7 @@ type FindingEvent struct {
 	// Event is the ledger event type that recorded the step.
 	Event EventType `json:"event"`
 	// Round is the latest round at that moment; 0 before the first round.
-	Round int `json:"round"`
+	Round int `json:"round,omitempty"`
 	// Packet is the packet whose report caused the step.
 	Packet string `json:"packet,omitempty"`
 	// Candidate is the digest of the candidate the step was made on: the one
