@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -384,7 +385,7 @@ func TestDescribe(t *testing.T) {
 					t.Errorf("hash %q: got %+v, want every flag false", invalid[i], c)
 				}
 			}
-			if repeated, first := got[len(got)-1], got[slices.Index(names, "fix")]; repeated != first {
+			if repeated, first := got[len(got)-1], got[slices.Index(names, "fix")]; !reflect.DeepEqual(repeated, first) {
 				t.Errorf("repeated hash: got %+v, want %+v", repeated, first)
 			}
 		})
