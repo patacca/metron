@@ -1,0 +1,7 @@
+{
+  "case": "listings-impossible-check",
+  "base": "listings",
+  "synthetic": true,
+  "expected_end": "governance",
+  "summary": "REQ-10 has a mandatory check that cannot pass at this stage. No review can start; the failing checks must reach an auditor and then suspend the campaign for governance, with no GREEN."
+}

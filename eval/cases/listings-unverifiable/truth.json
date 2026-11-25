@@ -1,0 +1,7 @@
+{
+  "case": "listings-unverifiable",
+  "base": "listings",
+  "synthetic": true,
+  "expected_end": "governance",
+  "summary": "REQ-9 (dedup precision on real listings) applies now, and nobody can verify it before the launch has collected listings. A review cannot honestly mark it satisfied: the campaign must stop for governance (an evidence gap or a suspension) and must never end GREEN."
+}
