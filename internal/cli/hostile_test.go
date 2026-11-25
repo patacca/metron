@@ -34,8 +34,10 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
-// hostile are committed file names that a shell would execute.
-var hostile = []string{"docs/$(touch PWNED).md", "docs/`id > PWNED2`.md"}
+// hostile are committed file names that a shell would execute. They are
+// valid on every platform: NTFS rejects < > : " | ? * and a trailing dot or
+// space, and git for Windows refuses such names even in the index.
+var hostile = []string{"docs/$(touch PWNED).md", "docs/`touch PWNED2`.md", "docs/it's; touch PWNED3.md"}
 
 // TestHostileFileNames commits files whose names hold command substitutions
 // and leaves them out, by a sparse checkout or by skip-worktree flags: no
@@ -94,7 +96,7 @@ func hostileFileNames(t *testing.T, sparse bool) {
 		cmd.Dir = r.dir
 		cmd.Run()
 	}
-	for _, name := range []string{"PWNED", "PWNED2", "docs/PWNED", "docs/PWNED2"} {
+	for _, name := range []string{"PWNED", "PWNED2", "PWNED3.md", "docs/PWNED", "docs/PWNED2", "docs/PWNED3.md"} {
 		if _, err := os.Stat(r.path(name)); !os.IsNotExist(err) {
 			t.Fatalf("%s exists: a file name was executed", name)
 		}
