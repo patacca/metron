@@ -538,7 +538,7 @@ escalation keeps the gate closed and takes priority over the ordinary loop.
 | `dispute` | An implementer disputes a finding | `auditor` | Adjudication |
 | `contradiction` | A finding declares that it reverses an earlier resolution | `auditor` | Adjudication |
 | `component-churn` | The same component is fixed in 3 distinct rounds | `auditor` | Component-level audit |
-| `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes it confirms | `auditor` | Redesign assessment |
+| `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes of blocking findings it confirms | `auditor` | Redesign assessment |
 | `non-convergence` | Consecutive rounds without GREEN reach 3; raised once per streak | `auditor` | Convergence analysis |
 | `process-audit` | Every 5th consecutive round ends without GREEN | `auditor` | Independent process audit |
 | `contract-gap` | A reviewer reports a risk the contract does not cover | `governance` | `metron resolve`, after amending the contract or dismissing the gap with a rationale |

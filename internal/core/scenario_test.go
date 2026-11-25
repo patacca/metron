@@ -427,7 +427,7 @@ func TestScenarioRegressionSpiral(t *testing.T) {
 			var want []EscalationKind
 			if tc.spiral {
 				want = []EscalationKind{EscalationRegressionSpiral}
-				if r := d[len(d)-1].Data.(EscalationRaised).Reason; r != "verification P-0003 found 1 blocking regression and confirmed 1 fix" {
+				if r := d[len(d)-1].Data.(EscalationRaised).Reason; r != "verification P-0003 found 1 blocking regression and confirmed 1 fix of a blocking finding" {
 					t.Fatalf("reason %q", r)
 				}
 			}

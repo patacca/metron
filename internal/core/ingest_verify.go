@@ -46,10 +46,14 @@ func (in *ingestion) verifierTransition(b VerifierBody) {
 
 func (in *ingestion) verifierEvents(b VerifierBody) {
 	pk := in.pk
+	// confirmed counts the confirmed fixes of blocking findings: what the
+	// batch repaired of what the gate depends on.
 	confirmed := 0
 	for _, v := range b.Verifications {
 		if v.Result == VerificationConfirmed {
-			confirmed++
+			if in.find(v.Finding).Tier.Blocking() {
+				confirmed++
+			}
 			in.add(EventFindingFixConfirmed, FindingFixConfirmed{ID: v.Finding, Packet: pk.Packet, Evidence: v.Evidence})
 		} else {
 			in.add(EventFindingFixRejected, FindingFixRejected{ID: v.Finding, Packet: pk.Packet, Evidence: v.Evidence,
@@ -68,6 +72,7 @@ func (in *ingestion) verifierEvents(b VerifierBody) {
 	}
 	if len(blocking) > 0 && len(blocking) >= confirmed {
 		in.raise(EscalationRegressionSpiral, fmt.Sprintf("verification %s found %s and confirmed %s", pk.Packet,
-			count(len(blocking), "blocking regression", "blocking regressions"), count(confirmed, "fix", "fixes")), blocking, nil, nil)
+			count(len(blocking), "blocking regression", "blocking regressions"),
+			count(confirmed, "fix of a blocking finding", "fixes of blocking findings")), blocking, nil, nil)
 	}
 }

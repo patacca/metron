@@ -290,3 +290,35 @@ func TestReclassificationToBlockingNeedsWhatABlockingFindingNeeds(t *testing.T) 
 		}
 	})
 }
+
+// D5. The regression spiral compares blocking regressions with the confirmed
+// fixes of blocking findings. A confirmed fix of a non-blocking finding
+// repairs nothing the gate depends on, so it must not dilute the comparison.
+// Fix packets no longer offer non-blocking findings, so the claim on one is
+// written here as a ledger from before that change holds it.
+func TestRegressionSpiralCountsOnlyBlockingConfirmations(t *testing.T) {
+	h := newHarness(t)
+	h.checks(true)
+	h.accept(h.packet(), "rev-1", review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated},
+		blocker("crash", "REQ-1"), improvement("long")))
+	fp := h.packet()
+	commit := h.commit(true)
+	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", commit)}})
+	h.seal([]Draft{{Type: EventFindingFixClaimed, Data: FindingFixClaimed{
+		ID: "F-0002", Round: 1, Packet: fp.ID, Candidate: h.candidate().Digest, Fix: fix("F-0002", commit)}}})
+	if h.next().Step == StepRunChecks {
+		h.checks(true)
+	}
+	vp := h.packet()
+	if !slices.Equal(vp.Subjects, []string{"F-0001", "F-0002"}) {
+		t.Fatalf("verify subjects %v", vp.Subjects)
+	}
+	b := verify(map[string]string{"F-0001": VerificationConfirmed, "F-0002": VerificationConfirmed}, "F-0001", "F-0002")
+	reg := blocker("leak", "REQ-1")
+	reg.IntroducedBy = "F-0002"
+	b.Regressions = []FindingInput{reg}
+	d := h.accept(vp, "ver-1", b)
+	if k := raisedKinds(d); !slices.Contains(k, EscalationRegressionSpiral) {
+		t.Fatalf("one blocking regression against one confirmed blocking fix raised %v, want a regression spiral", k)
+	}
+}

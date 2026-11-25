@@ -81,9 +81,9 @@ further fixes to it must take.
 ### `regression-spiral`: `E-0009`
 
 A verification found at least one blocking regression and no fewer
-regressions than the fixes it confirmed: the fixes are breaking things at
-least as fast as they repair them, and incremental patching has stopped
-working. Assess whether it should be suspended in favour of redesigning the
+blocking regressions than the fixes of blocking findings it confirmed: the
+fixes are breaking things at least as fast as they repair them, and
+incremental patching has stopped working. Assess whether it should be suspended in favour of redesigning the
 affected area. Look at the regressions, the fixes that caused them, and the
 coupling that lets one change break another. Your conclusion says whether
 patching may continue and on what conditions, or what must be redesigned
