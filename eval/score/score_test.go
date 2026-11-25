@@ -84,7 +84,8 @@ func TestGreens(t *testing.T) {
 
 func TestVariantInheritsFromItsBase(t *testing.T) {
 	f := newFixture(t)
-	f.write(filepath.Join(f.cases, "shop-stuck", "truth.json"), []byte(`{"case": "shop-stuck", "base": "shop", "expected_end": "governance"}`))
+	f.write(filepath.Join(f.cases, "shop-stuck", "truth.json"),
+		[]byte(`{"case": "shop-stuck", "base": "shop", "synthetic": true, "expected_end": "governance", "summary": "No review can pass."}`))
 	f.add(spec{caseName: "shop-stuck", arm: armMetron, name: "1", end: "governance:suspension",
 		oracle: oracle("", map[string]string{"test_P1": outcomeFail}, nil),
 		ledger: [][]core.Draft{{roundOpened(1)}, {opened("F-0001", 1, core.RoleReviewer, core.TierCritical,

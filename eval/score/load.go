@@ -76,6 +76,7 @@ type truth struct {
 	TestCommand   string  `json:"test_command,omitempty"`
 	OracleCommand string  `json:"oracle_command,omitempty"`
 	ExpectedEnd   string  `json:"expected_end,omitempty"`
+	Summary       string  `json:"summary,omitempty"`
 	Plants        []plant `json:"plants,omitempty"`
 	Decoys        []plant `json:"decoys,omitempty"`
 }
