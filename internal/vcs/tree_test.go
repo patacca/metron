@@ -115,6 +115,18 @@ func TestTreeProblems(t *testing.T) {
 			}
 			addLink(t, root, "l", filepath.Join(r.Root(), ".metron", "x"))
 		}, problems("l", TreeLink)},
+		{"link that leaves the repository and re-enters .metron", func(t *testing.T, root string) {
+			addLink(t, root, "cfg2.yaml", "../"+filepath.Base(root)+"/.metron/contract.yaml")
+		}, problems("cfg2.yaml", TreeLink)},
+		{"link that leaves and re-enters .metron from a subdirectory", func(t *testing.T, root string) {
+			addLink(t, root, "sub/cfg2.yaml", "../../"+filepath.Base(root)+"/.metron/contract.yaml")
+		}, problems("sub/cfg2.yaml", TreeLink)},
+		{"link that leaves and re-enters at an ordinary file", func(t *testing.T, root string) {
+			addLink(t, root, "sub/l", "../../"+filepath.Base(root)+"/a.txt")
+		}, problems()},
+		{"link that leaves for a sibling with a longer name", func(t *testing.T, root string) {
+			addLink(t, root, "l", "../"+filepath.Base(root)+"-other/.metron/x")
+		}, problems()},
 		{"link to sub/.metron/x", link("l", "sub/.metron/x"), problems()},
 		{"link to a .metron sibling", link("l", ".metron-other/x"), problems()},
 		{"link to an ordinary file", link("dir/l", "../a.txt"), problems()},

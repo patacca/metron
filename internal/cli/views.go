@@ -163,10 +163,12 @@ type contractSummary struct {
 }
 
 type openPacketDoc struct {
-	Packet string    `json:"packet"`
-	Action core.Step `json:"action"`
-	Role   core.Role `json:"role"`
-	Round  int       `json:"round"`
+	Packet string `json:"packet"`
+	// PacketDigest is the digest its report must name.
+	PacketDigest string    `json:"packet_digest"`
+	Action       core.Step `json:"action"`
+	Role         core.Role `json:"role"`
+	Round        int       `json:"round"`
 	// Valid is true while the packet can still be answered.
 	Valid bool `json:"valid"`
 	// Invalid says why the packet can no longer be answered.
@@ -255,7 +257,7 @@ func (w *world) status() statusDoc {
 		d.Rounds = []core.Round{}
 	}
 	if op, ok := st.OpenPacket(); ok {
-		d.OpenPacket = &openPacketDoc{Packet: op.Packet, Action: op.Action, Role: op.Role, Round: op.Round,
+		d.OpenPacket = &openPacketDoc{Packet: op.Packet, PacketDigest: op.Digest, Action: op.Action, Role: op.Role, Round: op.Round,
 			Valid: a.Step == core.StepSubmitReport && a.Packet == op.Packet, Invalid: core.PacketInvalid(st, w.facts)}
 	}
 	d.Findings = findingCounts{Blocking: []string{}, Backlog: []string{}}
@@ -532,9 +534,11 @@ var cmdFsck = &command{
 	summary:  "Verify the ledger and the stored packet and report files",
 	about: `Fsck verifies the ledger's hash chain, replays every event, validates each
 against the event schema, checks the protocol version, and checks that the
-stored file of every open or answered packet and of every accepted report
-matches the digest the ledger records. It prints how
-to recover from each problem it finds and exits 1 if it finds any.`,
+stored file of every answered packet and of every accepted report matches the
+digest the ledger records. It prints how to recover from each problem it finds
+and exits 1 if it finds any. A lost or altered file of the open packet is only
+noted: metron packet voids that packet and issues another when one is next
+needed.`,
 	run: runFsck,
 }
 
@@ -557,7 +561,7 @@ func runFsck(c *ctx, args []string) error {
 		return err
 	}
 	var b strings.Builder
-	var problems []string
+	var problems, notes []string
 	ledger := w.show(filepath.Join(w.store.Dir(), store.LedgerName))
 	switch {
 	case w.ledgerEmpty:
@@ -565,7 +569,7 @@ func runFsck(c *ctx, args []string) error {
 	case w.ledgerMissing:
 		problems = append(problems, fmt.Sprintf("%s does not exist: run %s", ledger, w.metron("init")))
 	case !w.facts.LedgerVerified:
-		problems = append(problems, w.facts.LedgerProblem+": restore the ledger from version control")
+		problems = append(problems, restoreLedger(w.facts.LedgerProblem))
 	case w.state.Protocol() != core.ProtocolVersion:
 		problems = append(problems, fmt.Sprintf("the ledger was written under protocol %q, not %q: use a matching metron", w.state.Protocol(), core.ProtocolVersion))
 	default:
@@ -601,8 +605,17 @@ func runFsck(c *ctx, args []string) error {
 		}
 		b.WriteString("\n")
 		for _, p := range w.storedFiles() {
+			// The open packet's file is operational, not evidence.
+			if p.open {
+				notes = append(notes, fmt.Sprintf("%s; this is not an integrity failure: %s voids packet %s and issues another when a packet is next needed",
+					p.Problem, w.metron("packet"), p.Packet))
+				continue
+			}
 			problems = append(problems, p.String())
 		}
+	}
+	for _, n := range notes {
+		fmt.Fprintf(&b, "Note: %s.\n", n)
 	}
 	if len(problems) == 0 {
 		b.WriteString("No problem found.\n")

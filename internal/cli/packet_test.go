@@ -13,9 +13,25 @@ func TestPacketFormats(t *testing.T) {
 	r := pinned(t)
 	r.must("check")
 	first := r.must("packet")
-	contains(t, "packet note", first.err, "issued packet P-0001: review for the reviewer, round 1")
+	digest := "sha256:"
+	contains(t, "packet note", first.err, "issued packet P-0001, digest "+digest)
+	digest = first.err[strings.Index(first.err, digest) : strings.Index(first.err, digest)+71]
+	contains(t, "packet note", first.err, "issued packet P-0001, digest "+digest+": review for the reviewer, round 1")
 	again := r.must("packet")
-	contains(t, "packet note", again.err, "packet P-0001 is open and still valid; returning it again")
+	contains(t, "packet note", again.err, "packet P-0001, digest "+digest+", is open and still valid; returning it again")
+	// The digest a report must name reaches every consumer of the packet.
+	if rec, ok := r.state(t).Packet("P-0001"); !ok || rec.Digest != digest {
+		t.Fatalf("the note shows %s, the ledger records %+v", digest, rec)
+	}
+	if a := r.next(); a.PacketDigest != digest {
+		t.Fatalf("next --json packet_digest %q, want %q", a.PacketDigest, digest)
+	}
+	contains(t, "next", r.must("next").out, "Packet:       P-0001, digest "+digest)
+	var st statusDoc
+	unmarshal(t, r.must("status", "--json").out, &st)
+	if st.OpenPacket == nil || st.OpenPacket.PacketDigest != digest {
+		t.Fatalf("status --json open packet %+v", st.OpenPacket)
+	}
 	if first.out != again.out {
 		t.Fatal("packet returned different bytes the second time")
 	}
@@ -28,7 +44,7 @@ func TestPacketFormats(t *testing.T) {
 	if prompt != r.must("packet", "--format", "prompt").out {
 		t.Fatal("the prompt differs the second time")
 	}
-	contains(t, "prompt", prompt, "# Packet P-0001", "metron ingest <file>", "# Report skeleton")
+	contains(t, "prompt", prompt, "# Packet P-0001", "metron ingest", "# Report skeleton", digest)
 
 	var sk core.Report
 	unmarshal(t, r.must("packet", "--format", "skeleton").out, &sk)
@@ -43,7 +59,7 @@ func TestPacketFormats(t *testing.T) {
 		t.Fatalf("packet -o wrote %d bytes (%v) and printed %q", len(data), err, res.out)
 	}
 	res = r.must("packet", "--format", "prompt", "-o", "prompt.md")
-	contains(t, "packet warning", res.err, "warning: prompt.md is in the work tree and makes it dirty")
+	contains(t, "packet warning", res.err, "warning: prompt.md is in the working tree and makes it unclean", "write it under .metron/work/ instead")
 	r.expectNext(core.StepCommitChanges)
 }
 
@@ -76,7 +92,7 @@ func TestPacketFileDamaged(t *testing.T) {
 				len(st.StoredFiles) != 1 || !strings.Contains(st.StoredFiles[0].Problem, tc.want) {
 				t.Fatalf("status open packet %+v, stored files %+v", st.OpenPacket, st.StoredFiles)
 			}
-			contains(t, "fsck", r.expect(exitNegative, "fsck").out, tc.want, "run metron packet to void it")
+			contains(t, "fsck", r.must("fsck").out, "Note: packet P-0001: "+tc.want+"; this is not an integrity failure", "No problem found.")
 			// The open packet's file is not an integrity failure: the packet is
 			// ignored until metron packet voids it.
 			if out := r.expect(exitNegative, "gate").out; strings.Contains(out, "P-0001") {

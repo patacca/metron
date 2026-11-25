@@ -88,6 +88,14 @@ enforce that, so Metron checks it after the fact: their report is rejected if
 the candidate digest changed or the working tree stopped being clean between
 the moment the packet was issued and the moment the report was submitted.
 
+A read-only role still has to write its report somewhere, and `.metron/work/`
+is that place. It is ignored by git and, like everything under `.metron/`,
+outside the candidate and outside the cleanliness check. It is also the only
+part of `.metron/` a role may write to: the contract belongs to governance
+and the state directory to Metron. A report may also be written outside the
+repository, but a report file anywhere else in the repository makes the tree
+unclean, and the report is refused.
+
 ## 4. Fixed vocabulary
 
 These sets are part of the protocol. They are not configurable per
@@ -596,9 +604,16 @@ being clean underneath a read-only role.
 
 ## 15. Reports and ingestion
 
-A report is submitted with `metron ingest <file>`. Metron validates it in
-three layers and accepts it only if all three pass; a rejected report
-changes nothing and the error says what to correct.
+A role starts from the report skeleton for its packet, which already has the
+right shape, and writes the report under `.metron/work/` (section 3):
+
+```
+metron packet --format skeleton -o .metron/work/report.json
+metron ingest .metron/work/report.json
+```
+
+Metron validates a report in three layers and accepts it only if all three
+pass; a rejected report changes nothing and the error says what to correct.
 
 1. **Structural**: the document satisfies its JSON Schema.
 2. **Semantic**: it is internally consistent and consistent with the
@@ -606,8 +621,10 @@ changes nothing and the error says what to correct.
 3. **Transition**: the state machine permits it now.
 
 The report must name the open packet, carry that packet's role, and carry
-its `packet_digest`, copied unchanged from the report skeleton. The
-identifier alone is not enough: packet identifiers repeat from one ledger to
+its `packet_digest`, copied unchanged from the report skeleton; a role given
+only the JSON packet finds the digest in `metron next --json` or in the note
+`metron packet` prints when it issues the packet. The identifier alone is not
+enough: packet identifiers repeat from one ledger to
 the next, so a report written for another repository, another ledger or an
 earlier issue of the same identifier would otherwise be accepted. The digest
 does not repeat, and a report carrying any other packet's digest is refused.

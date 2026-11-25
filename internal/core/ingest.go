@@ -18,7 +18,7 @@ import (
 // packet, Ingest returns no drafts, duplicate true and no error: the report
 // was already accepted and there is nothing to do.
 func Ingest(s State, f Facts, r Report, digest, rawDigest string) (drafts []Draft, duplicate bool, err error) {
-	if !validDigest(digest) || !validDigest(rawDigest) {
+	if !ValidDigest(digest) || !ValidDigest(rawDigest) {
 		return nil, false, fmt.Errorf("report digests %q and %q must be sha256 digests", digest, rawDigest)
 	}
 	if p := ledgerProblem(s, f); p != "" {
@@ -37,7 +37,7 @@ func Ingest(s State, f Facts, r Report, digest, rawDigest string) (drafts []Draf
 	if r.PacketDigest != pk.Digest {
 		var ps problems
 		if r.PacketDigest == "" {
-			ps.add("/packet_digest", "the report names no packet digest: copy packet_digest from packet %s and submit it again", pk.Packet)
+			ps.add("/packet_digest", "the report names no packet digest: copy the digest of packet %s from the report skeleton, from metron next --json or from the note metron packet prints, and submit it again", pk.Packet)
 		} else {
 			ps.add("/packet_digest", "the report was written for a different packet %s (digest %s, but this ledger issued %s): it comes from another ledger, another repository or an earlier issue of the same identifier; get the current packet again and answer it",
 				pk.Packet, r.PacketDigest, pk.Digest)

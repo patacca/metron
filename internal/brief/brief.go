@@ -83,7 +83,7 @@ func Skeleton(p core.Packet, digest string) ([]byte, error) {
 // newDigestView is newView for the entry points that bind a report to the
 // stored packet, which must be identified by a well-formed digest.
 func newDigestView(p core.Packet, digest string) (*view, error) {
-	if !validDigest(digest) {
+	if !core.ValidDigest(digest) {
 		return nil, fmt.Errorf("packet digest %q for packet %s is not \"sha256:\" followed by 64 lowercase hex digits; pass the digest of the stored packet", digest, p.ID)
 	}
 	v, err := newView(p)
@@ -92,19 +92,6 @@ func newDigestView(p core.Packet, digest string) (*view, error) {
 	}
 	v.Digest = digest
 	return v, nil
-}
-
-func validDigest(s string) bool {
-	hex, ok := strings.CutPrefix(s, "sha256:")
-	if !ok || len(hex) != 64 {
-		return false
-	}
-	for _, c := range hex {
-		if !('0' <= c && c <= '9' || 'a' <= c && c <= 'f') {
-			return false
-		}
-	}
-	return true
 }
 
 func instructions(v *view) (string, error) {

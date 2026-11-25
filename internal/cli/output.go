@@ -3,6 +3,7 @@ package cli
 import (
 	jsonv2 "encoding/json/v2"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/patacca/metron/internal/core"
@@ -14,6 +15,9 @@ import (
 type actionDoc struct {
 	Schema string `json:"schema,omitempty"`
 	core.Action
+	// PacketDigest is the digest of the open packet the step concerns, which
+	// its report must name.
+	PacketDigest string `json:"packet_digest,omitempty"`
 	// Command is the command that performs or continues the step. It is
 	// empty when no command does, and then hint says what to do.
 	Command string `json:"command"`
@@ -24,7 +28,11 @@ type actionDoc struct {
 }
 
 func (w *world) actionDoc(a core.Action) *actionDoc {
-	return &actionDoc{Action: a, Command: w.command(a), hint: thenHint(w, a)}
+	d := &actionDoc{Action: a, Command: w.command(a), hint: thenHint(w, a)}
+	if rec, ok := w.state.Packet(a.Packet); ok && a.Packet != "" {
+		d.PacketDigest = rec.Digest
+	}
+	return d
 }
 
 // writeNext prints the next action for a person.
@@ -38,7 +46,7 @@ func writeNext(b *strings.Builder, w *world, d *actionDoc) {
 	}
 	line("Reason", a.Reason)
 	if a.Packet != "" {
-		line("Packet", a.Packet)
+		line("Packet", a.Packet+", digest "+d.PacketDigest)
 	}
 	for _, l := range []struct {
 		label string
@@ -122,6 +130,9 @@ func treeLines(ps []vcs.TreeProblem, leftovers bool) []string {
 			what, fix = p.Kind, "make the tree clean"
 		}
 		out = append(out, fmt.Sprintf("%s is %s: %s", p.Path, what, fix))
+	}
+	if slices.ContainsFunc(ps, func(p vcs.TreeProblem) bool { return p.Kind == vcs.TreeHidden }) {
+		out = append(out, "if a sparse checkout or core.ignoreStat=true sets these flags, clearing them alone does not last: disable the sparse checkout with git sparse-checkout disable, and set git config core.ignoreStat false, first")
 	}
 	return out
 }

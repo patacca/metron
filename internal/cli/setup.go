@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"strings"
 
 	"github.com/patacca/metron/internal/brief"
@@ -21,30 +22,84 @@ var cmdInit = &command{
 	synopsis: "init",
 	summary:  "Create .metron/ with a contract template and an initialized ledger",
 	about: `Init prepares the repository for Metron. It creates .metron/contract.yaml from
-a commented template, a .metron/.gitignore that keeps the state directory's
-lock and temporary file out of git, a .metron/.gitattributes that stops git
-from converting line endings under state/, the state directory, and an
-initialized ledger. It never overwrites anything: it creates what is missing
-and says what it found.`,
+a commented template; a .metron/.gitignore that keeps the state directory's
+lock and temporary file, and the scratch space .metron/work/, out of git; a
+.metron/.gitattributes that stops git from converting line endings under
+state/; the state directory; and an initialized ledger. It never overwrites
+anything: it creates what is missing, adds the lines an existing .gitignore
+or .gitattributes lacks, and says what it found.`,
 	run: runInit,
 }
 
-// gitignore keeps the runtime files of the default state directory out of
-// git. Everything else under .metron/ is meant to be committed.
-const gitignore = `# Written by metron init. The lock and the temporary file are runtime files of
-# the state directory. Commit everything else under .metron/, state/ included,
-# together with the work.
-/state/lock
-/state/*.tmp
-`
+// metronFile is a file init writes under .metron/: a header for a new file,
+// and the lines it must hold, which init adds to an existing file that lacks
+// them.
+type metronFile struct {
+	name   string
+	header string
+	lines  []string
+}
 
-// gitattributes keeps git from converting line endings in the state
-// directory: stored reports are compared byte for byte with what was
-// ingested.
-const gitattributes = `# Written by metron init. Stored reports are compared byte for byte with what
+var metronFiles = []metronFile{
+	// The lock and the temporary file are runtime files of the state
+	// directory, and work/ is scratch space. Everything else under .metron/
+	// is meant to be committed.
+	{".gitignore", `# Written by metron init. The lock and the temporary file are runtime files of
+# the state directory, and work/ is scratch space for skeletons and reports
+# being written. Commit everything else under .metron/, state/ included,
+# together with the work.
+`, []string{"/state/lock", "/state/*.tmp", "/work/"}},
+	// Stored reports are compared byte for byte with what was ingested.
+	{".gitattributes", `# Written by metron init. Stored reports are compared byte for byte with what
 # was ingested, so git must never convert line endings under state/.
-state/** -text
-`
+`, []string{"state/** -text"}},
+}
+
+// ensure creates a .metron/ file, or adds the lines an existing one lacks,
+// and says what it did.
+func (f metronFile) ensure(s *site, meta string, b *strings.Builder) error {
+	path := filepath.Join(meta, f.name)
+	made, err := createFile(path, []byte(f.header+strings.Join(f.lines, "\n")+"\n"))
+	switch {
+	case err != nil:
+		return err
+	case made:
+		fmt.Fprintf(b, "Created %s.\n", s.show(path))
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	have := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	var missing []string
+	for _, l := range f.lines {
+		if !slices.ContainsFunc(have, func(h string) bool { return strings.TrimSpace(h) == l }) {
+			missing = append(missing, l)
+		}
+	}
+	if len(missing) == 0 {
+		fmt.Fprintf(b, "Found %s; left it as it is.\n", s.show(path))
+		return nil
+	}
+	add := strings.Join(missing, "\n") + "\n"
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		add = "\n" + add
+	}
+	out, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		return err
+	}
+	_, err = out.WriteString(add)
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(b, "Added %s to %s.\n", strings.Join(missing, ", "), s.show(path))
+	return nil
+}
 
 func runInit(c *ctx, args []string) error {
 	fs := c.flags()
@@ -62,25 +117,20 @@ func runInit(c *ctx, args []string) error {
 	}
 	meta := filepath.Join(s.repo.Root(), ".metron")
 	var b strings.Builder
-	created := false
-	for _, f := range []struct {
-		path string
-		data []byte
-	}{
-		{filepath.Join(meta, "contract.yaml"), contractTemplate},
-		{filepath.Join(meta, ".gitignore"), []byte(gitignore)},
-		{filepath.Join(meta, ".gitattributes"), []byte(gitattributes)},
-	} {
-		made, err := createFile(f.path, f.data)
-		if err != nil {
+	contract := filepath.Join(meta, "contract.yaml")
+	created, err := createFile(contract, contractTemplate)
+	if err != nil {
+		return err
+	}
+	if created {
+		fmt.Fprintf(&b, "Created %s.\n", s.show(contract))
+	} else {
+		fmt.Fprintf(&b, "Found %s; left it as it is.\n", s.show(contract))
+	}
+	for _, f := range metronFiles {
+		if err := f.ensure(s, meta, &b); err != nil {
 			return err
 		}
-		if made {
-			fmt.Fprintf(&b, "Created %s.\n", s.show(f.path))
-		} else {
-			fmt.Fprintf(&b, "Found %s; left it as it is.\n", s.show(f.path))
-		}
-		created = created || made && f.path == filepath.Join(meta, "contract.yaml")
 	}
 	if err := os.MkdirAll(s.store.Dir(), 0o777); err != nil {
 		return err
@@ -136,10 +186,10 @@ func initLedger(c *ctx, s *site, ledger string, b *strings.Builder) error {
 		fmt.Fprintf(b, "%s %s, protocol %s.\n", verb, ledger, core.ProtocolVersion)
 		return nil
 	case err != nil:
-		return fail(exitEnv, "found %s, but it fails verification: %v\nRun %s and restore the ledger from version control.", ledger, err, s.metron("fsck"))
+		return fail(exitEnv, "found %s, but it fails verification: %s\nRun %s for the details.", ledger, restoreLedger(err.Error()), s.metron("fsck"))
 	}
 	if _, err := core.Replay(events); err != nil {
-		return fail(exitEnv, "found %s, but it does not replay: %v\nRun %s and restore the ledger from version control.", ledger, err, s.metron("fsck"))
+		return fail(exitEnv, "found %s, but it does not replay: %s\nRun %s for the details.", ledger, restoreLedger(err.Error()), s.metron("fsck"))
 	}
 	fmt.Fprintf(b, "Found %s with %s; left it as it is.\n", ledger, plural(len(events), "event"))
 	return nil

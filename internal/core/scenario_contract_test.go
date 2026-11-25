@@ -154,6 +154,20 @@ func TestScenarioPinBackToAnEarlierContract(t *testing.T) {
 		}
 		h.expect(StepNone)
 	})
+	t.Run("a pin in between changed the stage", func(t *testing.T) {
+		h := newHarness(t)
+		h.checks(true)
+		h.accept(h.packet(), "rev-1", green(h.contract))
+		h.contract = stageTwoContract()
+		h.must(Pin(h.state, h.facts(), "controlled validation", "gov"))
+		h.contract = testContract()
+		h.must(Pin(h.state, h.facts(), "back to the prototype", "gov"))
+		g := h.gate()
+		if g.Open || g.Conditions[4].Satisfied || !slices.Contains(g.Conditions[4].Reasons, "no round of stage prototype has a verdict") {
+			t.Fatalf("gate %+v", g.Conditions[4])
+		}
+		h.expect(StepReview)
+	})
 	t.Run("a RED round under the other contract", func(t *testing.T) {
 		h := newHarness(t)
 		h.checks(true)

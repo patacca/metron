@@ -36,6 +36,13 @@ What it does not provide:
   written for that exact packet and not for another ledger or an earlier
   issue. It does not show who wrote it. Role separation is therefore a rule
   cooperating parties follow, not a guarantee.
+- **An honest working tree.** Metron runs checks, and roles read code, in the
+  working tree, and it relies on git to say that the tree matches the commit.
+  It refuses the ways this goes wrong by accident: uncommitted and untracked
+  files, files hidden by an index flag, links into `.metron/` or `.git/`. It
+  does not defend against local git configuration set up to make git consider
+  different content identical, such as a clean filter, nor against ignored
+  files that change what a check does.
 - **Protected evaluation.** Whoever runs `metron gate` can also run a modified
   binary. The exit status is only as trustworthy as the environment it ran in.
 - **Role isolation.** An agent with shell access can request any packet and
@@ -54,6 +61,7 @@ required to use the gate against agents that are not trusted.
 | Protected state and contract | The state directory and the pinned contract are writable only by the trusted environment, never by agents |
 | Checkpoints and rollback protection | Signed ledger checkpoints, held outside agent control, let the gate reject a truncated or rewritten ledger |
 | Protected gate evaluation | The gate runs in the trusted environment, from a known binary |
+| Checks on the candidate itself | Check commands run in the trusted environment on a fresh checkout of the candidate commit, not in a working tree someone else configured |
 | Role isolation | Implementation and review roles run with separate credentials and cannot act for each other |
 
 ### The authentication boundary

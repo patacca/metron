@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/patacca/metron/internal/core"
+	"github.com/patacca/metron/internal/store"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files under testdata/")
@@ -198,6 +199,20 @@ func (r *repo) expect(code int, args ...string) result {
 func (r *repo) must(args ...string) result {
 	r.t.Helper()
 	return r.expect(0, args...)
+}
+
+// state replays the repository's ledger.
+func (r *repo) state(t *testing.T) core.State {
+	t.Helper()
+	events, err := store.New(r.path(".metron/state")).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := core.Replay(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
 }
 
 // next returns the next action, as metron next --json prints it.

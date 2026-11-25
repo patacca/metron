@@ -558,6 +558,9 @@ func TestReportPacketDigest(t *testing.T) {
 			if dup {
 				t.Fatal("refused report reported as a duplicate")
 			}
+			if tc.digest == "" && !strings.Contains(err.Error(), "from the report skeleton, from metron next --json or from the note metron packet prints") {
+				t.Fatalf("the message does not say where the digest comes from: %v", err)
+			}
 		})
 	}
 	t.Run("a duplicate whose digest was changed", func(t *testing.T) {

@@ -14,7 +14,7 @@
       "fix": {
         "finding": "F-0001",
         "commits": [
-          "efa35caf636a3652395460dc113c48b00839d3c5"
+          "8e2816408a5eb87f2165cdd69897548a36a59fe1"
         ],
         "summary": "spell the greeting correctly",
         "components": [

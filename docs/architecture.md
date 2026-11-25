@@ -70,6 +70,10 @@ A tier is determined by evidence and impact, never by the domain alone.
 packet record it. A binary refuses a ledger written under another protocol
 version.
 
+Nothing is frozen before the first release. Until then `metron.protocol/v1`
+and the v1 document shapes can still change incompatibly, and a ledger written
+by an earlier build may be rejected as malformed.
+
 ## 4. Files
 
 Project configuration and operational state are separate.
@@ -82,18 +86,28 @@ Project configuration and operational state are separate.
     ledger.jsonl    the authoritative event log
     packets/        issued packets, immutable, P-0001.json
     reports/        accepted reports exactly as submitted, P-0001.json
+  work/             scratch space for skeletons and reports being written.
+                    Ignored by git, and never read by metron on its own.
 ```
 
 The state directory is `--state-dir`, else `$METRON_STATE_DIR`, else
 `.metron/state`. In cooperative use, commit `state/` together with the work:
 git history is the only anchor it has. In a protected environment, point the
-state directory outside the repository, at a location agents cannot write. A
-state directory inside the working tree but outside `.metron/` is refused:
-every write to it would make the tree unclean.
+state directory outside the repository, at a location agents cannot write.
+Those are the only two choices: any other directory inside the repository is
+refused, because writes to it would make the tree unclean or escape the
+ignore and line-ending rules that `metron init` sets up for `.metron/state`.
+The rule is applied to where the directory really is, after resolving symbolic
+links, including when `.metron` or `.metron/state` is itself a link.
+
+A role that must leave the candidate untouched still needs somewhere to write
+its report. `.metron/work/` is that place: like everything under `.metron/` it
+is outside the candidate and outside the cleanliness check.
 
 `metron init` also writes `.metron/.gitattributes`, which stops git from
-converting line endings under `state/`. Stored reports are compared byte for
-byte with what was ingested.
+converting line endings, applying filters or merging textually under `state/`.
+Stored reports are compared byte for byte with what was ingested, and two
+ledgers can never be merged line by line.
 
 Nothing under `.metron/` is part of the candidate, so nothing that affects the
 outcome of a review belongs there: a check script kept under `.metron/` could
@@ -119,18 +133,35 @@ any other tracked file does.
 The working tree is **clean** when all of the following hold outside
 `.metron/`:
 
-- `git status --porcelain` reports nothing, untracked files included.
+- `git status --porcelain` reports nothing: no modified, deleted or untracked
+  file. Metron asks with the file system monitor disabled and with git's
+  default, strictest comparison of file times, whatever the repository is
+  configured to use.
 - No tracked file carries the `assume-unchanged` or `skip-worktree` index
   flag. Either flag makes git report a modified file as unchanged, so checks
-  and reviewers would see content that is not the candidate.
-- No tracked symbolic link points into `.metron/`, whose content is not part
-  of the candidate.
+  and reviewers would see content that is not the candidate. A sparse checkout
+  sets the flag on every file it leaves out, so a sparse checkout is never
+  clean.
+- No tracked symbolic link resolves into `.metron/` or `.git/`, whose content
+  is not part of the candidate and not covered by the points above.
 
 Metron requires a clean tree whenever it binds something to a candidate.
 
-Ignored files are outside the candidate and are not examined, whichever ignore
-mechanism hides them. A check result is therefore only as reproducible as the
-environment it ran in, as with any locally run test.
+**What the cleanliness check does not cover.** It establishes that git
+considers the working tree identical to the commit. It does not establish more
+than that:
+
+- Ignored files are outside the candidate and are not examined, whichever
+  ignore mechanism hides them. The same holds for whatever a tracked symbolic
+  link points to outside the repository.
+- Local git configuration can make git consider different content identical: a
+  clean filter, `core.fileMode=false` (the executable bit), `core.ignoreCase`,
+  or index flags inside a submodule. Metron does not second-guess these.
+
+A check result is therefore only as reproducible as the environment it ran in,
+as with any locally run test. Running checks from a fresh checkout of the
+candidate in an environment nobody else controls is what closes this, and that
+belongs to authenticated mode (see [trust-model.md](trust-model.md)).
 
 Read-only roles are checked after the fact, because no agent protocol can
 enforce them: a reviewer, verifier or auditor report is rejected if the
@@ -169,7 +200,8 @@ now and starts blocking when the contract targets production.
 
 A `command` is run by a POSIX shell (`sh -c`) from the repository root, on
 every platform, so that the same command text means the same thing wherever a
-result is recorded. On Windows, Metron uses the `sh` that ships with Git.
+result is recorded. On Windows, Metron uses the `sh` found on `PATH`, and
+otherwise the one that ships with Git.
 
 There are no gate settings. The gate conditions are fixed (section 11).
 
@@ -215,7 +247,9 @@ one, every command that depends on the contract refuses to proceed until
 governance pins it. A new pin voids the open packet. A verdict counts only
 while the pinned digest is the one it was issued under: pinning a different
 contract sets every earlier verdict aside, and pinning the earlier contract
-again, unchanged, lets its verdicts count again. Pinning the digest that is
+again, unchanged, lets its verdicts count again, unless a pin in between
+changed the stage: the gate looks only at rounds held since the stage was last
+set. Pinning the digest that is
 already pinned is refused. A finding that was disputed can be disputed again
 after a new pin, because the contract it is judged against has changed.
 
@@ -272,6 +306,13 @@ because the exact bytes submitted cannot be recreated afterwards. Until that
 commit the file belongs to no accepted report and may be replaced. A crash in
 between leaves a file the ledger does not refer to, which the next ingestion
 for that packet overwrites.
+
+A stored packet file whose identifier the ledger never issued can only mean
+that the ledger was rolled back or replaced, since a packet file is written
+after its ledger commit. `metron fsck` reports it, and the gate cannot be
+evaluated until the ledger is restored. This catches a ledger restored from an
+older version by accident; it does not stop someone who also removes the
+files.
 
 `metron fsck` reports every missing or mismatching file of an accepted report
 or of a packet that was not voided. The gate requires less: the report that
@@ -350,7 +391,7 @@ whose condition holds.
 An open packet is **valid** while the pinned contract digest is the one it was
 issued under and, for a read-only role, the candidate digest is unchanged and
 the tree is clean. An open packet that is no longer valid is ignored by
-`metron next` and voided by the next `metron packet`.
+`metron next` and voided when the next packet is issued.
 
 Row 5 precedes every packet-issuing row because a packet is bound to a
 candidate, and a candidate is a commit. Row 9 means a review round never starts
@@ -477,7 +518,8 @@ the digest of its canonical JSON form.
 - Every listed commit is part of the current candidate's history, changes
   something outside `.metron/`, and is not already contained in the round's
   candidate. The last condition is checked only while that commit still
-  exists; history may have been rewritten since.
+  exists; history may have been rewritten since. In a shallow clone, a commit
+  at the boundary of the history is judged as if it had no parent.
 - For every finding it fixes, the candidate differs from the one on which
   that finding was last opened, reopened or had a fix rejected. A fix
   committed before the packet was requested is therefore valid; claiming a
@@ -560,11 +602,22 @@ A GREEN gate approves one candidate for one stage and the activity named in
 | `metron resolve <E-id> -m <decision>` | Governance: discharge a governance-owned escalation |
 | `metron gate` | Evaluate the gate |
 | `metron status`, `metron findings [--backlog\|--all]`, `metron log` | Read-only views of the ledger. `findings` lists what is unresolved, the non-blocking backlog, or everything |
-| `metron fsck` | Verify the ledger's hash chain and replay |
+| `metron fsck` | Verify the ledger's hash chain and replay, every event against the event schema, and every stored file against the ledger |
 | `metron schema [name]`, `metron protocol` | Print the embedded schemas and protocol text |
 | `metron version` | Print version information |
 
-Commands whose output an orchestrator consumes accept `--json`.
+Commands whose output an orchestrator consumes accept `--json` and then print
+exactly one JSON document, whose `schema` member names and versions its shape.
+A command that fails under `--json` prints a `metron.error/v1` document with
+its exit status and message.
+
+`metron next --json` separates what can be executed from what must be
+completed by someone. `command` is present only when it is a complete command
+that is safe to run as it stands in a POSIX shell: it never contains a file
+name or any other text taken from the repository, and anything taken from the
+invocation, such as the state directory, is quoted for the shell. A step that
+needs a decision, a message or a file carries `usage` instead, a template with
+placeholders, and the things it applies to in their own members.
 
 Exit status is part of the public interface:
 

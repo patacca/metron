@@ -31,9 +31,9 @@ func (s *State) onPinned(data []byte) error {
 		return err
 	}
 	switch {
-	case !validDigest(p.Digest):
+	case !ValidDigest(p.Digest):
 		return fmt.Errorf("contract digest %q is malformed", p.Digest)
-	case !validDigest(p.RawDigest):
+	case !ValidDigest(p.RawDigest):
 		return fmt.Errorf("raw contract digest %q is malformed", p.RawDigest)
 	case !p.Stage.Valid():
 		return fmt.Errorf("%q is not a lifecycle stage", p.Stage)
@@ -73,9 +73,9 @@ func (s *State) onEvidence(data []byte) error {
 		return errors.New("the evidence names no requirement")
 	case blank(p.Command):
 		return errors.New("the evidence names no command")
-	case !validDigest(p.Candidate):
+	case !ValidDigest(p.Candidate):
 		return fmt.Errorf("candidate digest %q is malformed", p.Candidate)
-	case !validDigest(p.OutputDigest):
+	case !ValidDigest(p.OutputDigest):
 		return fmt.Errorf("output digest %q is malformed", p.OutputDigest)
 	case p.Passed != (p.ExitCode == 0):
 		return fmt.Errorf("passed is %t but the exit code is %d", p.Passed, p.ExitCode)
@@ -140,7 +140,7 @@ func (s *State) onPacketIssued(data []byte) error {
 		return fmt.Errorf("the packet is under contract %s but %s is pinned", p.Contract, pin.Digest)
 	case !validCandidate(p.Candidate):
 		return fmt.Errorf("the candidate cannot be identified: %s", candidateProblem(p.Candidate))
-	case !validDigest(p.Digest):
+	case !ValidDigest(p.Digest):
 		return fmt.Errorf("packet digest %q is malformed", p.Digest)
 	case p.Round < 0:
 		return fmt.Errorf("round %d is negative", p.Round)
@@ -224,9 +224,9 @@ func (s *State) onReportAccepted(data []byte) error {
 		return fmt.Errorf("a %s report answers packet %s, which was issued to the %s", p.Role, p.Packet, s.packets[i].Role)
 	case blank(p.Author.ID):
 		return errors.New("the report names no author")
-	case !validDigest(p.Digest):
+	case !ValidDigest(p.Digest):
 		return fmt.Errorf("report digest %q is malformed", p.Digest)
-	case !validDigest(p.RawDigest):
+	case !ValidDigest(p.RawDigest):
 		return fmt.Errorf("raw report digest %q is malformed", p.RawDigest)
 	case p.Provenance.Mode != ProvenanceDeclared:
 		return fmt.Errorf("provenance mode %q is not supported", p.Provenance.Mode)

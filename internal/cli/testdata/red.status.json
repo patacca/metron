@@ -14,7 +14,7 @@
     "pinned": true
   },
   "candidate": {
-    "commit": "7d5c5d22e74de0b672771eb912b636e6554b1dd4",
+    "commit": "4f523456bbf0ef40f5b1640151d3cbaf7cb22b8c",
     "digest": "sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898"
   },
   "clean": true,
@@ -25,7 +25,7 @@
       "number": 1,
       "stage": "prototype",
       "candidate": {
-        "commit": "7d5c5d22e74de0b672771eb912b636e6554b1dd4",
+        "commit": "4f523456bbf0ef40f5b1640151d3cbaf7cb22b8c",
         "digest": "sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898"
       },
       "contract": "sha256:433f1f7a6e70f2d459369446f7ee08b9fb1533f8c27604edbd8d413eaed4d6ed",

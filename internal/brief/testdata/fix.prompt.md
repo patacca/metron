@@ -77,9 +77,10 @@ finding's evidence uses. Such a change makes the evidence pass while the
 defect remains, so the gate would report something false; the verifier will
 reject it.
 
-Do not touch `.metron/`. The contract belongs to governance and the state
-directory to Metron. A change there is never a fix, and editing the state
-directory corrupts the ledger.
+Do not touch `.metron/` except `.metron/work/`, the scratch space for your
+report. The contract belongs to governance and `.metron/state/` to Metron. A
+change there is never a fix, and editing the state directory corrupts the
+ledger.
 
 ## Disputing a finding
 
@@ -101,7 +102,9 @@ substance costs a full audit and comes back upheld, with the work still owed.
 
 Commit everything. When you submit, the working tree must be clean:
 `git status --porcelain` shows nothing outside `.metron/`, untracked files
-included. Write your report file outside the repository for the same reason.
+included. For the same reason, write your report under `.metron/work/`, which
+git ignores, or outside the repository: a report file anywhere else in the
+repository makes the tree unclean, and the report is refused.
 
 List each fix's commits by their full hash, as `git rev-parse` prints it.
 Every listed commit must be one added after the reviewed commit: reachable
@@ -126,7 +129,7 @@ answers and who wrote it:
 | --- | --- |
 | `schema` | `metron.report/v1` |
 | `packet` | `P-0011`, the packet you are answering |
-| `packet_digest` | The packet's digest, copied unchanged from the report skeleton. Packet identifiers repeat from one ledger to the next, but the digest does not, so it ties your report to this exact packet; a report that carries any other packet's digest is refused. |
+| `packet_digest` | The packet's digest, copied unchanged from the report skeleton; if you were given the packet without a skeleton, take it from `metron next --json` or from the note `metron packet` printed when it issued the packet. Packet identifiers repeat from one ledger to the next, but the digest does not, so it ties your report to this exact packet; a report that carries any other packet's digest is refused. |
 | `role` | `implementer` |
 | `author` | Who you are. `id` is a stable name for whoever acts in this role, 1 to 128 printable ASCII characters with no spaces: Metron decides role separation on it, so two identities must not differ only by something invisible. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |
@@ -540,11 +543,15 @@ empty value where one is required.
 
 # Handing the report back
 
-Save the completed report as a file outside the repository and submit it:
+Write the skeleton to a file, fill it in, and submit it:
 
 ```
-metron ingest <file>
+metron packet --format skeleton -o .metron/work/report.json
+metron ingest .metron/work/report.json
 ```
+
+Keep the report under `.metron/work/` or outside the repository; anywhere
+else in the repository it makes the tree unclean, and the report is refused.
 
 If you cannot run commands, return the report as a single JSON document and
 nothing else; whoever operates Metron will submit it. Metron accepts or

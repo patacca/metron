@@ -46,7 +46,7 @@ func Pin(s State, f Facts, reason, by string) ([]Draft, error) {
 	if err := ps.err(LayerSemantic); err != nil {
 		return nil, err
 	}
-	if !validDigest(f.ContractDigest) || !validDigest(f.ContractRawDigest) {
+	if !ValidDigest(f.ContractDigest) || !ValidDigest(f.ContractRawDigest) {
 		return nil, fmt.Errorf("facts: contract digests %q and %q must be sha256 digests", f.ContractDigest, f.ContractRawDigest)
 	}
 	if cur, ok := s.pin(); ok && cur.Digest == f.ContractDigest {
@@ -103,7 +103,7 @@ func RecordEvidence(s State, f Facts, results []Evidence) ([]Draft, error) {
 		if ev.Passed != (ev.ExitCode == 0) {
 			ps.add(p+"/passed", "passed is %t but the exit code is %d: a check passes exactly when it exits 0", ev.Passed, ev.ExitCode)
 		}
-		if !validDigest(ev.OutputDigest) {
+		if !ValidDigest(ev.OutputDigest) {
 			ps.add(p+"/output_digest", "output digest %q is not a sha256 digest", ev.OutputDigest)
 		}
 	}
@@ -231,7 +231,7 @@ func IssuePacket(s State, f Facts, p Packet, digest string) ([]Draft, error) {
 	if !reflect.DeepEqual(bare, plan.Packet) {
 		return nil, errors.New("the packet differs from the planned one: plan it again from the same state and facts and change only its instructions")
 	}
-	if !validDigest(digest) {
+	if !ValidDigest(digest) {
 		return nil, fmt.Errorf("packet digest %q is not a sha256 digest", digest)
 	}
 	var drafts []Draft

@@ -87,15 +87,21 @@ what they could have affected.
 ## Leave the candidate untouched
 
 This role is read-only. Do not edit, create or delete files in the
-repository, commit, stash, switch branches or check out another revision,
-and do not touch `.metron/`. When you submit your report, Metron compares
-the candidate digest and the cleanliness of the working tree with their
-state when this packet was issued, and rejects the report if either has
-changed. Building the code and running tests is fine as long as nothing is
-left behind that `git status` would show: send output to a directory outside
-the repository or to paths the repository already ignores. To look at
-another revision, use `git show` or a separate clone. Write your report file
-outside the repository too.
+repository, commit, stash, switch branches or check out another revision.
+Under `.metron/`, the contract and the state directory are off limits; the
+one place you may write is `.metron/work/`. When you submit your report,
+Metron compares the candidate digest and the cleanliness of the working tree
+with their state when this packet was issued, and rejects the report if
+either has changed. Building the code and running tests is fine as long as
+nothing is left behind that `git status` would show: send output to a
+directory outside the repository or to paths the repository already ignores.
+To look at another revision, use `git show` or a separate clone.
+
+Write your report under `.metron/work/` or outside the repository.
+`.metron/work/` is ignored by git and, like everything under `.metron/`, lies
+outside the candidate and outside the cleanliness check. A report file
+anywhere else in the repository makes the tree unclean, and the report is
+refused.
 
 ## Classifying regressions
 
@@ -128,7 +134,7 @@ answers and who wrote it:
 | --- | --- |
 | `schema` | `metron.report/v1` |
 | `packet` | `P-0012`, the packet you are answering |
-| `packet_digest` | The packet's digest, copied unchanged from the report skeleton. Packet identifiers repeat from one ledger to the next, but the digest does not, so it ties your report to this exact packet; a report that carries any other packet's digest is refused. |
+| `packet_digest` | The packet's digest, copied unchanged from the report skeleton; if you were given the packet without a skeleton, take it from `metron next --json` or from the note `metron packet` printed when it issued the packet. Packet identifiers repeat from one ledger to the next, but the digest does not, so it ties your report to this exact packet; a report that carries any other packet's digest is refused. |
 | `role` | `verifier` |
 | `author` | Who you are. `id` is a stable name for whoever acts in this role, 1 to 128 printable ASCII characters with no spaces: Metron decides role separation on it, so two identities must not differ only by something invisible. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |
@@ -499,11 +505,15 @@ empty value where one is required.
 
 # Handing the report back
 
-Save the completed report as a file outside the repository and submit it:
+Write the skeleton to a file, fill it in, and submit it:
 
 ```
-metron ingest <file>
+metron packet --format skeleton -o .metron/work/report.json
+metron ingest .metron/work/report.json
 ```
+
+Keep the report under `.metron/work/` or outside the repository; anywhere
+else in the repository it makes the tree unclean, and the report is refused.
 
 If you cannot run commands, return the report as a single JSON document and
 nothing else; whoever operates Metron will submit it. Metron accepts or

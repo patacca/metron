@@ -34,8 +34,10 @@ type site struct {
 
 // open locates the repository that contains the working directory and the
 // state directory: --state-dir, else $METRON_STATE_DIR, else .metron/state
-// under the repository root. A state directory elsewhere in the working tree
-// is refused: every write to it would make the tree unclean.
+// under the repository root. Those are the only two choices: .metron/state,
+// or a directory outside the repository. Anywhere else inside it, writes
+// would make the tree unclean or escape the ignore and line-ending rules
+// that init sets up for .metron/state.
 func (c *ctx) open(flagDir string) (*site, error) {
 	repo, err := vcs.Open(c.Dir)
 	if err != nil {
@@ -46,8 +48,9 @@ func (c *ctx) open(flagDir string) (*site, error) {
 	if dir == "" {
 		dir, from, status = c.Getenv(envStateDir), "$"+envStateDir, exitEnv
 	}
+	defaultDir := filepath.Join(repo.Root(), ".metron", "state")
 	if dir == "" {
-		s.store, s.inRepo = store.New(filepath.Join(repo.Root(), ".metron", "state")), true
+		s.store, s.inRepo = store.New(defaultDir), true
 		return s, nil
 	}
 	if !filepath.IsAbs(dir) {
@@ -55,11 +58,12 @@ func (c *ctx) open(flagDir string) (*site, error) {
 	}
 	dir = filepath.Clean(dir)
 	if rel, inside := s.relative(dir); inside {
-		if rel != ".metron" && !strings.HasPrefix(rel, ".metron/") {
-			return nil, fail(status, "the state directory %s, set by %s, lies inside the working tree but outside .metron/, so every write to it would make the tree unclean: use a directory outside the repository, or leave the default .metron/state",
+		if rel != ".metron/state" {
+			return nil, fail(status, "the state directory %s, set by %s, lies inside the repository: the state directory is either .metron/state, the default, or a directory outside the repository",
 				dir, from)
 		}
-		s.inRepo = true
+		s.store, s.inRepo = store.New(defaultDir), true
+		return s, nil
 	}
 	s.store = store.New(dir)
 	return s, nil
@@ -253,9 +257,12 @@ type fileProblem struct {
 	// command is the command that recovers, when one does.
 	command string
 	// report is set for a report file, and clear for a packet file; detail
-	// is the problem without the file's owner.
+	// is the problem without the file's owner. open is set for the file of the
+	// open packet, which is operational rather than evidence: metron packet
+	// voids the packet and issues another when one is next needed.
 	report bool
 	detail string
+	open   bool
 }
 
 func (p fileProblem) String() string { return p.Problem + ": " + p.Recovery }
@@ -287,7 +294,7 @@ func (w *world) storedFiles() []fileProblem {
 		if why := w.packetFile(p); why != "" {
 			fp := fileProblem{Packet: p.Packet, detail: why}
 			if p.Open {
-				fp.command = w.metron("packet")
+				fp.command, fp.open = w.metron("packet"), true
 				fp.Recovery = fmt.Sprintf("run %s to void it and issue a new packet", fp.command)
 			} else {
 				fp.Recovery = "restore the file from version control"
@@ -487,6 +494,15 @@ func (c *ctx) lock(s *site) (*store.Writer, *world, error) {
 		return nil, nil, err
 	}
 	return wr, w, nil
+}
+
+// restoreLedger adds the advice to restore the ledger from version control to
+// a verification problem that does not already give it.
+func restoreLedger(problem string) string {
+	if strings.Contains(problem, "restore the ledger from version control") {
+		return problem
+	}
+	return problem + ": restore the ledger from version control"
 }
 
 // usable refuses a command that needs a ledger when there is none, or when

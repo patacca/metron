@@ -93,14 +93,18 @@ From here on, ask Metron what to do and do it:
 metron next                               # the single next step, and the command for it
 metron check                              # runs the contract's check commands on HEAD
 metron packet --format prompt             # the brief for whoever acts next, human or agent
-metron packet --format skeleton -o report.json
-metron ingest report.json                 # validates the report and records the outcome
+metron packet --format skeleton -o .metron/work/report.json
+metron ingest .metron/work/report.json    # validates the report and records the outcome
 metron gate                               # exits 0 only when the gate is open
 ```
 
 `metron packet` hands out the work; `metron ingest` takes the answer. The
 prompt format is self-contained: paste it into any agent, or read it yourself.
 The skeleton is a report with the right shape and the judgments left empty.
+
+Write reports under `.metron/work/`, or outside the repository. A review is
+bound to a clean working tree, and a stray `report.json` next to the code
+would make it unclean.
 
 `metron status`, `metron findings` and `metron log` show where things stand.
 Commands meant for automation accept `--json`. Exit status is 0 for success

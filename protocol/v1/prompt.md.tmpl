@@ -244,11 +244,15 @@ empty value where one is required.
 
 # Handing the report back
 
-Save the completed report as a file outside the repository and submit it:
+Write the skeleton to a file, fill it in, and submit it:
 
 ```
-metron ingest <file>
+metron packet --format skeleton -o .metron/work/report.json
+metron ingest .metron/work/report.json
 ```
+
+Keep the report under `.metron/work/` or outside the repository; anywhere
+else in the repository it makes the tree unclean, and the report is refused.
 
 If you cannot run commands, return the report as a single JSON document and
 nothing else; whoever operates Metron will submit it. Metron accepts or

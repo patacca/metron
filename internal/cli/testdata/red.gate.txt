@@ -1,6 +1,6 @@
 Gate: CLOSED for stage prototype
 Authorizes: An internal demonstration
-Candidate: commit 7d5c5d22e74de0b672771eb912b636e6554b1dd4, sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898
+Candidate: commit 4f523456bbf0ef40f5b1640151d3cbaf7cb22b8c, sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898
 
 [FAIL] C  Every applicable requirement is satisfied in the reviewer report of the latest round
           - REQ-2 is violated in round 1

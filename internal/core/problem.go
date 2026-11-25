@@ -112,9 +112,9 @@ func lowerHex(s string) bool {
 	return true
 }
 
-// validDigest reports whether d is "sha256:" followed by 64 lowercase hex
-// digits.
-func validDigest(d string) bool {
+// ValidDigest reports whether d is "sha256:" followed by 64 lowercase hex
+// digits: the form of every digest Metron records.
+func ValidDigest(d string) bool {
 	h, ok := strings.CutPrefix(d, "sha256:")
 	return ok && len(h) == 64 && lowerHex(h)
 }
@@ -125,7 +125,7 @@ func validCommit(h string) bool {
 }
 
 func validCandidate(c Candidate) bool {
-	return validCommit(c.Commit) && validDigest(c.Digest)
+	return validCommit(c.Commit) && ValidDigest(c.Digest)
 }
 
 // candidateProblem says in words what is missing or wrong in a candidate, or
@@ -141,7 +141,7 @@ func candidateProblem(c Candidate) string {
 	switch {
 	case c.Digest == "":
 		ps = append(ps, "the candidate digest is unknown")
-	case !validDigest(c.Digest):
+	case !ValidDigest(c.Digest):
 		ps = append(ps, fmt.Sprintf("candidate digest %q is not \"sha256:\" followed by 64 lowercase hex digits", c.Digest))
 	}
 	return strings.Join(ps, " and ")

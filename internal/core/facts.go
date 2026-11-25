@@ -86,7 +86,7 @@ func contractProblem(s State, f Facts) string {
 		return fmt.Sprintf("the contract is invalid (%s, first: %s %s): fix it, then pin it",
 			count(len(r.Problems), "problem", "problems"), r.Problems[0].Path, r.Problems[0].Message)
 	}
-	if !validDigest(f.ContractDigest) {
+	if !ValidDigest(f.ContractDigest) {
 		return fmt.Sprintf("the contract digest %q is malformed", f.ContractDigest)
 	}
 	pin, ok := s.pin()

@@ -9,9 +9,11 @@ import (
 
 // findShell locates the POSIX sh that runs check commands where it has no
 // fixed path: on PATH first, then in the Git installation that git's exec
-// path lies in. Git for Windows keeps git-core under <git>/mingw64/libexec and
-// sh in <git>/usr/bin and <git>/bin. exe is the file name of sh on the
-// platform.
+// path lies in. Git for Windows keeps git-core under <git>/mingw64/libexec,
+// and sh in <git>/bin and <git>/usr/bin. The one in <git>/bin comes first: it
+// puts Git's own tools, grep and sed among them, on PATH, which the one in
+// <git>/usr/bin, started directly, does not. exe is the file name of sh on
+// the platform.
 func findShell(lookPath func(string) (string, error), gitExecPath func() (string, error), exe string) (string, error) {
 	if p, err := lookPath("sh"); err == nil {
 		return p, nil
@@ -19,7 +21,7 @@ func findShell(lookPath func(string) (string, error), gitExecPath func() (string
 	if out, err := gitExecPath(); err == nil && strings.TrimSpace(out) != "" {
 		dir := filepath.Clean(filepath.FromSlash(strings.TrimSpace(out)))
 		for range 4 {
-			for _, sub := range []string{"usr/bin", "bin"} {
+			for _, sub := range []string{"bin", "usr/bin"} {
 				p := filepath.Join(dir, filepath.FromSlash(sub), exe)
 				if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
 					return p, nil

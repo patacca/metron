@@ -165,23 +165,23 @@ func (r *Repo) blobs(objects []string) ([]string, error) {
 	return contents, nil
 }
 
-// pointsIntoMetron reports whether a link's target, resolved lexically from
-// the link's directory, is .metron/ at the root or lies under it. Backslashes
-// count as separators and the directory name is compared without regard to
-// case, so that the answer is the same on every platform and errs towards
+// pointsIntoMetron reports whether a link's target, resolved lexically, is
+// .metron/ at the root or lies under it. A relative target is resolved from
+// the link's directory as an absolute path, so that one which leaves the
+// repository and comes back in is resolved like any other. Backslashes count
+// as separators and the directory name is compared without regard to case,
+// so that the answer is the same on every platform and errs towards
 // reporting a problem.
 func (r *Repo) pointsIntoMetron(link, target string) bool {
 	target = strings.ReplaceAll(target, `\`, "/")
-	var resolved string
-	if native := filepath.FromSlash(target); path.IsAbs(target) || filepath.IsAbs(native) {
-		rel, err := filepath.Rel(r.root, filepath.Clean(native))
-		if err != nil {
-			return false
-		}
-		resolved = filepath.ToSlash(rel)
-	} else {
-		resolved = path.Join(path.Dir(link), target)
+	native := filepath.FromSlash(target)
+	if !path.IsAbs(target) && !filepath.IsAbs(native) {
+		native = filepath.Join(r.root, filepath.FromSlash(path.Dir(link)), native)
 	}
-	first, _, _ := strings.Cut(resolved, "/")
+	rel, err := filepath.Rel(r.root, filepath.Clean(native))
+	if err != nil {
+		return false
+	}
+	first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
 	return strings.EqualFold(first, strings.TrimSuffix(ExcludedDir, "/"))
 }

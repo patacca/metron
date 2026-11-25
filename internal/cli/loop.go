@@ -85,9 +85,10 @@ one is issued.
 
 --format json (the default) prints the packet itself; prompt renders it as a
 self-contained prompt for a person or an agent; skeleton prints a report
-skeleton shaped for the packet, every judgment left empty. Write it outside
-the repository or under .metron/: a new file elsewhere in the work tree makes
-the tree dirty, which invalidates a read-only role's packet.`,
+skeleton shaped for the packet, every judgment left empty. Write it under
+.metron/work/, which -o creates and git ignores, or outside the repository: a
+new file elsewhere in the working tree makes the tree unclean, which
+invalidates a read-only role's packet.`,
 	run: runPacket,
 }
 
@@ -140,13 +141,14 @@ func runPacket(c *ctx, args []string) error {
 		if data, err = s.store.ReadPacket(plan.Open); err != nil {
 			return err
 		}
-		note = fmt.Sprintf("packet %s is open and still valid; returning it again", plan.Open)
+		rec, _ := w.state.Packet(plan.Open)
+		note = fmt.Sprintf("packet %s, digest %s, is open and still valid; returning it again", plan.Open, rec.Digest)
 	} else {
 		if data, err = issue(w, wr, plan.Packet); err != nil {
 			return err
 		}
 		p := plan.Packet
-		note = fmt.Sprintf("issued packet %s: %s for the %s, round %d", p.ID, p.Action, p.Role, p.Round)
+		note = fmt.Sprintf("issued packet %s, digest %s: %s for the %s, round %d", p.ID, canon.Digest(data), p.Action, p.Role, p.Round)
 	}
 	var p core.Packet
 	if err := jsonv2.Unmarshal(data, &p, jsonv2.RejectUnknownMembers(true)); err != nil {
@@ -185,12 +187,18 @@ func runPacket(c *ctx, args []string) error {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(c.Dir, path)
 	}
+	// .metron/work/ is the scratch space for skeletons and reports.
+	if rel, ok := s.relative(filepath.Dir(path)); ok && rel == ".metron/work" {
+		if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+			return err
+		}
+	}
 	if err := os.WriteFile(path, rendered, 0o666); err != nil {
 		return err
 	}
 	fmt.Fprintf(c.Stderr, "metron packet: %s; wrote the %s to %s\n", note, *format, *out)
 	if dirty, err := s.repo.TreeProblems(); err == nil && len(dirty) > len(w.dirty) {
-		fmt.Fprintf(c.Stderr, "metron packet: warning: %s is in the work tree and makes it dirty, which invalidates a packet for a read-only role and blocks the loop; move it outside the repository or under .metron/\n", *out)
+		fmt.Fprintf(c.Stderr, "metron packet: warning: %s is in the working tree and makes it unclean, which invalidates a packet for a read-only role and blocks the loop; write it under .metron/work/ instead, or outside the repository\n", *out)
 	}
 	return nil
 }

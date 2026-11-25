@@ -14,13 +14,20 @@ func TestFindShell(t *testing.T) {
 	layout := func(t *testing.T, sub string) (root, execPath string) {
 		root = t.TempDir()
 		execPath = filepath.Join(root, "mingw64", "libexec", "git-core")
-		for _, d := range []string{execPath, filepath.Join(root, filepath.FromSlash(sub))} {
-			if err := os.MkdirAll(d, 0o777); err != nil {
+		subs := []string{sub}
+		if sub == "both" {
+			subs = []string{"usr/bin", "bin"}
+		}
+		if err := os.MkdirAll(execPath, 0o777); err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range subs {
+			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(d)), 0o777); err != nil {
 				t.Fatal(err)
 			}
-		}
-		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(sub), "sh.exe"), nil, 0o666); err != nil {
-			t.Fatal(err)
+			if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(d), "sh.exe"), nil, 0o666); err != nil {
+				t.Fatal(err)
+			}
 		}
 		// git prints its exec path with forward slashes and a newline.
 		return root, filepath.ToSlash(execPath) + "\n"
@@ -35,6 +42,7 @@ func TestFindShell(t *testing.T) {
 		{"on PATH", "usr/bin", func(string) (string, error) { return "/somewhere/sh.exe", nil }, true, "/somewhere/sh.exe"},
 		{"usr/bin", "usr/bin", notFound, true, "usr/bin/sh.exe"},
 		{"bin", "bin", notFound, true, "bin/sh.exe"},
+		{"bin first", "both", notFound, true, "bin/sh.exe"},
 		{"no git", "usr/bin", notFound, false, ""},
 		{"no sh", "elsewhere", notFound, true, ""},
 	} {

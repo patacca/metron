@@ -17,7 +17,14 @@ func TestTruncatedBatch(t *testing.T) {
 	ledger := string(r.read(".metron/state/ledger.jsonl"))
 	lines := strings.SplitAfter(strings.TrimSuffix(ledger, "\n"), "\n")
 	r.write(".metron/state/ledger.jsonl", strings.Join(lines[:len(lines)-1], ""))
-	contains(t, "fsck", r.expect(exitNegative, "fsck").out, "1 problem found")
+	out := r.expect(exitNegative, "fsck").out
+	contains(t, "fsck", out, "1 problem found")
+	if n := strings.Count(out, "restore the ledger from version control"); n != 1 {
+		t.Fatalf("fsck gives the advice %d times:\n%s", n, out)
+	}
+	if res := r.expect(exitEnv, "init"); strings.Count(res.err, "version control") != 1 {
+		t.Fatalf("init gives the advice other than once:\n%s", res.err)
+	}
 	r.expect(exitEnv, "gate")
 	contains(t, "log", r.expect(exitEnv, "log").err, "the ledger fails verification")
 	r.expectNext(core.StepRepairLedger)
@@ -68,7 +75,11 @@ func TestTreeProblems(t *testing.T) {
 			if a.Command != tc.command {
 				t.Fatalf("command %q, want %q", a.Command, tc.command)
 			}
-			contains(t, "next", r.must("next").out, "Tree:         "+tc.want)
+			out := r.must("next").out
+			contains(t, "next", out, "Tree:         "+tc.want)
+			if hidden := strings.Contains(tc.want, "skip-worktree"); hidden != strings.Contains(out, "disable the sparse checkout with git sparse-checkout disable, and set git config core.ignoreStat false") {
+				t.Errorf("the advice about sparse checkouts and core.ignoreStat appears = %t:\n%s", !hidden, out)
+			}
 			contains(t, "check", r.expect(exitNegative, "check").out, tc.want)
 			var st statusDoc
 			unmarshal(t, r.must("status", "--json").out, &st)

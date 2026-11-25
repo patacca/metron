@@ -58,7 +58,9 @@ func TestStaleOpenPacketOnGreenCandidate(t *testing.T) {
 	}
 	r.expectNext(core.StepNone)
 	contains(t, "next", r.must("next").out, "Note:         packet "+p.ID+" (review) is open but no longer valid (its stored file")
-	r.expect(exitNegative, "fsck")
+	// The open packet's file is operational: fsck notes it and passes.
+	contains(t, "fsck", r.must("fsck").out, "Note: packet "+p.ID+": its stored file packets/"+p.ID+".json is missing; this is not an integrity failure",
+		"No problem found.")
 }
 
 // TestLostEarlierReport loses the report of an earlier packet: fsck and status
@@ -129,16 +131,22 @@ func TestCloneWithAutoCRLF(t *testing.T) {
 	c.must("gate")
 }
 
+// TestStateDirectoryInsideTree checks the only two choices of state
+// directory: .metron/state, or a directory outside the repository.
 func TestStateDirectoryInsideTree(t *testing.T) {
 	r := newRepo(t)
-	res := r.expect(exitUsage, "init", "--state-dir", "state")
-	contains(t, "init error", res.err, "lies inside the working tree but outside .metron/",
-		"use a directory outside the repository, or leave the default .metron/state")
-	r.env[envStateDir] = r.path("sub/state")
-	r.expect(exitEnv, "next")
-	r.env[envStateDir] = r.dir
-	r.expect(exitEnv, "status")
-	// Under .metron/ it is committed together with the work.
-	r.env[envStateDir] = r.path(".metron/elsewhere")
-	contains(t, "init output", r.must("init").out, "Created .metron/elsewhere/ledger.jsonl", "Commit .metron/, state included")
+	choices := "lies inside the repository: the state directory is either .metron/state, the default, or a directory outside the repository"
+	for _, dir := range []string{"state", ".metron", ".metron/elsewhere", ".metron/work", ".git/metron", "."} {
+		contains(t, "init --state-dir "+dir, r.expect(exitUsage, "init", "--state-dir", dir).err, choices)
+	}
+	for _, dir := range []string{r.path("sub/state"), r.path(".metron/state/../other"), r.dir} {
+		r.env[envStateDir] = dir
+		contains(t, "next with "+dir, r.expect(exitEnv, "next").err, choices)
+	}
+	// .metron/state given explicitly is the default: committed with the work.
+	r.env[envStateDir] = r.path(".metron/state")
+	contains(t, "init output", r.must("init").out, "Created .metron/state/ledger.jsonl", "Commit .metron/, state included")
+	if _, err := os.Stat(r.path(".metron/elsewhere")); !os.IsNotExist(err) {
+		t.Fatalf("a refused state directory was created: %v", err)
+	}
 }

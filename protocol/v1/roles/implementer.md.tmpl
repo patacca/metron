@@ -88,9 +88,10 @@ finding's evidence uses. Such a change makes the evidence pass while the
 defect remains, so the gate would report something false; the verifier will
 reject it.
 
-Do not touch `.metron/`. The contract belongs to governance and the state
-directory to Metron. A change there is never a fix, and editing the state
-directory corrupts the ledger.
+Do not touch `.metron/` except `.metron/work/`, the scratch space for your
+report. The contract belongs to governance and `.metron/state/` to Metron. A
+change there is never a fix, and editing the state directory corrupts the
+ledger.
 
 ## Disputing a finding
 
@@ -112,7 +113,9 @@ substance costs a full audit and comes back upheld, with the work still owed.
 
 Commit everything. When you submit, the working tree must be clean:
 `git status --porcelain` shows nothing outside `.metron/`, untracked files
-included. Write your report file outside the repository for the same reason.
+included. For the same reason, write your report under `.metron/work/`, which
+git ignores, or outside the repository: a report file anywhere else in the
+repository makes the tree unclean, and the report is refused.
 
 List each fix's commits by their full hash, as `git rev-parse` prints it.
 Every listed commit must be one added after the reviewed commit: reachable
