@@ -2,8 +2,8 @@
 
 ## Your situation
 
-You are the reviewer of Courier for round 3, under
-a contract that targets the `pilot` stage. The candidate is this commit:
+You are the reviewer of Courier, under a contract that
+targets the `pilot` stage. The candidate is this commit:
 
 - commit `c3e5a7b9d1f30246813579bdf02468ace1357902`
 - candidate digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`
@@ -21,9 +21,15 @@ governance, which owns the acceptance contract.
 
 Everything this brief refers to is in the packet: the contract, the latest
 check results (`evidence`), every finding in the ledger with its history
-(`findings`), the earlier rounds of this stage (`history`) and the binding
-decisions (`decisions`). If you received this brief as a prompt, the same
-information follows it, laid out for reading.
+(`findings`), the decisions that bind you (`decisions`) and the ones that no
+longer do (`earlier_decisions`). If you received this brief as a prompt, the
+same information follows it, laid out for reading.
+
+The packet does not say how many reviews came before this one, how they
+ended or who held them. None of that bears on your decision: you review this
+candidate as if nobody had reviewed it before, and use what the ledger
+records, findings, fixes, verifications and decisions, as technical evidence
+about the code.
 
 Since the last review, fixes for earlier findings were verified by a
 verifier on commit `c3e5a7b9d1f30246813579bdf02468ace1357902` (candidate digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`). That is the candidate in front of you.
@@ -262,11 +268,23 @@ otherwise a loop can be kept going indefinitely by re-arguing settled points.
 - A `withdrawn` finding cannot be reopened: an auditor decided it was wrong.
   If you have evidence that the auditor did not have, open a new finding and
   name the withdrawn one in `contradicts`, so that an auditor decides again.
-- The packet's decisions bind you: audit directives, and the resolutions of
-  earlier escalations by an auditor or by governance, each with where it came
-  from. If you have evidence that one rests on something false, report that
-  evidence through the channels above rather than acting against the
-  decision.
+- The packet's `decisions` bind you: audit directives, and the resolutions
+  of earlier escalations by an auditor or by governance, each with where it
+  came from. They are the ones made under the pinned contract and, for
+  evidence governance supplied, about this very candidate. If you have
+  evidence that one rests on something false, report that evidence through
+  the channels above rather than acting against the decision.
+- `earlier_decisions` do not bind you. They were superseded, were made under
+  a contract that has changed since, or supplied evidence about another
+  candidate. Read them for what they tell you about the code and the
+  reasoning so far; do not treat them as rules, and do not count evidence
+  supplied for another candidate as evidence for this one.
+- A finding records the contract it was established under. Where that is
+  not the pinned contract, a requirement or risk it cites by identifier may
+  now say something else. Before you reopen such a finding or rely on it,
+  check the citation against the pinned contract; if it no longer fits, open
+  a new finding against the pinned contract and name the old one in
+  `related`.
 
 ## The verdict
 
@@ -367,7 +385,7 @@ information the brief above refers to.
 
 - Packet: `P-0013`, issued 2026-11-20T14:03:09Z under protocol `metron.protocol/v1`
 - Packet digest: `sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef`
-- Action: `review`, for the `reviewer`, round 3
+- Action: `review`, for the `reviewer`
 - Candidate: commit `c3e5a7b9d1f30246813579bdf02468ace1357902`, digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`
 - Fixes last verified on: commit `c3e5a7b9d1f30246813579bdf02468ace1357902`, digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`, which is this candidate
 - Contract digest: `sha256:abababababababababababababababababababababababababababababababab`
@@ -534,20 +552,13 @@ Evidence needed: Recovery times of real subscribers during the pilot.
 
 Reassess when: Two weeks of pilot traffic have been delivered.
 
-## Convergence thresholds
-
-- Root-cause analysis: required for a finding's next fix once its rejected fixes and reopenings reach 2.
-- Convergence analysis: once per streak, when the failed steps without a GREEN verdict reach 3. A failed step is a review that does not end GREEN, a verification that rejects a fix or finds a blocking regression, or a run of the checks with a failure.
-- Independent process audit: each time the failed steps without a GREEN verdict reach a multiple of 5. Once it is discharged, the campaign is suspended until governance resumes it.
-- Campaign budget: the campaign is suspended once it has issued 20 packets without an approval, whatever the outcome of each step.
-- The count of failed steps restarts with a GREEN verdict or when governance resumes a suspended campaign. A pin does not restart it, whether or not it changes the stage.
-
 ## Findings in the ledger
 
 ### F-0001: Retries stop after the fifth failed attempt
 
 - Tier `T1`, in `reliability`
 - Status `resolved`; opened in round 1 by the reviewer; recurrences: 0
+- Established under contract `sha256:9999999999999999999999999999999999999999999999999999999999999999`, which is not the pinned one: check in the pinned contract that what it cites still says what the finding relies on
 - Components: `internal/delivery/retry.go`
 - Requirement: `REQ-8`
 
@@ -578,6 +589,7 @@ History, oldest first:
 
 - Tier `T2`, reclassified from `T1`, in `performance`
 - Status `open`; opened in round 1 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/store/append.go`
 - Requirement: `REQ-9`
@@ -613,6 +625,7 @@ History, oldest first:
 
 - Tier `T3`, in `reliability`
 - Status `open`; opened in round 1 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Components: `internal/delivery/retry.go`
 - Related: `F-0001`
 
@@ -634,6 +647,7 @@ History, oldest first:
 
 - Tier `T1`, in `data-integrity`
 - Status `resolved`; opened in round 1 by the reviewer; recurrences: 3
+- Established under the pinned contract
 - Root-cause analysis required for its next fix
 - Components: `internal/store/append.go` and `internal/delivery/accept.go`
 - Requirement: `REQ-4`
@@ -674,6 +688,7 @@ History, oldest first:
 
 - Tier `T1`, in `architecture`
 - Status `resolved`; opened in round 2 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/store/event.go`
 - Requirement: `REQ-3`
@@ -711,6 +726,7 @@ History, oldest first:
 
 - Tier `T4`, in `simplicity`
 - Status `open`; opened in round 2 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Components: `internal/delivery/dispatcher.go`
 
 Description: An options struct would make call sites easier to read.
@@ -727,6 +743,7 @@ History, oldest first:
 
 - Tier `T0`, in `security-privacy`
 - Status `withdrawn`; opened in round 2 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/delivery/sign.go`
 - Risk: `RISK-2`
@@ -748,23 +765,28 @@ History, oldest first:
 - Round 2, `escalation.resolved` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
 - Round 2, `finding.withdrawn` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: The error path cannot be reached with any key NewSigner accepts; the mechanism does not occur.
 
-## Rounds of this stage
-
-| Round | Commit | Verdict | Reviewer |
-| --- | --- | --- | --- |
-| 1 | `4a1c9e2b7d3f60812e5a9c4b7d1e3f2a6b8c0d94` | `RED` | review-agent |
-| 2 | `9b2d4f6a8c0e1357924680ace13579bdf0246813` | `RED` | review-agent |
-
 ## Binding decisions
 
-Audit directives and escalation resolutions recorded so far, oldest first.
-They bind every role.
+Audit directives and escalation resolutions that apply to this contract and
+this candidate, oldest first. They bind every role.
 
-- A `resolution` of `E-0001` by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
-- A `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
-- A `resolution` of `E-0002` by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
-- A `resolution` of `E-0003` by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
-- A `resolution` of `E-0004` by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
+- `D-0001`: a `resolution` of `E-0001` (`contract-gap`) by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
+- `D-0003`: a `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
+- `D-0004`: a `resolution` of `E-0002` (`dispute`) by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- `D-0005`: a `resolution` of `E-0003` (`dispute`) by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- `D-0006`: a `resolution` of `E-0004` (`dispute`) by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
+
+## Earlier decisions
+
+These no longer bind. They are here so that you know what was decided before
+and why; weigh them as evidence, not as rules.
+
+- `D-0002`: a `directive` by `auditor`, in packet `P-0003`: Treat every finding about the replay tool as outside the pilot.
+  It no longer binds because an audit superseded it in packet `P-0009`.
+- `D-0007`: a `directive` by `auditor`, in packet `P-0009`: Verify retry behaviour against the 10-minute outage of the validation plan.
+  It no longer binds because it was made under contract `sha256:9999999999999999999999999999999999999999999999999999999999999999`, at stage `controlled-validation`, not under the pinned contract.
+- `D-0008`: a `resolution` of `E-0005` (`evidence-gap`) by `governance`, about `REQ-7`: REQ-7 holds: the one-hour soak test of 14 November stayed within 6% of the five-minute figure.
+  It no longer binds because it supplied evidence about candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`, not about the candidate of this packet.
 
 ---
 

@@ -320,6 +320,9 @@ func summarize(e core.Event) string {
 	case core.EventDirectiveIssued:
 		d := decode[core.DirectiveIssued](e)
 		return fmt.Sprintf("from %s: %s", d.Packet, d.Text)
+	case core.EventDecisionSuperseded:
+		d := decode[core.DecisionSuperseded](e)
+		return fmt.Sprintf("%s by %s: %s", d.Decision, d.Packet, d.Rationale)
 	}
 	return string(e.Data)
 }

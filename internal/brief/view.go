@@ -44,11 +44,20 @@ type view struct {
 	Thresholds  core.Convergence
 	ChurnRounds int
 
+	// Earlier lists the decisions that no longer bind, each with the reason.
+	Earlier []earlier
+
 	// Digest is the stored packet's digest, set for a skeleton or a prompt.
 	// Brief and Skeleton are set only when rendering a prompt.
 	Digest   string
 	Brief    string
 	Skeleton string
+}
+
+// earlier is a decision that no longer binds, and why.
+type earlier struct {
+	core.Decision
+	Why string
 }
 
 type requirement struct {
@@ -85,8 +94,13 @@ func newView(p core.Packet) (*view, error) {
 	if p.Role != role {
 		return nil, fmt.Errorf("packet %s has action %q but role %q; that action belongs to the %s", p.ID, p.Action, p.Role, role)
 	}
-	// An audit can be due before any round has a verdict; it names round 0.
-	if p.Round < 1 && (p.Action != core.StepAudit || p.Round != 0) {
+	// A fix or a verification follows a round, numbered from 1. An audit can
+	// be due before any round has a verdict and then names round 0. A review
+	// names none: its packet does not say how many came before.
+	switch {
+	case p.Action == core.StepReview && (p.Round != 0 || len(p.History) > 0):
+		return nil, fmt.Errorf("packet %s is a review packet but names round %d and %d earlier rounds; a review packet names none", p.ID, p.Round, len(p.History))
+	case p.Round < 0, p.Round == 0 && p.Action != core.StepReview && p.Action != core.StepAudit:
 		return nil, fmt.Errorf("packet %s has round %d, but rounds are numbered from 1; the packet is malformed", p.ID, p.Round)
 	}
 
@@ -100,6 +114,9 @@ func newView(p core.Packet) (*view, error) {
 		ChurnRounds: core.ComponentChurnRounds,
 	}
 	if err := v.requirements(); err != nil {
+		return nil, err
+	}
+	if err := v.decisions(); err != nil {
 		return nil, err
 	}
 	if err := v.findings(); err != nil {
@@ -141,6 +158,33 @@ func (v *view) requirements() error {
 				v.ID, e.Requirement, e.Candidate, v.Candidate.Digest)
 		}
 		v.Applicable[at].Evidence = e
+	}
+	return nil
+}
+
+// decisions checks that the packet sorts its decisions as the protocol does,
+// and says why each earlier one no longer binds.
+func (v *view) decisions() error {
+	for _, d := range v.Decisions {
+		if !d.Binds(v.ContractDigest, v.Candidate.Digest) {
+			return fmt.Errorf("packet %s lists decision %s as binding, but it does not bind under this contract on this candidate", v.ID, d.ID)
+		}
+	}
+	for _, d := range v.EarlierDecisions {
+		e := earlier{Decision: d}
+		switch {
+		case d.Binds(v.ContractDigest, v.Candidate.Digest):
+			return fmt.Errorf("packet %s lists decision %s as an earlier one, but it binds under this contract on this candidate", v.ID, d.ID)
+		case d.SupersededBy != "":
+			e.Why = "an audit superseded it in packet `" + d.SupersededBy + "`"
+		case d.Contract != v.ContractDigest:
+			e.Why = "it was made under contract `" + d.Contract + "`, at stage `" + string(d.Stage) + "`, not under the pinned contract"
+		case d.Candidate == "":
+			e.Why = "it supplied evidence that is bound to no candidate"
+		default:
+			e.Why = "it supplied evidence about " + v.candidate(d.Candidate) + ", not about the candidate of this packet"
+		}
+		v.Earlier = append(v.Earlier, e)
 	}
 	return nil
 }

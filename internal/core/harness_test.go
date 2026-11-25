@@ -87,7 +87,7 @@ func stageTwoContract() Contract {
 func newHarness(tb testing.TB) *harness {
 	tb.Helper()
 	h := &harness{tb: tb, contract: testContract(), clean: true,
-		history: []Commit{{Hash: commitHash(0), Substantive: true}},
+		history: []Commit{{Hash: commitHash(0), Substantive: true, Paths: []string{"src/v0.go"}}},
 		packets: map[string]Packet{}, accepted: map[string]Report{}}
 	h.must(Initialize(h.state))
 	h.must(Pin(h.state, h.facts(), "initial contract", "gov"))
@@ -127,7 +127,7 @@ func (h *harness) describe(base string, hashes []string) []Commit {
 	for _, hash := range hashes {
 		c := Commit{Hash: hash}
 		if i := slices.IndexFunc(h.history, func(c Commit) bool { return c.Hash == hash }); i >= 0 {
-			c.Reachable, c.InBase, c.Substantive = true, b >= 0 && i <= b, h.history[i].Substantive
+			c.Reachable, c.InBase, c.Substantive, c.Paths = true, b >= 0 && i <= b, h.history[i].Substantive, h.history[i].Paths
 		}
 		out = append(out, c)
 	}
@@ -198,10 +198,20 @@ func lookup(s State, id string) (Finding, bool) {
 // .metron/ content they never had, so it changes the candidate digest.
 func (h *harness) commit(substantive bool) string {
 	if substantive {
-		h.top++
-		h.tree = h.top
+		return h.touch(fmt.Sprintf("src/v%d.go", h.top+1))
 	}
-	c := Commit{Hash: commitHash(len(h.history)), Substantive: substantive}
+	c := Commit{Hash: commitHash(len(h.history))}
+	h.history = append(h.history, c)
+	h.clean = true
+	return c.Hash
+}
+
+// touch records a commit that changes the given paths, with content they
+// never had.
+func (h *harness) touch(paths ...string) string {
+	h.top++
+	h.tree = h.top
+	c := Commit{Hash: commitHash(len(h.history)), Substantive: true, Paths: paths}
 	h.history = append(h.history, c)
 	h.clean = true
 	return c.Hash

@@ -299,6 +299,7 @@ var patternHints = map[string]string{
 	`^F-[0-9]{4,}$`:                 `must be a finding identifier such as "F-0001"`,
 	`^P-[0-9]{4,}$`:                 `must be a packet identifier such as "P-0001"`,
 	`^E-[0-9]{4,}$`:                 `must be an escalation identifier such as "E-0001"`,
+	`^D-[0-9]{4,}$`:                 `must be a decision identifier such as "D-0001"`,
 	`^REQ-[0-9]+$`:                  `must be a requirement identifier such as "REQ-1"`,
 	`^RISK-[0-9]+$`:                 `must be an unacceptable-risk identifier such as "RISK-1"`,
 	`^ACC-[0-9]+$`:                  `must be an accepted-risk identifier such as "ACC-1"`,

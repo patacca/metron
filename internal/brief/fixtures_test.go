@@ -20,6 +20,10 @@ const (
 	digestFixed  = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
 	digestRound5 = "sha256:5555555555555555555555555555555555555555555555555555555555555555"
 
+	// earlierContract is the contract of an earlier pin, which F-0001 was
+	// established under.
+	earlierContract = "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+
 	packetDigest   = "sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"
 	contractDigest = "sha256:abababababababababababababababababababababababababababababababab"
 	outputDigest   = "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
@@ -343,30 +347,72 @@ func history(rounds int) []core.RoundSummary {
 }
 
 func decisions() []core.Decision {
+	made := func(d core.Decision) core.Decision {
+		d.Stage, d.Contract = core.StagePilot, contractDigest
+		return d
+	}
 	return []core.Decision{
-		{Source: core.DecisionResolution, Escalation: "E-0001", By: core.RoleGovernance,
-			Text: "Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives."},
-		{Source: core.DecisionDirective, Packet: "P-0003", By: core.RoleAuditor,
-			Text: "Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests."},
-		{Source: core.DecisionResolution, Escalation: "E-0002", Packet: "P-0003", By: core.RoleAuditor,
-			Text: "The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency."},
-		{Source: core.DecisionResolution, Escalation: "E-0003", Packet: "P-0009", By: core.RoleAuditor,
-			Text: "Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships."},
-		{Source: core.DecisionResolution, Escalation: "E-0004", Packet: "P-0009", By: core.RoleAuditor,
-			Text: "Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key."},
+		made(core.Decision{ID: "D-0001", Source: core.DecisionResolution, Escalation: "E-0001", Kind: core.EscalationContractGap, By: core.RoleGovernance,
+			Candidate: digestRound1,
+			Text:      "Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives."}),
+		made(core.Decision{ID: "D-0003", Source: core.DecisionDirective, Packet: "P-0003", By: core.RoleAuditor, Candidate: digestFirst,
+			Text: "Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests."}),
+		made(core.Decision{ID: "D-0004", Source: core.DecisionResolution, Escalation: "E-0002", Kind: core.EscalationDispute, Packet: "P-0003", By: core.RoleAuditor,
+			Candidate: digestFirst,
+			Text:      "The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency."}),
+		made(core.Decision{ID: "D-0005", Source: core.DecisionResolution, Escalation: "E-0003", Kind: core.EscalationDispute, Packet: "P-0009", By: core.RoleAuditor,
+			Candidate: digestBatch,
+			Text:      "Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships."}),
+		made(core.Decision{ID: "D-0006", Source: core.DecisionResolution, Escalation: "E-0004", Kind: core.EscalationDispute, Packet: "P-0009", By: core.RoleAuditor,
+			Candidate: digestBatch,
+			Text:      "Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key."}),
+	}
+}
+
+// earlierDecisions are decisions that no longer bind, one for each reason: a
+// directive an audit superseded, a directive issued under an earlier
+// contract, and evidence governance supplied for another candidate.
+func earlierDecisions() []core.Decision {
+	return []core.Decision{
+		{ID: "D-0002", Source: core.DecisionDirective, Packet: "P-0003", By: core.RoleAuditor, Stage: core.StagePilot, Contract: contractDigest,
+			Candidate: digestFirst, SupersededBy: "P-0009",
+			Text: "Treat every finding about the replay tool as outside the pilot."},
+		{ID: "D-0007", Source: core.DecisionDirective, Packet: "P-0009", By: core.RoleAuditor, Stage: core.StageControlledValidation, Contract: earlierContract,
+			Candidate: digestBatch,
+			Text:      "Verify retry behaviour against the 10-minute outage of the validation plan."},
+		{ID: "D-0008", Source: core.DecisionResolution, Escalation: "E-0005", Kind: core.EscalationEvidenceGap, By: core.RoleGovernance,
+			Stage: core.StagePilot, Contract: contractDigest, Candidate: digestRound1, Requirements: []string{"REQ-7"},
+			Text: "REQ-7 holds: the one-hour soak test of 14 November stayed within 6% of the five-minute figure."},
 	}
 }
 
 func base(id string, action core.Step, round int, candidate core.Candidate) core.Packet {
 	role, _ := action.PacketRole()
 	c := fullContract()
-	return core.Packet{
+	p := core.Packet{
 		Schema: core.SchemaPacket, ID: id, Protocol: core.ProtocolVersion,
 		Role: role, Action: action, Round: round, IssuedAt: "2026-11-20T14:03:09Z",
 		Candidate: candidate, ReadOnly: role.ReadOnly(),
 		ContractDigest: contractDigest, Contract: c, ApplicableRequirements: applicableIDs(c),
-		ReportSchema: core.SchemaReport, Decisions: decisions(),
+		ReportSchema: core.SchemaReport, Decisions: decisions(), EarlierDecisions: earlierDecisions(),
 	}
+	// A review packet names no round and carries no earlier rounds.
+	if action == core.StepReview {
+		p.Round = 0
+	}
+	return p
+}
+
+// established fills in the contract the findings were established under:
+// the pinned one, except F-0001, which predates it.
+func established(p core.Packet) core.Packet {
+	for i := range p.Findings {
+		p.Findings[i].Contract = contractDigest
+		if p.Findings[i].ID == "F-0001" && p.Contract.Project.Name == "Courier" {
+			p.Findings[i].Contract = earlierContract
+		}
+	}
+	return p
 }
 
 func fixF4() *core.Fix {
@@ -394,7 +440,6 @@ func fullReview() core.Packet {
 		f4(core.StatusResolved, fixF4(), len(f4History)), f5(core.StatusResolved, fixF5(), len(f5History)),
 		f6Preference(), f7Withdrawn(),
 	}
-	p.History = history(2)
 	p.Verified = &core.Candidate{Commit: commitFixed, Digest: digestFixed}
 	return p
 }
@@ -514,12 +559,12 @@ func minimal(action core.Step) core.Packet {
 	role, _ := action.PacketRole()
 	p := core.Packet{
 		Schema: core.SchemaPacket, ID: "P-0001", Protocol: core.ProtocolVersion,
-		Role: role, Action: action, Round: 1, IssuedAt: "2026-11-20T09:00:00Z",
+		Role: role, Action: action, Round: map[bool]int{true: 0, false: 1}[action == core.StepReview], IssuedAt: "2026-11-20T09:00:00Z",
 		Candidate: core.Candidate{Commit: commitRound1, Digest: digestRound1}, ReadOnly: role.ReadOnly(),
 		ContractDigest: contractDigest, Contract: minimalContract(), ApplicableRequirements: []string{"REQ-1"},
 		ReportSchema: core.SchemaReport,
 	}
-	finding := core.Finding{ID: "F-0001", Status: core.StatusOpen, Tier: core.TierCritical, Round: 1, Source: core.RoleReviewer,
+	finding := core.Finding{ID: "F-0001", Status: core.StatusOpen, Tier: core.TierCritical, Round: 1, Source: core.RoleReviewer, Contract: contractDigest,
 		Input: core.FindingInput{Key: "k", Tier: core.TierCritical, Domain: core.DomainFunctionalCorrectness, Title: "Crashes on start",
 			Components: []string{"main.go"}, Description: "d", Evidence: "e", Impact: "i"}}
 	switch action {
@@ -545,11 +590,11 @@ var actions = []core.Step{core.StepReview, core.StepFix, core.StepVerify, core.S
 func full(action core.Step) core.Packet {
 	switch action {
 	case core.StepReview:
-		return fullReview()
+		return established(fullReview())
 	case core.StepFix:
-		return fullFix()
+		return established(fullFix())
 	case core.StepVerify:
-		return fullVerify()
+		return established(fullVerify())
 	}
-	return fullAudit()
+	return established(fullAudit())
 }

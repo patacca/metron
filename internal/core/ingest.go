@@ -260,7 +260,7 @@ func (in *ingestion) open(source Role, fi FindingInput) string {
 // other event of the report.
 func (in *ingestion) raise(kind EscalationKind, reason string, findings, components, requirements []string) {
 	in.raised = append(in.raised, EscalationRaised{Kind: kind, Owner: kind.Owner(), Round: in.pk.Round, Packet: in.pk.Packet,
-		Reason: reason, Findings: findings, Components: components, Requirements: requirements})
+		Candidate: in.f.Candidate.Digest, Reason: reason, Findings: findings, Components: components, Requirements: requirements})
 }
 
 // compareIDs orders ledger identifiers that share a prefix by sequence

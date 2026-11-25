@@ -16,7 +16,10 @@ func TestPacketFormats(t *testing.T) {
 	digest := "sha256:"
 	contains(t, "packet note", first.err, "issued packet P-0001, digest "+digest)
 	digest = first.err[strings.Index(first.err, digest) : strings.Index(first.err, digest)+71]
-	contains(t, "packet note", first.err, "issued packet P-0001, digest "+digest+": review for the reviewer, round 1")
+	contains(t, "packet note", first.err, "issued packet P-0001, digest "+digest+": review for the reviewer\n")
+	if strings.Contains(first.err, "round") {
+		t.Fatalf("the note of a review packet names a round: %s", first.err)
+	}
 	again := r.must("packet")
 	contains(t, "packet note", again.err, "packet P-0001, digest "+digest+", is open and still valid; returning it again")
 	// The digest a report must name reaches every consumer of the packet.
@@ -75,7 +78,7 @@ func TestPacketFileDamaged(t *testing.T) {
 			}
 		}, "its stored file packets/P-0001.json is missing"},
 		{"altered", func(r *repo, path string) {
-			r.write(path, strings.Replace(string(r.read(path)), `"round":1`, `"round":7`, 1))
+			r.write(path, strings.Replace(string(r.read(path)), `"read_only":true`, `"read_only":false`, 1))
 		}, "its stored file packets/P-0001.json does not match the digest recorded when it was issued"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -102,8 +105,9 @@ func TestPacketFileDamaged(t *testing.T) {
 			contains(t, "ingest error", res.err, "the stored file of packet P-0001 is unusable", "run metron packet again")
 
 			p, _ := r.packet()
-			if p.ID != "P-0002" || p.Round != 2 {
-				t.Fatalf("reissued packet %s round %d", p.ID, p.Round)
+			unmarshal(t, r.must("status", "--json").out, &st)
+			if p.ID != "P-0002" || len(st.Rounds) != 2 {
+				t.Fatalf("reissued packet %s, %d rounds", p.ID, len(st.Rounds))
 			}
 			contains(t, "log", r.must("log").out, "packet.voided          P-0001: "+tc.want)
 			r.must("fsck")

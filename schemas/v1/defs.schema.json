@@ -44,6 +44,10 @@
       "type": "string",
       "pattern": "^E-[0-9]{4,}$"
     },
+    "decisionId": {
+      "type": "string",
+      "pattern": "^D-[0-9]{4,}$"
+    },
     "requirementId": {
       "type": "string",
       "pattern": "^REQ-[0-9]+$"
@@ -429,6 +433,9 @@
         "round": {
           "$ref": "#/$defs/count"
         },
+        "contract": {
+          "$ref": "#/$defs/sha256"
+        },
         "source": {
           "$ref": "#/$defs/role"
         },
@@ -459,6 +466,7 @@
         "status",
         "tier",
         "round",
+        "contract",
         "source",
         "recurrences",
         "root_cause_required",
@@ -484,6 +492,9 @@
         },
         "reason": {
           "$ref": "#/$defs/text"
+        },
+        "candidate": {
+          "$ref": "#/$defs/sha256"
         },
         "findings": {
           "$ref": "#/$defs/findingIdList"
@@ -535,7 +546,8 @@
         "finding.reclassified",
         "escalation.raised",
         "escalation.resolved",
-        "directive.issued"
+        "directive.issued",
+        "decision.superseded"
       ]
     },
     "findingEvent": {

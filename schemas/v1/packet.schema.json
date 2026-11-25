@@ -90,6 +90,12 @@
         "$ref": "#/$defs/decision"
       }
     },
+    "earlier_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
     "report_schema": {
       "$ref": "defs.schema.json#/$defs/text"
     },
@@ -103,7 +109,6 @@
     "protocol",
     "role",
     "action",
-    "round",
     "issued_at",
     "candidate",
     "read_only",
@@ -140,6 +145,9 @@
     "decision": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/decisionId"
+        },
         "source": {
           "type": "string",
           "enum": [
@@ -150,6 +158,9 @@
         "escalation": {
           "$ref": "defs.schema.json#/$defs/escalationId"
         },
+        "kind": {
+          "$ref": "defs.schema.json#/$defs/escalationKind"
+        },
         "packet": {
           "$ref": "defs.schema.json#/$defs/packetId"
         },
@@ -158,12 +169,33 @@
         },
         "text": {
           "$ref": "defs.schema.json#/$defs/text"
+        },
+        "stage": {
+          "$ref": "defs.schema.json#/$defs/stage"
+        },
+        "contract": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "candidate": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.schema.json#/$defs/requirementId"
+          }
+        },
+        "superseded_by": {
+          "$ref": "defs.schema.json#/$defs/packetId"
         }
       },
       "required": [
+        "id",
         "source",
         "by",
-        "text"
+        "text",
+        "stage",
+        "contract"
       ],
       "additionalProperties": false
     }

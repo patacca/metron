@@ -398,6 +398,25 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "decision.superseded"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/decisionSuperseded"
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -658,6 +677,12 @@
         },
         "fix": {
           "$ref": "defs.schema.json#/$defs/fix"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "$ref": "defs.schema.json#/$defs/text"
+          }
         }
       },
       "required": [
@@ -665,7 +690,8 @@
         "round",
         "packet",
         "candidate",
-        "fix"
+        "fix",
+        "paths"
       ],
       "additionalProperties": false
     },
@@ -843,6 +869,9 @@
         "packet": {
           "$ref": "defs.schema.json#/$defs/packetId"
         },
+        "candidate": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
         "reason": {
           "$ref": "defs.schema.json#/$defs/text"
         },
@@ -908,6 +937,26 @@
       "required": [
         "packet",
         "text"
+      ],
+      "additionalProperties": false
+    },
+    "decisionSuperseded": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "$ref": "defs.schema.json#/$defs/decisionId"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "rationale": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "decision",
+        "packet",
+        "rationale"
       ],
       "additionalProperties": false
     },

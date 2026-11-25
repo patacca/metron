@@ -37,8 +37,8 @@ type State struct {
 	// steps counts the packets issued in the current campaign: since the
 	// ledger began, the last approval or the last resumption by governance.
 	steps int
-	// churn tracks, for the current campaign, the rounds in which each
-	// component was named in a fix.
+	// churn tracks, for the current campaign, the rounds in which a fix
+	// changed each path.
 	churn []churn
 	// claimedOn is the digest of the candidate on which the claims that
 	// await verification stand: the one the latest fix was claimed on.
@@ -89,10 +89,12 @@ type actor struct {
 	role Role
 }
 
+// churn tracks one path: the rounds in which a fix changed it, and whether a
+// component-churn escalation was raised for it.
 type churn struct {
-	component string
-	rounds    []int
-	raised    bool
+	path   string
+	rounds []int
+	raised bool
 }
 
 // Replay folds events, in order, into a new State. Like Apply it ignores
@@ -186,6 +188,8 @@ func (s *State) apply(e Event) error {
 		return s.onEscalationResolved(e.Data)
 	case EventDirectiveIssued:
 		return s.onDirective(e.Data)
+	case EventDecisionSuperseded:
+		return s.onSuperseded(e.Data)
 	}
 	return fmt.Errorf("unknown event type %q", e.Type)
 }

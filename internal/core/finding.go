@@ -70,6 +70,9 @@ type Finding struct {
 	// Round is the round in which the finding was opened. Round numbers run
 	// from 1 across the whole ledger.
 	Round int `json:"round"`
+	// Contract is the digest of the contract the finding was established
+	// under. A requirement or a risk it cites is one of that contract.
+	Contract string `json:"contract"`
 	// Source is the role that reported it.
 	Source Role `json:"source"`
 	// Recurrences counts rejected fixes and reopenings.
@@ -166,6 +169,9 @@ type Escalation struct {
 	// whole ledger.
 	Round  int    `json:"round"`
 	Reason string `json:"reason"`
+	// Candidate is the digest of the candidate the escalation was raised on,
+	// when it was raised on one.
+	Candidate string `json:"candidate,omitempty"`
 	// Findings, Components and Requirements are the subjects, when the kind
 	// has any.
 	Findings     []string `json:"findings,omitempty"`

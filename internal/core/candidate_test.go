@@ -306,7 +306,7 @@ func TestRegressionSpiralCountsOnlyBlockingConfirmations(t *testing.T) {
 	commit := h.commit(true)
 	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", commit)}})
 	h.seal([]Draft{{Type: EventFindingFixClaimed, Data: FindingFixClaimed{
-		ID: "F-0002", Round: 1, Packet: fp.ID, Candidate: h.candidate().Digest, Fix: fix("F-0002", commit)}}})
+		ID: "F-0002", Round: 1, Packet: fp.ID, Candidate: h.candidate().Digest, Fix: fix("F-0002", commit), Paths: []string{"src/v1.go"}}}})
 	if h.next().Step == StepRunChecks {
 		h.checks(true)
 	}

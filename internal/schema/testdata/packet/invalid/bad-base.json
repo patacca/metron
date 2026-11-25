@@ -120,6 +120,7 @@
       "status": "claimed",
       "tier": "T1",
       "round": 1,
+      "contract": "sha256:abababababababababababababababababababababababababababababababab",
       "source": "reviewer",
       "recurrences": 0,
       "root_cause_required": false,
@@ -174,15 +175,21 @@
   ],
   "decisions": [
     {
+      "id": "D-0001",
       "source": "directive",
       "escalation": "E-0001",
       "by": "auditor",
-      "text": "Every fix to internal/ledger includes a race test."
+      "text": "Every fix to internal/ledger includes a race test.",
+      "stage": "pilot",
+      "contract": "sha256:abababababababababababababababababababababababababababababababab"
     },
     {
+      "id": "D-0002",
       "source": "resolution",
       "by": "governance",
-      "text": "ACC-1 stands for the pilot."
+      "text": "ACC-1 stands for the pilot.",
+      "stage": "pilot",
+      "contract": "sha256:abababababababababababababababababababababababababababababababab"
     }
   ],
   "base": {

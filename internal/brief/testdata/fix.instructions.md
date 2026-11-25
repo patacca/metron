@@ -20,8 +20,9 @@ acceptance contract, and an auditor adjudicates disputes.
 
 Everything this brief refers to is in the packet: the contract, the findings
 you work on with their evidence and history (`findings`), the latest check
-results (`evidence`), the rounds of this stage (`history`) and the binding
-decisions (`decisions`). If you received this brief as a prompt, the same
+results (`evidence`), the rounds of this stage (`history`), the decisions
+that bind you (`decisions`) and the ones that no longer do
+(`earlier_decisions`). If you received this brief as a prompt, the same
 information follows it, laid out for reading.
 
 ## What you are asked to do

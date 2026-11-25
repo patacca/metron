@@ -191,7 +191,7 @@ func TestPacketProblem(t *testing.T) {
 		t.Fatalf("next with an unusable packet is %s", a.Step)
 	}
 	plan, err := PlanPacket(h.state, f)
-	if err != nil || plan.Open != "" || plan.Packet.ID != "P-0002" || plan.Packet.Round != 2 {
+	if err != nil || plan.Open != "" || plan.Packet.ID != "P-0002" || plan.Packet.Round != 0 || len(plan.Packet.History) != 0 {
 		t.Fatalf("plan %+v, %v", plan, err)
 	}
 	r := h.report(lost, "rev-1", green(h.contract))

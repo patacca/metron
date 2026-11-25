@@ -41,6 +41,7 @@ var eventPayloads = map[core.EventType]reflect.Type{
 	core.EventEscalationRaised:    reflect.TypeOf(core.EscalationRaised{}),
 	core.EventEscalationResolved:  reflect.TypeOf(core.EscalationResolved{}),
 	core.EventDirectiveIssued:     reflect.TypeOf(core.DirectiveIssued{}),
+	core.EventDecisionSuperseded:  reflect.TypeOf(core.DecisionSuperseded{}),
 }
 
 type node = map[string]any

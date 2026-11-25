@@ -154,7 +154,9 @@ func TestPinVoidsOpenPacket(t *testing.T) {
 	r.ingest(exitNegative, review(t, sk, "rev-1", nil))
 	r.expectNext(core.StepReview)
 	q, _ := r.packet()
-	if q.ID != "P-0002" || q.Round != p.Round+1 || q.Contract.Authorizes != "A demonstration to the team" {
-		t.Fatalf("packet after the pin: %s round %d authorizes %q", q.ID, q.Round, q.Contract.Authorizes)
+	var st statusDoc
+	unmarshal(t, r.must("status", "--json").out, &st)
+	if q.ID != "P-0002" || p.Round != 0 || q.Round != 0 || len(st.Rounds) != 2 || q.Contract.Authorizes != "A demonstration to the team" {
+		t.Fatalf("packet after the pin: %s, %d rounds, authorizes %q", q.ID, len(st.Rounds), q.Contract.Authorizes)
 	}
 }

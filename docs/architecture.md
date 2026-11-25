@@ -16,7 +16,7 @@ one of them has a bug. Trust assumptions are in [trust-model.md](trust-model.md)
 | Liveness | Every state names one action that someone can perform, and a campaign never runs unattended without bound: within the limits the contract sets, the gate opens or the next action belongs to governance. Possible improvements never block. Whether a campaign reaches GREEN depends on engineering judgments, which Metron does not make (section 10). |
 | Proportionality | A finding blocks only if it is tied to a contract requirement or an unacceptable risk. Over-engineering is itself reviewable. |
 | Empiricism | Decisions cite evidence. What cannot be decided without real-world data is a calibration, not a blocker. |
-| Independence | Iteration counts, effort and deadlines change the investigation procedure, never the approval threshold. |
+| Independence | Iteration counts, effort and deadlines change the investigation procedure, never the approval threshold. A reviewer is not told how many reviews came before, how they ended or who held them. |
 
 The objective of a review is to establish that a candidate is sufficiently
 correct, reliable, efficient, maintainable and safe for its authorized purpose.
@@ -367,6 +367,7 @@ report, so the loss of a file never closes the gate for good.
 | `finding.withdrawn` / `finding.reclassified` | An auditor adjudication |
 | `escalation.raised` / `escalation.resolved` | A convergence safeguard fired or was discharged; resolving a `suspension` resumes the campaign |
 | `directive.issued` | Binding guidance from an audit, carried into later packets |
+| `decision.superseded` | An audit withdrew an earlier directive or audit conclusion |
 
 **Finding state machine**
 
@@ -404,14 +405,20 @@ does not contain it.
 Reopening requires one of five reasons: `new-evidence`, `regression`,
 `invalid-verification`, `requirement-changed`, `contract-conflict`.
 
+A finding also records the digest of the contract it was established under.
+It cites a requirement or a risk by identifier, and after a pin the same
+identifier may say something else, so a packet shows whether a finding
+predates the pinned contract.
+
 **Identifiers.** Findings are `F-0001`, packets `P-0001`, escalations
-`E-0001`: a prefix and a sequence number zero-padded to at least four digits,
-assigned in order of creation and never reused.
+`E-0001`, decisions `D-0001`: a prefix and a sequence number zero-padded to at
+least four digits, assigned in order of creation and never reused.
 
 **Event order.** Accepting a report yields, in this order: `report.accepted`;
 the finding events in the order the report lists them, reopenings before
 findings marked addressed and those before new findings; `verdict.recorded`;
-`directive.issued` in report order; `escalation.resolved` in identifier order; `escalation.raised`, ordered by
+`directive.issued` in report order; `decision.superseded` in report order;
+`escalation.resolved` in identifier order; `escalation.raised`, ordered by
 kind as listed in section 10 and then by subject.
 
 Two other commands can raise an escalation. Recording check results yields
@@ -532,10 +539,19 @@ What a packet carries depends on the action:
 | `audit` | auditor | The candidate, read-only | Every open auditor-owned escalation; the findings of `dispute` and `contradiction` escalations are adjudicable | Every finding in the ledger |
 
 Every packet also carries the contract, the latest check result per applicable
-requirement for its candidate, the earlier rounds of the stage, and every
-directive and escalation resolution recorded so far. Each finding carries its
-history: every event recorded for it, with the evidence or rationale given at
-the time.
+requirement for its candidate, and the decisions recorded so far, sorted into
+those that bind and those that no longer do (section 10). Each finding carries
+its history: every event recorded for it, with the candidate it was made on
+and the evidence or rationale given at the time.
+
+A fix, verify or audit packet names the round it follows and lists the earlier
+rounds of the stage with their verdicts. **A review packet does not**: no round
+number, no earlier verdict, no reviewer identity, in the packet or in its
+brief. They have no use in a reviewer's report, and the Independence principle
+says they must not move the threshold. What a reviewer does get is everything
+technical: every finding with its full history, the binding and the earlier
+decisions, the check results, and the candidate the fixes were verified on.
+Nothing that limits what a review can conclude is withheld.
 
 A report is a versioned envelope around a role-specific body:
 
@@ -657,6 +673,9 @@ the digest of its canonical JSON form.
   finding that stands on the contract. A finding never blocks on an auditor's
   word alone.
 - May issue directives. May recommend, but not make, contract changes.
+- May supersede an earlier audit decision, a directive or an audit's
+  conclusion, by naming it in `supersede` with a rationale. A governance
+  decision is not an auditor's to supersede.
 - May ask, in `suspend`, for the campaign to be suspended until governance
   decides, with the reason.
 
@@ -670,7 +689,7 @@ any open escalation keeps the gate closed and takes priority in `metron next`.
 | --- | --- | --- | --- |
 | `dispute` | An implementer disputes a finding | auditor | Adjudication |
 | `contradiction` | A finding declares that it reverses an earlier resolution | auditor | Adjudication |
-| `component-churn` | The same component is fixed in 3 distinct rounds of a campaign; raised once per component per campaign | auditor | Component-level audit |
+| `component-churn` | Fixes change the same path in 3 distinct rounds of a campaign; raised once per path per campaign, one escalation for all the paths a report brings to the threshold | auditor | Component-level audit |
 | `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes of blocking findings it confirms | auditor | Redesign assessment |
 | `non-convergence` | The failure streak reaches 3; raised once per streak | auditor | Convergence analysis |
 | `process-audit` | The failure streak reaches a multiple of 5 | auditor | Independent process audit. Discharging it raises a `suspension` |
@@ -684,8 +703,32 @@ a root-cause analysis.
 
 The thresholds 2, 3, 5 and 20 are defaults and the only tunable values:
 `root_cause_after`, `convergence_audit_after`, `process_audit_after` and
-`suspend_after`. Escalation resolutions and audit directives are carried into
-every later packet.
+`suspend_after`.
+
+Component churn is counted on facts: the paths that the commits listed under a
+fix change outside `.metron/`, which Metron reads from the repository when the
+fix is claimed. The component names a report gives are descriptions for
+people; two reports rarely spell them alike, so nothing is counted on them.
+
+**Decisions.** An audit directive and the resolution of an escalation, by an
+auditor or by governance, are decisions. Each records where it was made: the
+stage and contract digest pinned at the time, the candidate (the one the
+auditor examined or, for a governance resolution, the one the escalation was
+raised on), and the requirements the escalation named. That decides where it
+applies. A decision **binds** a packet's role when all of these hold:
+
+- no audit has superseded it;
+- the contract it was made under is the pinned one. A decision answers a
+  question the contract poses, so any change of contract ends it, whether or
+  not the stage changed. Pinning that contract again makes it bind again, as
+  it makes the verdicts issued under it count again;
+- for the resolution of an `evidence-gap`, which is evidence governance
+  supplies: the packet's candidate is the one the gap was raised on. Evidence
+  establishes something about one candidate and is not carried to another.
+
+Every other decision is listed in the packet as an **earlier decision**, with
+the reason it no longer binds: context for what was decided and why, not a
+rule. A decision that should outlive a contract change is issued again.
 
 **Campaigns.** A campaign is the work towards one approval. It begins with the
 ledger, with the first round opened after an approval, or when governance
@@ -762,9 +805,16 @@ G = C ∧ B ∧ E ∧ I ∧ V
 | --- | --- | --- |
 | C | Acceptance criteria satisfied | Every applicable requirement is `satisfied` in the reviewer report of the latest round |
 | B | No blockers | No unresolved T0 or T1 finding, no T0 or T1 finding carried by this candidate (section 7), and no open escalation |
-| E | Evidence sufficient | Every applicable requirement with a `command` has a passing result recorded for this candidate and this command text |
+| E | Automated evidence sufficient | Every applicable requirement with a `command` has a passing result recorded for this candidate and this command text |
 | I | Integrity | The current candidate digest equals the reviewed one; the tree is clean; the contract digest equals the pinned one; the ledger verifies and was written under this protocol version; the report carrying the verdict is stored intact |
 | V | Independent verdict | The latest round's verdict is `GREEN`, issued for this candidate under this contract digest, by an author who never acted as implementer |
+
+Condition E is about automated evidence only. A requirement without a
+`command` adds nothing to it, and a contract with no command at all satisfies
+it trivially; such requirements are established by the reviewer's assessment
+under condition C, with the evidence the report cites. Evidence governance
+supplies after an INDETERMINATE verdict is a decision bound to its candidate
+(section 10) and reaches the gate only through a later review.
 
 `metron gate` exits 0 only when all five hold. Anything else, including an
 internal error, an unreadable file or a missing tool, exits non-zero. No

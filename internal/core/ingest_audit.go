@@ -66,6 +66,24 @@ func (in *ingestion) checkAuditor(b AuditorBody) {
 			in.sem.add("/body/adjudications", "finding %s has no decision: uphold, withdraw or reclassify every adjudicable finding", id)
 		}
 	}
+	superseded := make(map[string]string)
+	for i, sp := range b.Supersede {
+		p := ptr("body", "supersede", i)
+		j := slices.IndexFunc(in.s.decisions, func(d Decision) bool { return d.ID == sp.Decision })
+		switch prev, dup := superseded[sp.Decision]; {
+		case j < 0:
+			in.sem.add(p+"/decision", "decision %q does not exist: name a decision of this packet by its D- identifier", sp.Decision)
+		case dup:
+			in.sem.add(p+"/decision", "decision %s is already superseded at %s: supersede it once", sp.Decision, prev)
+		case in.s.decisions[j].By != RoleAuditor:
+			in.sem.add(p+"/decision", "decision %s was made by %s: an audit supersedes only directives and audit conclusions; recommend to governance what it should decide instead", sp.Decision, in.s.decisions[j].By)
+		default:
+			superseded[sp.Decision] = p
+		}
+		if blank(sp.Rationale) {
+			in.sem.add(p+"/rationale", "the rationale is blank: say why the decision no longer holds")
+		}
+	}
 	if b.Suspend != "" && blank(b.Suspend) {
 		in.sem.add("/body/suspend", "suspend is blank: say why governance must decide before the campaign continues, or remove the member")
 	}
@@ -94,6 +112,11 @@ func (in *ingestion) auditorTransition(b AuditorBody) {
 			in.tr.add("/packet", "escalation %s is no longer open: request a new packet", id)
 		}
 	}
+	for i, sp := range b.Supersede {
+		if j := slices.IndexFunc(in.s.decisions, func(d Decision) bool { return d.ID == sp.Decision }); j >= 0 && in.s.decisions[j].SupersededBy != "" {
+			in.tr.add(ptr("body", "supersede", i, "decision"), "decision %s was already superseded in packet %s", sp.Decision, in.s.decisions[j].SupersededBy)
+		}
+	}
 	for i, a := range b.Adjudications {
 		x := in.find(a.Finding)
 		switch {
@@ -119,6 +142,9 @@ func (in *ingestion) auditorEvents(b AuditorBody) {
 	}
 	for _, t := range b.Directives {
 		in.add(EventDirectiveIssued, DirectiveIssued{Packet: pk.Packet, Text: t})
+	}
+	for _, sp := range b.Supersede {
+		in.add(EventDecisionSuperseded, DecisionSuperseded{Decision: sp.Decision, Packet: pk.Packet, Rationale: sp.Rationale})
 	}
 	ids := slices.Clone(pk.Escalations)
 	slices.SortFunc(ids, compareIDs)

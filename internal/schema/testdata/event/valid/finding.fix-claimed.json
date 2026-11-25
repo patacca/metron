@@ -20,7 +20,11 @@
       ],
       "root_cause": "The balance cache was introduced without a lock discipline.",
       "tests": "Added TestConcurrentPost."
-    }
+    },
+    "paths": [
+      "internal/delivery/retry.go",
+      "internal/delivery/retry_test.go"
+    ]
   },
   "hash": "14c795baef1229956e39c6d81c0c511bb3800a180133f0ef5ca866f102a1d12e"
 }

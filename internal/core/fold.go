@@ -380,11 +380,14 @@ func (s *State) onEscalationRaised(data []byte) error {
 		s.convergenceRaised = true
 	case EscalationComponentChurn:
 		if len(p.Components) == 0 {
-			return errors.New("a component-churn escalation names no component")
+			return errors.New("a component-churn escalation names no path")
 		}
 		for _, c := range p.Components {
 			s.churnEntry(c).raised = true
 		}
+	}
+	if p.Candidate != "" && !ValidDigest(p.Candidate) {
+		return fmt.Errorf("candidate digest %q is malformed", p.Candidate)
 	}
 	if adjudicable(p.Kind) {
 		for _, id := range p.Findings {
@@ -392,7 +395,7 @@ func (s *State) onEscalationRaised(data []byte) error {
 		}
 	}
 	s.escalations = append(s.escalations, Escalation{
-		ID: p.ID, Kind: p.Kind, Owner: p.Owner, Round: p.Round, Reason: p.Reason,
+		ID: p.ID, Kind: p.Kind, Owner: p.Owner, Round: p.Round, Reason: p.Reason, Candidate: p.Candidate,
 		Findings: p.Findings, Components: p.Components, Requirements: p.Requirements, Open: true,
 	})
 	return nil
@@ -486,7 +489,14 @@ func (s *State) onEscalationResolved(data []byte) error {
 			s.record(&s.findings[s.findingIndex(id)], EventEscalationResolved, p.Packet, s.examined(p.Packet), p.Resolution)
 		}
 	}
-	s.decisions = append(s.decisions, Decision{Source: DecisionResolution, Escalation: p.ID, Packet: p.Packet, By: p.By, Text: p.Resolution})
+	// An auditor decides on the candidate it examined; governance decides
+	// about the candidate the escalation was raised on.
+	candidate := e.Candidate
+	if p.By == RoleAuditor {
+		candidate = s.examined(p.Packet)
+	}
+	s.decide(Decision{Source: DecisionResolution, Escalation: p.ID, Kind: e.Kind, Packet: p.Packet, By: p.By, Text: p.Resolution,
+		Candidate: candidate, Requirements: e.Requirements})
 	return nil
 }
 
@@ -501,6 +511,37 @@ func (s *State) onDirective(data []byte) error {
 	if blank(p.Text) {
 		return errors.New("the directive is blank")
 	}
-	s.decisions = append(s.decisions, Decision{Source: DecisionDirective, Packet: p.Packet, By: RoleAuditor, Text: p.Text})
+	s.decide(Decision{Source: DecisionDirective, Packet: p.Packet, By: RoleAuditor, Text: p.Text, Candidate: s.examined(p.Packet)})
+	return nil
+}
+
+// decide records a decision with its identifier and the stage and contract
+// pinned now, under which it binds.
+func (s *State) decide(d Decision) {
+	pin, _ := s.pin()
+	d.ID, d.Stage, d.Contract = seqID("D", len(s.decisions)+1), pin.Stage, pin.Digest
+	s.decisions = append(s.decisions, d)
+}
+
+func (s *State) onSuperseded(data []byte) error {
+	p, err := payload[DecisionSuperseded](data)
+	if err != nil {
+		return err
+	}
+	if err := s.answered(p.Packet, StepAudit); err != nil {
+		return err
+	}
+	i := slices.IndexFunc(s.decisions, func(d Decision) bool { return d.ID == p.Decision })
+	switch {
+	case i < 0:
+		return fmt.Errorf("decision %q does not exist", p.Decision)
+	case s.decisions[i].By != RoleAuditor:
+		return fmt.Errorf("decision %s was made by %s: an audit supersedes only audit decisions", p.Decision, s.decisions[i].By)
+	case s.decisions[i].SupersededBy != "":
+		return fmt.Errorf("decision %s is already superseded", p.Decision)
+	case blank(p.Rationale):
+		return errors.New("the supersession has no rationale")
+	}
+	s.decisions[i].SupersededBy = p.Packet
 	return nil
 }

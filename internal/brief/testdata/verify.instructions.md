@@ -34,8 +34,9 @@ theirs.
 
 Everything this brief refers to is in the packet: the contract, the claimed
 fixes with their findings and each finding's history (`findings`), the latest
-check results (`evidence`), the rounds of this stage (`history`) and the
-binding decisions (`decisions`). If you received this brief as a prompt, the
+check results (`evidence`), the rounds of this stage (`history`), the
+decisions that bind you (`decisions`) and the ones that no longer do
+(`earlier_decisions`). If you received this brief as a prompt, the
 same information follows it, laid out for reading.
 
 ## What you are deciding

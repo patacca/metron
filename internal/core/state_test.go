@@ -132,9 +132,12 @@ func TestFindingHistory(t *testing.T) {
 	if f, _ := lookup(h.state, "F-0001"); !reflect.DeepEqual(f.History, want) {
 		t.Fatalf("history\n got %+v\nwant %+v", f.History, want)
 	}
+	pin, _ := h.state.Pin()
 	wantDecisions := []Decision{
-		{Source: DecisionDirective, Packet: "P-0003", By: RoleAuditor, Text: "test empty input"},
-		{Source: DecisionResolution, Escalation: "E-0001", Packet: "P-0003", By: RoleAuditor, Text: "it is critical"},
+		{ID: "D-0001", Source: DecisionDirective, Packet: "P-0003", By: RoleAuditor, Text: "test empty input",
+			Stage: StagePrototype, Contract: pin.Digest, Candidate: x},
+		{ID: "D-0002", Source: DecisionResolution, Escalation: "E-0001", Kind: EscalationDispute, Packet: "P-0003", By: RoleAuditor, Text: "it is critical",
+			Stage: StagePrototype, Contract: pin.Digest, Candidate: x},
 	}
 	if d := h.state.decisions; !reflect.DeepEqual(d, wantDecisions) {
 		t.Fatalf("decisions %+v", d)

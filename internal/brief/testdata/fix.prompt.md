@@ -20,8 +20,9 @@ acceptance contract, and an auditor adjudicates disputes.
 
 Everything this brief refers to is in the packet: the contract, the findings
 you work on with their evidence and history (`findings`), the latest check
-results (`evidence`), the rounds of this stage (`history`) and the binding
-decisions (`decisions`). If you received this brief as a prompt, the same
+results (`evidence`), the rounds of this stage (`history`), the decisions
+that bind you (`decisions`) and the ones that no longer do
+(`earlier_decisions`). If you received this brief as a prompt, the same
 information follows it, laid out for reading.
 
 ## What you are asked to do
@@ -375,6 +376,7 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 
 - Tier `T1`, in `data-integrity`
 - Status `open`; opened in round 1 by the reviewer; recurrences: 3
+- Established under the pinned contract
 - Root-cause analysis required for its next fix
 - Components: `internal/store/append.go` and `internal/delivery/accept.go`
 - Requirement: `REQ-4`
@@ -409,6 +411,7 @@ History, oldest first:
 
 - Tier `T1`, in `architecture`
 - Status `open`; opened in round 2 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/store/event.go`
 - Requirement: `REQ-3`
@@ -444,14 +447,26 @@ History, oldest first:
 
 ## Binding decisions
 
-Audit directives and escalation resolutions recorded so far, oldest first.
-They bind every role.
+Audit directives and escalation resolutions that apply to this contract and
+this candidate, oldest first. They bind every role.
 
-- A `resolution` of `E-0001` by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
-- A `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
-- A `resolution` of `E-0002` by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
-- A `resolution` of `E-0003` by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
-- A `resolution` of `E-0004` by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
+- `D-0001`: a `resolution` of `E-0001` (`contract-gap`) by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
+- `D-0003`: a `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
+- `D-0004`: a `resolution` of `E-0002` (`dispute`) by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- `D-0005`: a `resolution` of `E-0003` (`dispute`) by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- `D-0006`: a `resolution` of `E-0004` (`dispute`) by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
+
+## Earlier decisions
+
+These no longer bind. They are here so that you know what was decided before
+and why; weigh them as evidence, not as rules.
+
+- `D-0002`: a `directive` by `auditor`, in packet `P-0003`: Treat every finding about the replay tool as outside the pilot.
+  It no longer binds because an audit superseded it in packet `P-0009`.
+- `D-0007`: a `directive` by `auditor`, in packet `P-0009`: Verify retry behaviour against the 10-minute outage of the validation plan.
+  It no longer binds because it was made under contract `sha256:9999999999999999999999999999999999999999999999999999999999999999`, at stage `controlled-validation`, not under the pinned contract.
+- `D-0008`: a `resolution` of `E-0005` (`evidence-gap`) by `governance`, about `REQ-7`: REQ-7 holds: the one-hour soak test of 14 November stayed within 6% of the five-minute figure.
+  It no longer binds because it supplied evidence about candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`, not about the candidate of this packet.
 
 ---
 

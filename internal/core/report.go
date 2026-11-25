@@ -168,14 +168,24 @@ type AuditorBody struct {
 	Resolutions []EscalationResolution `json:"resolutions"`
 	// Adjudications has exactly one entry per adjudicable finding.
 	Adjudications []Adjudication `json:"adjudications,omitempty"`
-	// Directives are binding guidance carried into every later packet.
+	// Directives are binding guidance carried into later packets while the
+	// contract they were issued under is pinned.
 	Directives []string `json:"directives,omitempty"`
+	// Supersede lists earlier audit decisions that no longer bind.
+	Supersede []Supersession `json:"supersede,omitempty"`
 	// ContractRecommendations are suggestions for governance. They change
 	// nothing by themselves.
 	ContractRecommendations []string `json:"contract_recommendations,omitempty"`
 	// Suspend asks for the campaign to be suspended until governance decides,
 	// and says why. It keeps the gate closed and stops every role.
 	Suspend string `json:"suspend,omitempty"`
+}
+
+// Supersession withdraws an earlier directive or audit conclusion.
+type Supersession struct {
+	// Decision is the "D-" identifier of the decision.
+	Decision  string `json:"decision"`
+	Rationale string `json:"rationale"`
 }
 
 // EscalationResolution is an auditor's analysis and conclusion for one

@@ -65,7 +65,8 @@ func TestWholeLoop(t *testing.T) {
 	r.expectNext(core.StepReview)
 
 	p, sk := r.packet()
-	if p.ID != "P-0001" || p.Action != core.StepReview || p.Round != 1 || !p.ReadOnly {
+	// A review packet does not say which round it is.
+	if p.ID != "P-0001" || p.Action != core.StepReview || p.Round != 0 || !p.ReadOnly {
 		t.Fatalf("review packet %s %s round %d", p.ID, p.Action, p.Round)
 	}
 	if a := r.expectNext(core.StepSubmitReport); a.Packet != "P-0001" || a.Owner != core.RoleReviewer {
@@ -104,7 +105,7 @@ func TestWholeLoop(t *testing.T) {
 	r.expectNext(core.StepReview)
 
 	p, sk = r.packet()
-	if p.Round != 2 || len(p.History) != 1 || p.History[0].Verdict != core.VerdictRed || p.Verified == nil || *p.Verified != verified {
+	if p.Round != 0 || len(p.History) != 0 || p.Verified == nil || *p.Verified != verified {
 		t.Fatalf("second review packet round %d history %+v verified %+v", p.Round, p.History, p.Verified)
 	}
 	contains(t, "ingest output", r.ingest(exitOK, review(t, sk, "rev-1", nil)).out, "round 2: GREEN by rev-1", "Next step:    none, the gate is open")

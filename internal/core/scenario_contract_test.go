@@ -41,8 +41,8 @@ func TestScenarioRepin(t *testing.T) {
 		t.Fatal("the same contract digest was pinned twice")
 	}
 	rp := h.packet()
-	if rp.Round != 3 {
-		t.Fatalf("round %d", rp.Round)
+	if n := len(h.state.rounds); n != 3 {
+		t.Fatalf("round %d", n)
 	}
 	h.accept(rp, "rev-1", green(h.contract))
 	h.expect(StepNone)
@@ -81,7 +81,7 @@ func TestScenarioStageChange(t *testing.T) {
 	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"))
 	h.checks(true)
 	rp := h.packet()
-	if rp.Round != 3 || !slices.Contains(rp.ApplicableRequirements, "REQ-4") || len(rp.History) != 0 {
+	if len(h.state.rounds) != 3 || !slices.Contains(rp.ApplicableRequirements, "REQ-4") || len(h.state.StageRounds()) != 1 {
 		t.Fatalf("first review of the new stage %+v", rp)
 	}
 	h.accept(rp, "rev-1", green(h.contract))
@@ -114,8 +114,8 @@ func TestScenarioHistoryRoundsAcrossStages(t *testing.T) {
 	b := review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated, "REQ-4": RequirementViolated}, blocker("loss", "REQ-4"))
 	b.Reopen = []Reopen{{Finding: "F-0001", Reason: ReopenRegression, Justification: "it is back"}}
 	rp := h.packet()
-	if rp.Round != 3 {
-		t.Fatalf("the first review of the second stage is round %d, want 3", rp.Round)
+	if n := len(h.state.rounds); n != 3 || rp.Round != 0 {
+		t.Fatalf("the first review of the second stage is round %d, want 3; its packet names round %d", n, rp.Round)
 	}
 	h.accept(rp, "rev-1", b)
 

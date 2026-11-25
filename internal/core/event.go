@@ -25,6 +25,7 @@ const (
 	EventEscalationRaised    EventType = "escalation.raised"
 	EventEscalationResolved  EventType = "escalation.resolved"
 	EventDirectiveIssued     EventType = "directive.issued"
+	EventDecisionSuperseded  EventType = "decision.superseded"
 )
 
 // Event is one line of the ledger. Members are serialized in this order; the
@@ -157,6 +158,10 @@ type FindingFixClaimed struct {
 	// Candidate is the digest of the candidate the fix was claimed on.
 	Candidate string `json:"candidate"`
 	Fix       Fix    `json:"fix"`
+	// Paths lists what the fix's commits change outside .metron/, as paths
+	// from the repository root, sorted and each once. Component churn is
+	// counted on them.
+	Paths []string `json:"paths"`
 }
 
 // FindingFixConfirmed is the payload of EventFindingFixConfirmed.
@@ -230,7 +235,9 @@ type EscalationRaised struct {
 	// Packet is the packet whose report raised it or, for a suspension that
 	// the campaign budget raises, the packet whose issue used the budget up.
 	// It is empty for an escalation raised by a failed check recording.
-	Packet       string   `json:"packet,omitempty"`
+	Packet string `json:"packet,omitempty"`
+	// Candidate is the digest of the candidate the escalation was raised on.
+	Candidate    string   `json:"candidate,omitempty"`
 	Reason       string   `json:"reason"`
 	Findings     []string `json:"findings,omitempty"`
 	Components   []string `json:"components,omitempty"`
@@ -254,4 +261,13 @@ type EscalationResolved struct {
 type DirectiveIssued struct {
 	Packet string `json:"packet"`
 	Text   string `json:"text"`
+}
+
+// DecisionSuperseded is the payload of EventDecisionSuperseded: an audit
+// withdrew an earlier directive or audit conclusion, which no longer binds.
+type DecisionSuperseded struct {
+	// Decision is the "D-" identifier of the superseded decision.
+	Decision  string `json:"decision"`
+	Packet    string `json:"packet"`
+	Rationale string `json:"rationale"`
 }

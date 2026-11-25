@@ -126,7 +126,7 @@ func RecordEvidence(s State, f Facts, results []Evidence) ([]Draft, error) {
 	// GREEN, so that checks which never pass reach someone who can decide.
 	if len(failed) > 0 {
 		what := fmt.Sprintf("the %s of %s on candidate %s", pick(len(failed), "check", "checks"), strings.Join(failed, ", "), f.Candidate.Digest)
-		for i, e := range s.stalls(f.Contract.Thresholds(), len(s.rounds), "", what) {
+		for i, e := range s.stalls(f.Contract.Thresholds(), len(s.rounds), "", f.Candidate.Digest, what) {
 			e.ID = seqID("E", len(s.escalations)+i+1)
 			drafts = append(drafts, Draft{Type: EventEscalationRaised, Data: e})
 		}
@@ -175,9 +175,17 @@ func PlanPacket(s State, f Facts) (PacketPlan, error) {
 		ContractDigest:         pin.Digest,
 		Contract:               c,
 		ApplicableRequirements: requirementIDs(c.Applicable()),
-		History:                s.history(),
-		Decisions:              slices.Clone(s.decisions),
 		ReportSchema:           SchemaReport,
+	}
+	if a.Step != StepReview {
+		p.History = s.history()
+	}
+	for _, d := range s.decisions {
+		if d.Binds(pin.Digest, f.Candidate.Digest) {
+			p.Decisions = append(p.Decisions, d)
+		} else {
+			p.EarlierDecisions = append(p.EarlierDecisions, d)
+		}
 	}
 	for _, r := range c.Applicable() {
 		if e, ok := s.latestEvidence(r, f.Candidate.Digest); ok && r.Command != "" {
@@ -186,7 +194,6 @@ func PlanPacket(s State, f Facts) (PacketPlan, error) {
 	}
 	switch a.Step {
 	case StepReview:
-		p.Round = len(s.rounds) + 1
 		p.Findings = slices.Clone(s.findings)
 		if s.verified != nil {
 			v := *s.verified
@@ -258,10 +265,13 @@ func IssuePacket(s State, f Facts, p Packet, digest string) ([]Draft, error) {
 	if op, ok := s.openPacket(); ok {
 		drafts = append(drafts, Draft{Type: EventPacketVoided, Data: PacketVoided{Packet: op.Packet, Reason: packetInvalid(s, f, op)}})
 	}
+	// A review opens the next round. The packet itself does not say which.
+	round := p.Round
 	if p.Action == StepReview {
 		pin, _ := s.pin()
+		round = len(s.rounds) + 1
 		drafts = append(drafts, Draft{Type: EventRoundOpened, Data: RoundOpened{
-			Round: p.Round, Stage: pin.Stage, Candidate: p.Candidate, Contract: p.ContractDigest, Protocol: ProtocolVersion,
+			Round: round, Stage: pin.Stage, Candidate: p.Candidate, Contract: p.ContractDigest, Protocol: ProtocolVersion,
 		}})
 	}
 	var escalations []string
@@ -269,14 +279,14 @@ func IssuePacket(s State, f Facts, p Packet, digest string) ([]Draft, error) {
 		escalations = append(escalations, e.ID)
 	}
 	drafts = append(drafts, Draft{Type: EventPacketIssued, Data: PacketIssued{
-		Packet: p.ID, Role: p.Role, Action: p.Action, Round: p.Round, Candidate: p.Candidate, Base: p.Base,
+		Packet: p.ID, Role: p.Role, Action: p.Action, Round: round, Candidate: p.Candidate, Base: p.Base,
 		Contract: p.ContractDigest, Protocol: ProtocolVersion, Digest: digest,
 		Subjects: p.Subjects, RootCauseRequired: p.RootCauseRequired,
 		Escalations: escalations, Adjudicable: p.Adjudicable,
 	}})
 	// The packet that uses up the campaign budget is the last one issued
 	// without a decision by governance.
-	if e, ok := s.exhausted(f.Contract.Thresholds(), p); ok {
+	if e, ok := s.exhausted(f.Contract.Thresholds(), p, round); ok {
 		drafts = append(drafts, Draft{Type: EventEscalationRaised, Data: e})
 	}
 	return drafts, nil

@@ -1,0 +1,13 @@
+{
+  "seq": 18,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "6a38d3c81a4b7e859191ce5b95e96bfd1fc561e3cc20c44d6bacf8fd34aa4fc0",
+  "type": "decision.superseded",
+  "more": 0,
+  "data": {
+    "decision": "D-0002",
+    "packet": "P-0006",
+    "rationale": "The reproduction shows that empty input is inside the envelope."
+  },
+  "hash": "907cebbfd6d3f5bb600e98337d91b71cdc932507cdac7ea63dfa90cb1bd74bad"
+}

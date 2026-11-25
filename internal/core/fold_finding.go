@@ -37,8 +37,11 @@ func (s *State) onFindingOpened(data []byte) error {
 	case p.Round < 0:
 		return fmt.Errorf("round %d is negative", p.Round)
 	}
+	// The packet exists: answered checked it. A finding is established
+	// under the contract its packet was issued under.
 	s.findings = append(s.findings, Finding{
 		ID: p.ID, Status: StatusOpen, Tier: p.Input.Tier, Round: p.Round, Source: p.Source, Input: p.Input,
+		Contract: s.packets[s.packetIndex(p.Packet)].Contract,
 	})
 	s.record(&s.findings[len(s.findings)-1], EventFindingOpened, p.Packet, s.examined(p.Packet), "")
 	// A blocking regression makes its verification a failed step.
@@ -82,8 +85,8 @@ func (s *State) onFixClaimed(data []byte) error {
 			s.accounted = append(s.accounted, c)
 		}
 	}
-	for _, c := range fix.Components {
-		s.noteChurn(c, p.Round)
+	for _, path := range p.Paths {
+		s.noteChurn(path, p.Round)
 	}
 	return nil
 }
@@ -282,29 +285,29 @@ func (s *State) findingIn(id string, want FindingStatus) (*Finding, error) {
 	return &s.findings[i], nil
 }
 
-func (s *State) churnEntry(component string) *churn {
+func (s *State) churnEntry(path string) *churn {
 	for i := range s.churn {
-		if s.churn[i].component == component {
+		if s.churn[i].path == path {
 			return &s.churn[i]
 		}
 	}
-	s.churn = append(s.churn, churn{component: component})
+	s.churn = append(s.churn, churn{path: path})
 	return &s.churn[len(s.churn)-1]
 }
 
-func (s *State) noteChurn(component string, round int) {
-	c := s.churnEntry(component)
+func (s *State) noteChurn(path string, round int) {
+	c := s.churnEntry(path)
 	if !slices.Contains(c.rounds, round) {
 		// Clip so that a state sharing this backing array is never touched.
 		c.rounds = append(slices.Clip(c.rounds), round)
 	}
 }
 
-// churnRounds returns the distinct rounds of the current stage in which a
-// component was named in a fix, and whether churn was raised for it.
-func (s State) churnRounds(component string) ([]int, bool) {
+// churnRounds returns the distinct rounds of the current campaign in which
+// a fix changed a path, and whether churn was raised for it.
+func (s State) churnRounds(path string) ([]int, bool) {
 	for _, c := range s.churn {
-		if c.component == component {
+		if c.path == path {
 			return c.rounds, c.raised
 		}
 	}

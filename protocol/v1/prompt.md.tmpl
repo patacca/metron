@@ -16,7 +16,7 @@ information the brief above refers to.
 
 - Packet: `{{.ID}}`, issued {{.IssuedAt}} under protocol `{{.Protocol}}`
 - Packet digest: `{{.Digest}}`
-- Action: `{{.Action}}`, for the `{{.Role}}`, round {{.Round}}
+- Action: `{{.Action}}`, for the `{{.Role}}`{{if .Round}}, round {{.Round}}{{end}}
 - Candidate: commit `{{.Candidate.Commit}}`, digest `{{.Candidate.Digest}}`
 {{- with .Base}}
 - Reviewed commit: `{{.Commit}}`, digest `{{.Digest}}`
@@ -140,6 +140,8 @@ Reassess when: {{.ReassessWhen}}
 {{- end}}
 {{- end}}
 
+{{- if not .IsReview}}
+
 ## Convergence thresholds
 
 - Root-cause analysis: required for a finding's next fix once its rejected fixes and reopenings reach {{.Thresholds.RootCauseAfter}}.
@@ -147,6 +149,7 @@ Reassess when: {{.ReassessWhen}}
 - Independent process audit: each time the failed steps without a GREEN verdict reach a multiple of {{.Thresholds.ProcessAuditAfter}}. Once it is discharged, the campaign is suspended until governance resumes it.
 - Campaign budget: the campaign is suspended once it has issued {{.Thresholds.SuspendAfter}} packets without an approval, whatever the outcome of each step.
 - The count of failed steps restarts with a GREEN verdict or when governance resumes a suspended campaign. A pin does not restart it, whether or not it changes the stage.
+{{- end}}
 {{- with .Escalations}}
 
 ## Escalations to discharge
@@ -199,6 +202,7 @@ Reassess when: {{.ReassessWhen}}
 The ledger holds no findings yet.
 {{- end}}
 {{- end}}
+{{- if not .IsReview}}
 
 ## Rounds of this stage
 {{with .History}}
@@ -210,17 +214,29 @@ The ledger holds no findings yet.
 {{- else}}
 No round of this stage has been recorded yet.
 {{- end}}
+{{- end}}
 
 ## Binding decisions
 
-Audit directives and escalation resolutions recorded so far, oldest first.
-They bind every role.
+Audit directives and escalation resolutions that apply to this contract and
+this candidate, oldest first. They bind every role.
 {{with .Decisions}}
 {{- range .}}
-- A `{{.Source}}`{{with .Escalation}} of `{{.}}`{{end}} by `{{.By}}`{{with .Packet}}, in packet `{{.}}`{{end}}: {{.Text}}
+- `{{.ID}}`: a `{{.Source}}`{{with .Escalation}} of `{{.}}`{{end}}{{with .Kind}} (`{{.}}`){{end}} by `{{.By}}`{{with .Packet}}, in packet `{{.}}`{{end}}{{with .Requirements}}, about {{codes .}}{{end}}: {{.Text}}
 {{- end}}
 {{- else}}
-None recorded.
+None.
+{{- end}}
+{{- with .Earlier}}
+
+## Earlier decisions
+
+These no longer bind. They are here so that you know what was decided before
+and why; weigh them as evidence, not as rules.
+{{range .}}
+- `{{.ID}}`: a `{{.Source}}`{{with .Escalation}} of `{{.}}`{{end}}{{with .Kind}} (`{{.}}`){{end}} by `{{.By}}`{{with .Packet}}, in packet `{{.}}`{{end}}{{with .Requirements}}, about {{codes .}}{{end}}: {{.Text}}
+  It no longer binds because {{.Why}}.
+{{- end}}
 {{- end}}
 
 ---
@@ -259,6 +275,7 @@ open until a report for it is accepted.
 
 - Tier `{{.Tier}}`{{if ne .Tier .Input.Tier}}, reclassified from `{{.Input.Tier}}`{{end}}, in `{{.Input.Domain}}`
 - Status `{{.Status}}`; opened in round {{.Round}} by the {{.Source}}; recurrences: {{.Recurrences}}
+- Established under {{contract .Contract}}
 {{- if .RootCauseRequired}}
 - Root-cause analysis required for its next fix
 {{- end}}

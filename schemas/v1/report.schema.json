@@ -294,6 +294,22 @@
       ],
       "additionalProperties": false
     },
+    "supersession": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "$ref": "defs.schema.json#/$defs/decisionId"
+        },
+        "rationale": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "decision",
+        "rationale"
+      ],
+      "additionalProperties": false
+    },
     "reviewerBody": {
       "type": "object",
       "properties": {
@@ -420,6 +436,12 @@
         },
         "directives": {
           "$ref": "defs.schema.json#/$defs/textList"
+        },
+        "supersede": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/supersession"
+          }
         },
         "contract_recommendations": {
           "$ref": "defs.schema.json#/$defs/textList"

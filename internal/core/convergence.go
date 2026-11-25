@@ -18,13 +18,13 @@ import (
 // identifiers: a convergence analysis once per streak, from the moment the
 // streak reaches its threshold, and a process audit each time the streak
 // reaches a multiple of its own. what says which step failed.
-func (s State) stalls(th Convergence, round int, packet, what string) []EscalationRaised {
+func (s State) stalls(th Convergence, round int, packet, candidate, what string) []EscalationRaised {
 	streak := s.streak + 1
 	reason := fmt.Sprintf("%s since the last GREEN verdict or resumption, the latest being %s",
 		count(streak, "step has failed", "steps have failed"), what)
 	var out []EscalationRaised
 	raise := func(kind EscalationKind) {
-		out = append(out, EscalationRaised{Kind: kind, Owner: kind.Owner(), Round: round, Packet: packet, Reason: reason})
+		out = append(out, EscalationRaised{Kind: kind, Owner: kind.Owner(), Round: round, Packet: packet, Candidate: candidate, Reason: reason})
 	}
 	if streak >= th.ConvergenceAuditAfter && !s.convergenceRaised {
 		raise(EscalationNonConvergence)
@@ -38,13 +38,13 @@ func (s State) stalls(th Convergence, round int, packet, what string) []Escalati
 // stall queues the escalations that the failed step of the report under
 // ingestion raises.
 func (in *ingestion) stall(what string) {
-	in.raised = append(in.raised, in.s.stalls(in.th, in.pk.Round, in.pk.Packet, what)...)
+	in.raised = append(in.raised, in.s.stalls(in.th, in.pk.Round, in.pk.Packet, in.f.Candidate.Digest, what)...)
 }
 
 // exhausted returns the suspension that issuing one more packet raises
 // because the campaign has used up its budget, or false. A review after an
 // approval begins a new campaign, with nothing spent.
-func (s State) exhausted(th Convergence, p Packet) (EscalationRaised, bool) {
+func (s State) exhausted(th Convergence, p Packet, round int) (EscalationRaised, bool) {
 	used := s.steps
 	if p.Action == StepReview && s.approved() {
 		used = 0
@@ -53,7 +53,7 @@ func (s State) exhausted(th Convergence, p Packet) (EscalationRaised, bool) {
 		return EscalationRaised{}, false
 	}
 	return EscalationRaised{ID: seqID("E", len(s.escalations)+1), Kind: EscalationSuspension, Owner: RoleGovernance,
-		Round: p.Round, Packet: p.ID,
+		Round: round, Packet: p.ID, Candidate: p.Candidate.Digest,
 		Reason: fmt.Sprintf("packet %s is the %s of this campaign without an approval, which is its budget: the campaign is suspended once this packet is answered or void", p.ID, ordinal(used+1))}, true
 }
 

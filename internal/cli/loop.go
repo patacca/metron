@@ -146,8 +146,13 @@ func runPacket(c *ctx, args []string) error {
 		if data, err = issue(w, wr, plan.Packet); err != nil {
 			return err
 		}
+		// A review packet names no round, and neither does the note: the
+		// reviewer may be the one reading it.
 		p := plan.Packet
-		note = fmt.Sprintf("issued packet %s, digest %s: %s for the %s, round %d", p.ID, canon.Digest(data), p.Action, p.Role, p.Round)
+		note = fmt.Sprintf("issued packet %s, digest %s: %s for the %s", p.ID, canon.Digest(data), p.Action, p.Role)
+		if p.Round > 0 {
+			note += fmt.Sprintf(", round %d", p.Round)
+		}
 	}
 	var p core.Packet
 	if err := jsonv2.Unmarshal(data, &p, jsonv2.RejectUnknownMembers(true)); err != nil {

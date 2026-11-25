@@ -7,6 +7,7 @@
       "status": "open",
       "tier": "T1",
       "round": 1,
+      "contract": "sha256:433f1f7a6e70f2d459369446f7ee08b9fb1533f8c27604edbd8d413eaed4d6ed",
       "source": "reviewer",
       "recurrences": 0,
       "root_cause_required": false,

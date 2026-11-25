@@ -11,7 +11,11 @@ type Packet struct {
 	Role     Role   `json:"role"`
 	// Action is one of StepReview, StepFix, StepVerify or StepAudit.
 	Action Step `json:"action"`
-	Round  int  `json:"round"`
+	// Round is the round a fix, a verification or an audit follows. A review
+	// packet does not carry it, nor the earlier rounds: how many reviews came
+	// before, how they ended and who held them has no bearing on what a
+	// reviewer must decide, and the ledger knows which round a report is for.
+	Round int `json:"round,omitempty"`
 	// IssuedAt is RFC 3339 UTC with second precision.
 	IssuedAt  string    `json:"issued_at"`
 	Candidate Candidate `json:"candidate"`
@@ -51,11 +55,17 @@ type Packet struct {
 	// and an auditor receive every finding; an implementer and a verifier
 	// receive the ones they work on.
 	Findings []Finding `json:"findings,omitempty"`
-	// History summarizes the earlier rounds of the current stage.
+	// History summarizes the earlier rounds of the current stage. A review
+	// packet does not carry it.
 	History []RoundSummary `json:"history,omitempty"`
-	// Decisions are audit directives and escalation resolutions, by the
-	// auditor or by governance. They bind every role.
+	// Decisions are the audit directives and escalation resolutions, by the
+	// auditor or by governance, that apply to this packet's contract and
+	// candidate. They bind every role.
 	Decisions []Decision `json:"decisions,omitempty"`
+	// EarlierDecisions are the decisions that no longer bind: superseded,
+	// made under another contract, or establishing something about another
+	// candidate. They are context for what was decided and why.
+	EarlierDecisions []Decision `json:"earlier_decisions,omitempty"`
 
 	ReportSchema string `json:"report_schema"`
 	// Instructions is the role's brief, rendered from the protocol.
@@ -71,17 +81,36 @@ type RoundSummary struct {
 	Reviewer string  `json:"reviewer,omitempty"`
 }
 
-// Decision is binding guidance recorded in the ledger.
+// Decision is guidance recorded in the ledger: an audit directive, or the
+// resolution of an escalation by an auditor or by governance. It records
+// where it was made, which decides where it applies.
 type Decision struct {
+	// ID is "D-" followed by a zero-padded sequence number.
+	ID string `json:"id"`
 	// Source is DecisionDirective or DecisionResolution.
 	Source string `json:"source"`
-	// Escalation is the escalation the decision came out of, if any.
-	Escalation string `json:"escalation,omitempty"`
+	// Escalation is the escalation a resolution discharged, and Kind its
+	// kind. Both are empty for a directive.
+	Escalation string         `json:"escalation,omitempty"`
+	Kind       EscalationKind `json:"kind,omitempty"`
 	// Packet is the audit packet whose report recorded the decision. It is
 	// empty for a governance resolution.
 	Packet string `json:"packet,omitempty"`
 	By     Role   `json:"by"`
 	Text   string `json:"text"`
+	// Stage and Contract are the stage and the contract digest pinned when
+	// the decision was made. It binds only under that contract.
+	Stage    Stage  `json:"stage"`
+	Contract string `json:"contract"`
+	// Candidate is the digest of the candidate the decision was made on: the
+	// one the auditor examined or, for a governance resolution, the one the
+	// escalation was raised on. It is empty when that is unknown.
+	Candidate string `json:"candidate,omitempty"`
+	// Requirements are the requirements the decision is about, when the
+	// escalation named any.
+	Requirements []string `json:"requirements,omitempty"`
+	// SupersededBy is the audit packet whose report superseded the decision.
+	SupersededBy string `json:"superseded_by,omitempty"`
 }
 
 // Decision sources.
@@ -89,3 +118,20 @@ const (
 	DecisionDirective  = "directive"
 	DecisionResolution = "resolution"
 )
+
+// Binds reports whether the decision binds a role working under the given
+// contract digest on the given candidate. A decision binds until it is
+// superseded and while the contract it was made under is the pinned one: a
+// change of contract is a change of the question it answered, whether or not
+// the stage changed. Evidence that governance supplied for an evidence gap
+// establishes something about one candidate, so it binds on that candidate
+// only.
+func (d Decision) Binds(contract, candidate string) bool {
+	switch {
+	case d.SupersededBy != "", d.Contract != contract:
+		return false
+	case d.Kind == EscalationEvidenceGap:
+		return d.Candidate != "" && d.Candidate == candidate
+	}
+	return true
+}

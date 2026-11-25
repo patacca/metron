@@ -27,7 +27,8 @@ standard: you work within the acceptance contract as governance pinned it.
 Everything this brief refers to is in the packet: the contract, the
 escalations (`escalations`), every finding in the ledger with its history
 (`findings`), the latest check results (`evidence`), the rounds of
-this stage (`history`) and the binding decisions so far (`decisions`). If you
+this stage (`history`), the decisions that bind now (`decisions`) and the
+ones that no longer do (`earlier_decisions`). If you
 received this brief as a prompt, the same information follows it, laid out
 for reading.
 
@@ -68,11 +69,13 @@ next reviewer does not reopen it from the same starting point.
 
 ### `component-churn`: `E-0008`
 
-The same component has been fixed in 3 distinct rounds; the
-escalation names it. Repeated local fixes to one component usually mean the trouble lies in the
-component itself, in its design, its responsibilities or its interfaces, or
-in the way findings against it are being framed. Audit the component as a
-whole: read its findings and fixes in the ledger and the changes made to it,
+Fixes have changed the same files in 3 distinct rounds; the
+escalation names the paths. They come from the commits themselves, not from
+what the reports called the component. Repeated local fixes to one place
+usually mean the trouble lies in the component those files belong to, in its
+design, its responsibilities or its interfaces, or in the way findings
+against it are being framed. Audit the component as a whole: read its
+findings and fixes in the ledger and the changes made to it,
 and establish whether the findings share a cause, whether the component
 needs redesign rather than further patching, and whether the findings are
 consistent with each other and with the contract. Direct the approach that
@@ -143,8 +146,11 @@ not make a finding a calibration.
 
 ## Directives and contract recommendations
 
-Directives are binding guidance. Metron carries them into every later packet,
-and every role must follow them. Use them to set the course the loop must
+Directives are binding guidance. Metron carries them into later packets, and
+every role must follow them, for as long as the contract you issue them
+under stays pinned: when governance changes the contract, they are shown as
+earlier decisions and bind no more, because the question they answered has
+changed. Use them to set the course the loop must
 take: an investigation that has to happen before more patching, an approach
 further fixes must follow, or the settled answer to a question that keeps
 being re-argued. Write each directive so that someone without your context can
@@ -153,6 +159,13 @@ what it covers, and consistent with the contract. A directive cannot change
 the contract, lower or raise the standard, or decide a future review in
 advance. Issue only the directives you need; each one constrains every round
 that follows.
+
+An earlier directive or audit conclusion that turned out wrong, or that no
+longer fits, keeps binding until someone withdraws it. List it in
+`supersede`, by its `D-` identifier, with the reason; issue a new directive
+if something should take its place. You can supersede only audit decisions,
+yours or another auditor's. A governance decision is governance's to change:
+recommend it.
 
 When the root of the problem lies in the contract, such as an ambiguous
 criterion, a missing requirement, an unrealistic envelope or a requirement
@@ -230,7 +243,8 @@ The body has these members:
 | --- | --- |
 | `resolutions` | Exactly one entry per escalation in this packet, and none for any other. Each has `escalation` (its `E-` identifier), `analysis` (what you examined, what you found, and the evidence for it) and `conclusion` (what you concluded and what the loop must do next). When Metron accepts the report, each conclusion is recorded as its escalation's resolution, discharges it, and is carried into every later packet as a binding decision, so write it to be read on its own. |
 | `adjudications` | One entry per adjudicable finding, with `finding` (its `F-` identifier), `decision` (`uphold`, `withdraw` or `reclassify`), `tier` (the new tier; present for, and only for, `reclassify`) and `rationale` (why, with the evidence you checked). Left out when there is nothing to adjudicate. |
-| `directives` | Optional. Binding guidance for every later packet, one statement per entry. |
+| `directives` | Optional. Binding guidance for later packets under this contract, one statement per entry. |
+| `supersede` | Optional. Earlier audit decisions that no longer bind, each with `decision` (its `D-` identifier) and `rationale`. |
 | `contract_recommendations` | Optional. Changes to the contract you recommend to governance, one per entry, each with its reason. |
 | `suspend` | Optional. Why the campaign must be suspended until governance decides, written for governance. Leave it out to let the loop continue. |
 
@@ -454,6 +468,7 @@ verification P-0018 found 2 blocking regressions and confirmed 1 fixes
 
 - Tier `T1`, in `performance`
 - Status `open`; opened in round 4 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/delivery/client.go`
 - Requirement: `REQ-9`
@@ -483,6 +498,7 @@ History, oldest first:
 
 - Tier `T1`, in `stability`
 - Status `open`; opened in round 5 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Components: `internal/delivery/retry.go`
 - Requirement: `REQ-7`
 - Would reverse the resolution of `F-0001`
@@ -508,6 +524,7 @@ History, oldest first:
 
 - Tier `T1`, in `reliability`
 - Status `resolved`; opened in round 1 by the reviewer; recurrences: 0
+- Established under contract `sha256:9999999999999999999999999999999999999999999999999999999999999999`, which is not the pinned one: check in the pinned contract that what it cites still says what the finding relies on
 - Components: `internal/delivery/retry.go`
 - Requirement: `REQ-8`
 
@@ -538,6 +555,7 @@ History, oldest first:
 
 - Tier `T2`, reclassified from `T1`, in `performance`
 - Status `open`; opened in round 1 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Disputed once; cannot be disputed again
 - Components: `internal/store/append.go`
 - Requirement: `REQ-9`
@@ -573,6 +591,7 @@ History, oldest first:
 
 - Tier `T3`, in `reliability`
 - Status `open`; opened in round 1 by the reviewer; recurrences: 0
+- Established under the pinned contract
 - Components: `internal/delivery/retry.go`
 - Related: `F-0001`
 
@@ -602,14 +621,26 @@ History, oldest first:
 
 ## Binding decisions
 
-Audit directives and escalation resolutions recorded so far, oldest first.
-They bind every role.
+Audit directives and escalation resolutions that apply to this contract and
+this candidate, oldest first. They bind every role.
 
-- A `resolution` of `E-0001` by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
-- A `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
-- A `resolution` of `E-0002` by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
-- A `resolution` of `E-0003` by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
-- A `resolution` of `E-0004` by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
+- `D-0001`: a `resolution` of `E-0001` (`contract-gap`) by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
+- `D-0003`: a `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
+- `D-0004`: a `resolution` of `E-0002` (`dispute`) by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- `D-0005`: a `resolution` of `E-0003` (`dispute`) by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- `D-0006`: a `resolution` of `E-0004` (`dispute`) by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
+
+## Earlier decisions
+
+These no longer bind. They are here so that you know what was decided before
+and why; weigh them as evidence, not as rules.
+
+- `D-0002`: a `directive` by `auditor`, in packet `P-0003`: Treat every finding about the replay tool as outside the pilot.
+  It no longer binds because an audit superseded it in packet `P-0009`.
+- `D-0007`: a `directive` by `auditor`, in packet `P-0009`: Verify retry behaviour against the 10-minute outage of the validation plan.
+  It no longer binds because it was made under contract `sha256:9999999999999999999999999999999999999999999999999999999999999999`, at stage `controlled-validation`, not under the pinned contract.
+- `D-0008`: a `resolution` of `E-0005` (`evidence-gap`) by `governance`, about `REQ-7`: REQ-7 holds: the one-hour soak test of 14 November stayed within 6% of the five-minute figure.
+  It no longer binds because it supplied evidence about candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`, not about the candidate of this packet.
 
 ---
 

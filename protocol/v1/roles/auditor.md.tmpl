@@ -28,7 +28,8 @@ standard: you work within the acceptance contract as governance pinned it.
 Everything this brief refers to is in the packet: the contract, the
 escalations (`escalations`), every finding in the ledger with its history
 (`findings`), the latest check results (`evidence`), the rounds of
-this stage (`history`) and the binding decisions so far (`decisions`). If you
+this stage (`history`), the decisions that bind now (`decisions`) and the
+ones that no longer do (`earlier_decisions`). If you
 received this brief as a prompt, the same information follows it, laid out
 for reading.
 
@@ -74,11 +75,13 @@ next reviewer does not reopen it from the same starting point.
 
 ### `component-churn`: {{range $i, $e := .}}{{if $i}}, {{end}}`{{$e.ID}}`{{end}}
 
-The same component has been fixed in {{$.ChurnRounds}} distinct rounds; the
-escalation names it. Repeated local fixes to one component usually mean the trouble lies in the
-component itself, in its design, its responsibilities or its interfaces, or
-in the way findings against it are being framed. Audit the component as a
-whole: read its findings and fixes in the ledger and the changes made to it,
+Fixes have changed the same files in {{$.ChurnRounds}} distinct rounds; the
+escalation names the paths. They come from the commits themselves, not from
+what the reports called the component. Repeated local fixes to one place
+usually mean the trouble lies in the component those files belong to, in its
+design, its responsibilities or its interfaces, or in the way findings
+against it are being framed. Audit the component as a whole: read its
+findings and fixes in the ledger and the changes made to it,
 and establish whether the findings share a cause, whether the component
 needs redesign rather than further patching, and whether the findings are
 consistent with each other and with the contract. Direct the approach that
@@ -181,8 +184,11 @@ your report contains no adjudications.
 
 ## Directives and contract recommendations
 
-Directives are binding guidance. Metron carries them into every later packet,
-and every role must follow them. Use them to set the course the loop must
+Directives are binding guidance. Metron carries them into later packets, and
+every role must follow them, for as long as the contract you issue them
+under stays pinned: when governance changes the contract, they are shown as
+earlier decisions and bind no more, because the question they answered has
+changed. Use them to set the course the loop must
 take: an investigation that has to happen before more patching, an approach
 further fixes must follow, or the settled answer to a question that keeps
 being re-argued. Write each directive so that someone without your context can
@@ -191,6 +197,13 @@ what it covers, and consistent with the contract. A directive cannot change
 the contract, lower or raise the standard, or decide a future review in
 advance. Issue only the directives you need; each one constrains every round
 that follows.
+
+An earlier directive or audit conclusion that turned out wrong, or that no
+longer fits, keeps binding until someone withdraws it. List it in
+`supersede`, by its `D-` identifier, with the reason; issue a new directive
+if something should take its place. You can supersede only audit decisions,
+yours or another auditor's. A governance decision is governance's to change:
+recommend it.
 
 When the root of the problem lies in the contract, such as an ambiguous
 criterion, a missing requirement, an unrealistic envelope or a requirement
@@ -241,6 +254,7 @@ The body has these members:
 | --- | --- |
 | `resolutions` | Exactly one entry per escalation in this packet, and none for any other. Each has `escalation` (its `E-` identifier), `analysis` (what you examined, what you found, and the evidence for it) and `conclusion` (what you concluded and what the loop must do next). When Metron accepts the report, each conclusion is recorded as its escalation's resolution, discharges it, and is carried into every later packet as a binding decision, so write it to be read on its own. |
 | `adjudications` | One entry per adjudicable finding, with `finding` (its `F-` identifier), `decision` (`uphold`, `withdraw` or `reclassify`), `tier` (the new tier; present for, and only for, `reclassify`) and `rationale` (why, with the evidence you checked). Left out when there is nothing to adjudicate. |
-| `directives` | Optional. Binding guidance for every later packet, one statement per entry. |
+| `directives` | Optional. Binding guidance for later packets under this contract, one statement per entry. |
+| `supersede` | Optional. Earlier audit decisions that no longer bind, each with `decision` (its `D-` identifier) and `rationale`. |
 | `contract_recommendations` | Optional. Changes to the contract you recommend to governance, one per entry, each with its reason. |
 | `suspend` | Optional. Why the campaign must be suspended until governance decides, written for governance. Leave it out to let the loop continue. |

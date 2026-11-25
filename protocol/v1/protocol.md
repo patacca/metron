@@ -47,7 +47,7 @@ state, the contract or the gate outcome.
 | Liveness | Every state names one action that someone can perform, and a campaign never runs unattended without bound: within the limits the contract sets, the gate opens or the next action belongs to governance. Possible improvements never block. | A process that can be blocked forever by "it could be better" stops being used, and one that can run forever without anyone deciding wastes the effort it was meant to direct. Reaching GREEN cannot be promised: it depends on engineering judgments, which no program makes. |
 | Proportionality | A finding blocks only if it is tied to a contract requirement or an unacceptable risk. Over-engineering is itself reviewable. | Blocking needs a standard that exists before the review, or the standard is whatever the reviewer prefers. Unnecessary complexity is a cost, not a safe default. |
 | Empiricism | Decisions cite evidence. What cannot be decided without real-world data is a calibration, not a blocker. | Arguments without evidence cannot be checked and so cannot converge. Some questions can only be settled by running the system. |
-| Independence | Iteration counts, effort and deadlines change the investigation procedure, never the approval threshold. | A bar that drops after enough failed rounds rewards persistence instead of quality; one that rises does the opposite. Both make the verdict depend on history instead of on the candidate. |
+| Independence | Iteration counts, effort and deadlines change the investigation procedure, never the approval threshold. A reviewer is not told how many reviews came before, how they ended or who held them. | A bar that drops after enough failed rounds rewards persistence instead of quality; one that rises does the opposite. Both make the verdict depend on history instead of on the candidate. |
 
 ## 3. Roles and authority
 
@@ -491,8 +491,10 @@ the auditor upholds the finding at its tier and says why it should block; a
 reviewer then opens a blocking finding that stands on the contract, or
 governance amends the contract.
 
-It may issue directives, which are binding guidance carried into every later
-packet, and it may recommend contract changes to governance. It cannot make
+It may issue directives, which are binding guidance carried into later
+packets, and it may supersede an earlier directive or audit conclusion that
+no longer holds, by naming it with a reason. It may recommend contract
+changes to governance. It cannot make
 them, and it does not lower the standard to end a loop. When the loop should
 not continue until governance has decided something, for instance because
 the affected area has to be redesigned or the contract cannot be met as
@@ -520,6 +522,12 @@ finding is resolved by a fix that a verifier confirms. A non-blocking finding
 is resolved when a reviewer finds it addressed: nobody is asked to fix the
 backlog, so nobody claims or verifies a fix for it, but the record of it
 should not outlive the problem.
+
+A finding also records the contract it was established under. It cites a
+requirement or a risk by identifier, and governance can change what an
+identifier says; a packet therefore shows which findings predate the pinned
+contract, and whoever relies on one checks its citation against the contract
+in force.
 
 Every packet carries each finding's **history**: every step recorded for it,
 with the round, the packet whose report caused it, the candidate it was made
@@ -581,7 +589,7 @@ escalation keeps the gate closed and takes priority over the ordinary loop.
 | --- | --- | --- | --- |
 | `dispute` | An implementer disputes a finding | `auditor` | Adjudication |
 | `contradiction` | A finding declares that it reverses an earlier resolution | `auditor` | Adjudication |
-| `component-churn` | The same component is fixed in 3 distinct rounds of a campaign | `auditor` | Component-level audit |
+| `component-churn` | Fixes change the same files in 3 distinct rounds of a campaign | `auditor` | Component-level audit |
 | `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes of blocking findings it confirms | `auditor` | Redesign assessment |
 | `non-convergence` | The failure streak reaches 3; raised once per streak | `auditor` | Convergence analysis |
 | `process-audit` | The failure streak reaches a multiple of 5 | `auditor` | Independent process audit, after which the campaign is suspended |
@@ -591,9 +599,25 @@ escalation keeps the gate closed and takes priority over the ordinary loop.
 
 The thresholds for root-cause analysis (2), convergence analysis (3), the
 process audit (5) and the campaign budget (20) are defaults that the contract
-may change; they are the only tunable values. Escalation resolutions, whether
-by an auditor or by governance, and audit directives are carried into every
-later packet, each with the packet it came from, and bind every role.
+may change; they are the only tunable values. Component churn is counted on
+the files that the commits of each fix change, not on what a report calls
+the component.
+
+### Decisions and where they apply
+
+Audit directives and escalation resolutions, by an auditor or by governance,
+are decisions. A decision records where it was made: the stage and the
+contract pinned at the time, the candidate, and the requirements it is
+about. It **binds** every role while three things hold: no audit has
+superseded it; the contract it was made under is still the pinned one; and,
+if it is evidence that governance supplied for an evidence gap, the candidate
+is the one that evidence was about. A decision answers a question the
+contract poses, so a change of contract ends it even when the stage stays the
+same, and evidence about one candidate says nothing about the next.
+
+Decisions that no longer bind are not thrown away. Every packet lists them as
+earlier decisions, each with the reason it stopped binding, because the
+reasoning behind them is still worth reading. They are evidence, not rules.
 
 ### Campaigns, failed steps and the budget
 
@@ -717,9 +741,12 @@ for one has not been approved.
 
 Each action is carried out through a **packet**: a JSON document holding
 everything the role needs, including the contract, the candidate, the
-relevant findings with their history, the latest check results, the rounds
-of the current stage, the binding decisions, the role's brief and the schema
-its report must satisfy. At most one packet is open at a time.
+relevant findings with their history, the latest check results, the binding
+and the earlier decisions, the role's brief and the schema its report must
+satisfy. A fix, verify or audit packet also names the round it follows and
+lists the rounds of the current stage. A review packet does not: the number
+of earlier reviews, their verdicts and their reviewers are no part of what a
+reviewer decides on, so the reviewer is not given them. At most one packet is open at a time.
 Asking for the packet again while it is open and valid returns the same
 packet, so a crashed agent can simply be retried. A packet becomes void when
 the contract is re-pinned, or when the candidate changes or the tree stops
@@ -763,7 +790,7 @@ later state. Submitting the same report again succeeds and changes nothing.
 | --- | --- | --- |
 | C | Acceptance criteria satisfied | Every applicable requirement is `satisfied` in the reviewer report of the latest round |
 | B | No blockers | No unresolved `T0` or `T1` finding, none carried by this candidate, and no open escalation |
-| E | Evidence sufficient | Every applicable requirement with a `command` has a passing result recorded for this candidate and this command text |
+| E | Automated evidence sufficient | Every applicable requirement with a `command` has a passing result recorded for this candidate and this command text. Requirements without a command are established by the review, under C |
 | I | Integrity | The current candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version |
 | V | Independent verdict | The latest round's verdict is `GREEN`, for this candidate under this contract, by an author who never acted as implementer |
 

@@ -139,41 +139,63 @@ func (in *ingestion) implementerTransition(b ImplementerBody) {
 	}
 }
 
+// changed returns the paths a fix's commits change, sorted and each once.
+func (in *ingestion) changed(fx Fix) []string {
+	paths := []string{}
+	for _, c := range in.f.Commits {
+		if !slices.Contains(fx.Commits, c.Hash) {
+			continue
+		}
+		for _, path := range c.Paths {
+			if !slices.Contains(paths, path) {
+				paths = append(paths, path)
+			}
+		}
+	}
+	slices.Sort(paths)
+	return paths
+}
+
 func (in *ingestion) implementerEvents(b ImplementerBody) {
 	pk := in.pk
-	for _, fx := range b.Fixes {
-		in.add(EventFindingFixClaimed, FindingFixClaimed{ID: fx.Finding, Round: pk.Round, Packet: pk.Packet, Candidate: in.f.Candidate.Digest, Fix: fx})
+	changed := make([][]string, len(b.Fixes))
+	for i, fx := range b.Fixes {
+		changed[i] = in.changed(fx)
+		in.add(EventFindingFixClaimed, FindingFixClaimed{ID: fx.Finding, Round: pk.Round, Packet: pk.Packet, Candidate: in.f.Candidate.Digest,
+			Fix: fx, Paths: changed[i]})
 	}
 	disputes := slices.Clone(b.Disputes)
 	slices.SortStableFunc(disputes, func(a, b Dispute) int { return compareIDs(a.Finding, b.Finding) })
 	for _, d := range disputes {
 		in.raise(EscalationDispute, fmt.Sprintf("the implementer disputes %s: %s", d.Finding, d.Rationale), []string{d.Finding}, nil, nil)
 	}
-	var components []string
-	for _, fx := range b.Fixes {
-		for _, c := range fx.Components {
-			if !slices.Contains(components, c) {
-				components = append(components, c)
+	// Churn is counted on the paths the fixes change, which are facts, not
+	// on the component names a report gives, which are not comparable. One
+	// escalation names every path that reaches the threshold with this
+	// report.
+	var paths, findings []string
+	for i, fx := range b.Fixes {
+		for _, path := range changed[i] {
+			rounds, done := in.s.churnRounds(path)
+			n := len(rounds)
+			if !slices.Contains(rounds, pk.Round) {
+				n++
 			}
-		}
-	}
-	slices.Sort(components)
-	for _, c := range components {
-		rounds, done := in.s.churnRounds(c)
-		n := len(rounds)
-		if !slices.Contains(rounds, pk.Round) {
-			n++
-		}
-		if done || n < ComponentChurnRounds {
-			continue
-		}
-		var findings []string
-		for _, fx := range b.Fixes {
-			if slices.Contains(fx.Components, c) && !slices.Contains(findings, fx.Finding) {
+			if done || n < ComponentChurnRounds {
+				continue
+			}
+			if !slices.Contains(paths, path) {
+				paths = append(paths, path)
+			}
+			if !slices.Contains(findings, fx.Finding) {
 				findings = append(findings, fx.Finding)
 			}
 		}
+	}
+	if len(paths) > 0 {
+		slices.Sort(paths)
 		slices.SortFunc(findings, compareIDs)
-		in.raise(EscalationComponentChurn, fmt.Sprintf("component %q was named in fixes in %d distinct rounds of stage %s", c, n, in.c.Stage), findings, []string{c}, nil)
+		in.raise(EscalationComponentChurn, fmt.Sprintf("fixes changed %s in %d distinct rounds of this campaign: %s",
+			pick(len(paths), "the same path", "the same paths"), ComponentChurnRounds, strings.Join(paths, ", ")), findings, paths, nil)
 	}
 }

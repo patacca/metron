@@ -101,7 +101,7 @@ func instructions(v *view) (string, error) {
 func execute(name string, v *view) (string, error) {
 	t, err := template.New(name).
 		Option("missingkey=error").
-		Funcs(template.FuncMap{"codes": codes, "candidate": v.candidate}).
+		Funcs(template.FuncMap{"codes": codes, "candidate": v.candidate, "contract": v.contract}).
 		ParseFS(protocol.FS, dir+"/*.tmpl", dir+"/roles/*.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("parse the embedded protocol templates: %w", err)
@@ -202,6 +202,16 @@ func (v *view) candidate(digest string) string {
 		return "this candidate"
 	}
 	return "candidate `" + digest + "`"
+}
+
+// contract names a contract digest relative to the packet's pinned contract:
+// a finding established under another contract cites that contract's
+// requirements and risks, which the pinned one may have changed.
+func (v *view) contract(digest string) string {
+	if digest == v.ContractDigest {
+		return "the pinned contract"
+	}
+	return "contract `" + digest + "`, which is not the pinned one: check in the pinned contract that what it cites still says what the finding relies on"
 }
 
 // normalize removes trailing whitespace from every line, collapses runs of

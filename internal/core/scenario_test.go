@@ -34,7 +34,7 @@ func (h *harness) drain() {
 // revert does: the candidate is one the ledger has already seen.
 func (h *harness) checkout(tree int) string {
 	h.tree = tree
-	c := Commit{Hash: commitHash(len(h.history)), Substantive: true}
+	c := Commit{Hash: commitHash(len(h.history)), Substantive: true, Paths: []string{"src/restored.go"}}
 	h.history = append(h.history, c)
 	h.clean = true
 	return c.Hash
@@ -49,7 +49,8 @@ func TestScenarioGreenInOneRound(t *testing.T) {
 	h.checks(true)
 	h.expect(StepReview)
 	p := h.packet()
-	if p.Round != 1 || p.Action != StepReview || !p.ReadOnly || p.Base != nil {
+	// A review packet says nothing about the reviews before it.
+	if p.Round != 0 || len(p.History) != 0 || len(h.state.rounds) != 1 || p.Action != StepReview || !p.ReadOnly || p.Base != nil {
 		t.Fatalf("review packet %+v", p)
 	}
 	if want := []string{"REQ-1", "REQ-2", "REQ-3"}; !slices.Equal(p.ApplicableRequirements, want) {
@@ -119,7 +120,7 @@ func TestScenarioRedFixVerifyGreen(t *testing.T) {
 	// its packet names the candidate the fixes were verified on.
 	h.expect(StepReview)
 	rp := h.packet()
-	if rp.Round != 2 || len(rp.History) != 1 || rp.History[0].Verdict != VerdictRed || len(rp.Findings) != 1 ||
+	if rp.Round != 0 || len(rp.History) != 0 || len(h.state.rounds) != 2 || len(rp.Findings) != 1 ||
 		rp.Verified == nil || *rp.Verified != vp.Candidate || *rp.Verified != rp.Candidate {
 		t.Fatalf("second review packet %+v", rp)
 	}
@@ -219,8 +220,8 @@ func TestScenarioDispute(t *testing.T) {
 		// verdict rested on no longer stands.
 		h.expect(StepReview)
 		rp := h.packet()
-		if rp.Round != 2 {
-			t.Fatalf("round %d", rp.Round)
+		if n := len(h.state.rounds); n != 2 {
+			t.Fatalf("round %d", n)
 		}
 		h.accept(rp, "rev-1", green(h.contract))
 		h.expect(StepNone)
@@ -250,8 +251,11 @@ func TestScenarioIndeterminate(t *testing.T) {
 	// Re-review of the same candidate is permitted after a resolution.
 	h.expect(StepReview)
 	rp := h.packet()
-	if len(rp.Decisions) != 1 || rp.Decisions[0] != (Decision{Source: DecisionResolution, Escalation: "E-0001", By: RoleGovernance, Text: "REQ-2 confirmed by the product owner"}) {
-		t.Fatalf("decisions %+v", rp.Decisions)
+	want := Decision{ID: "D-0001", Source: DecisionResolution, Escalation: "E-0001", Kind: EscalationEvidenceGap, By: RoleGovernance,
+		Text: "REQ-2 confirmed by the product owner", Stage: StagePrototype, Contract: rp.ContractDigest,
+		Candidate: rp.Candidate.Digest, Requirements: []string{"REQ-2"}}
+	if len(rp.Decisions) != 1 || !reflect.DeepEqual(rp.Decisions[0], want) || len(rp.EarlierDecisions) != 0 {
+		t.Fatalf("decisions %+v, earlier %+v", rp.Decisions, rp.EarlierDecisions)
 	}
 	h.accept(rp, "rev-1", green(h.contract))
 	h.expect(StepNone)
@@ -352,8 +356,8 @@ func TestScenarioNonConvergenceAndProcessAudit(t *testing.T) {
 	h.checks(true)
 	for round := 1; round <= 5; round++ {
 		rp := h.packet()
-		if rp.Round != round {
-			t.Fatalf("round %d, want %d", rp.Round, round)
+		if n := len(h.state.rounds); n != round {
+			t.Fatalf("round %d, want %d", n, round)
 		}
 		d := h.accept(rp, "rev-1", review(h.contract, VerdictIndeterminate, map[string]string{"REQ-2": RequirementUnverified}))
 		want := []EscalationKind{EscalationEvidenceGap}
@@ -398,21 +402,28 @@ func TestScenarioNonConvergenceAndProcessAudit(t *testing.T) {
 	h.expect(StepNone)
 }
 
+// Churn is counted on the paths the fixes change, whatever the reports call
+// the component.
 func TestScenarioComponentChurn(t *testing.T) {
 	h := newHarness(t)
 	h.checks(true)
+	names := []string{"parser", "internal/parser", "the parsing code", "parser.go"}
 	for round := 1; round <= 4; round++ {
 		h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
 		h.drain()
 		id := fmt.Sprintf("F-%04d", round)
-		d := h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix(id, h.commit(true), "parser", "lexer")}})
+		commit := h.touch("internal/parser/parse.go", "internal/lexer/lex.go", fmt.Sprintf("internal/parser/case%d_test.go", round))
+		d := h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix(id, commit, names[round-1])}})
+		if got := d[1].Data.(FindingFixClaimed).Paths; len(got) != 3 || got[0] != "internal/lexer/lex.go" {
+			t.Fatalf("round %d: claim paths %v", round, got)
+		}
 		var want []EscalationKind
 		if round == 3 {
-			want = []EscalationKind{EscalationComponentChurn, EscalationComponentChurn}
-			lexer, parser := d[2].Data.(EscalationRaised), d[3].Data.(EscalationRaised)
-			if !slices.Equal(lexer.Components, []string{"lexer"}) || !slices.Equal(parser.Components, []string{"parser"}) ||
-				!slices.Equal(parser.Findings, []string{id}) {
-				t.Fatalf("churn escalations %+v %+v", lexer, parser)
+			// One escalation names every path that reached the threshold.
+			want = []EscalationKind{EscalationComponentChurn}
+			e := d[2].Data.(EscalationRaised)
+			if !slices.Equal(e.Components, []string{"internal/lexer/lex.go", "internal/parser/parse.go"}) || !slices.Equal(e.Findings, []string{id}) {
+				t.Fatalf("churn escalation %+v", e)
 			}
 		}
 		if got := raisedKinds(d); !slices.Equal(got, want) {
