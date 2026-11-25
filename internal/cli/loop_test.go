@@ -51,7 +51,7 @@ func TestWholeLoop(t *testing.T) {
 	r.must("init")
 	r.expectNext(core.StepPinContract)
 	r.write(".metron/contract.yaml", testContract)
-	contains(t, "contract output", r.expect(exitNegative, "contract").out, "valid, not pinned", `metron contract pin -m "<reason>"`)
+	contains(t, "contract output", r.expect(exitNegative, "contract").out, "valid, not pinned", "metron contract pin -m <reason>")
 	r.expectNext(core.StepPinContract)
 	r.must("contract", "pin", "-m", "first contract")
 	r.must("contract")
@@ -192,7 +192,7 @@ func TestGovernanceEscalation(t *testing.T) {
 	res := r.ingest(exitOK, complete(t, sk, "rev-1", b))
 	contains(t, "ingest output", res.out, "E-0001 (contract-gap, owned by governance)")
 	a := r.expectNext(core.StepAdjudicate)
-	if !slices.Equal(a.Escalations, []string{"E-0001"}) || a.Command != `metron resolve E-0001 -m "<decision>"` {
+	if !slices.Equal(a.Escalations, []string{"E-0001"}) || a.Command != "" || a.Usage != "metron resolve <escalation> -m <decision>" {
 		t.Fatalf("adjudicate action %+v", a)
 	}
 	r.expect(exitNegative, "gate")
@@ -232,7 +232,7 @@ func TestStateDirectoryElsewhere(t *testing.T) {
 			unmarshal(t, run("next", "--json").out, &a)
 			want := "metron check"
 			if how == "flag" {
-				want += " --state-dir " + quoteArg(state)
+				want += " --state-dir " + shellQuote(state)
 			}
 			if a.Step != core.StepRunChecks || a.Command != want {
 				t.Fatalf("next %+v, want run-checks with %q", a, want)

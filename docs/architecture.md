@@ -137,11 +137,11 @@ The working tree is **clean** when all of the following hold outside
   file. Metron asks with the file system monitor disabled and with git's
   default, strictest comparison of file times, whatever the repository is
   configured to use.
-- No tracked file carries the `assume-unchanged` or `skip-worktree` index
-  flag. Either flag makes git report a modified file as unchanged, so checks
-  and reviewers would see content that is not the candidate. A sparse checkout
-  sets the flag on every file it leaves out, so a sparse checkout is never
-  clean.
+- No tracked file, in the repository or in an initialized submodule, carries
+  the `assume-unchanged` or `skip-worktree` index flag. Either flag makes git
+  report a modified file as unchanged, so checks and reviewers would see
+  content that is not the candidate. A sparse checkout sets the flag on every
+  file it leaves out, so a sparse checkout is never clean.
 - No tracked symbolic link resolves into `.metron/` or `.git/`, whose content
   is not part of the candidate and not covered by the points above.
 
@@ -155,8 +155,8 @@ than that:
   ignore mechanism hides them. The same holds for whatever a tracked symbolic
   link points to outside the repository.
 - Local git configuration can make git consider different content identical: a
-  clean filter, `core.fileMode=false` (the executable bit), `core.ignoreCase`,
-  or index flags inside a submodule. Metron does not second-guess these.
+  clean filter, `core.fileMode=false` (the executable bit) or
+  `core.ignoreCase`. Metron does not second-guess these.
 
 A check result is therefore only as reproducible as the environment it ran in,
 as with any locally run test. Running checks from a fresh checkout of the

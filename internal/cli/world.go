@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/patacca/metron/internal/canon"
@@ -49,18 +52,23 @@ func (c *ctx) open(flagDir string) (*site, error) {
 		dir, from, status = c.Getenv(envStateDir), "$"+envStateDir, exitEnv
 	}
 	defaultDir := filepath.Join(repo.Root(), ".metron", "state")
-	if dir == "" {
-		s.store, s.inRepo = store.New(defaultDir), true
-		return s, nil
-	}
-	if !filepath.IsAbs(dir) {
+	switch {
+	case dir == "":
+		dir, from = defaultDir, "default"
+	case !filepath.IsAbs(dir):
 		dir = filepath.Join(c.Dir, dir)
 	}
 	dir = filepath.Clean(dir)
+	// The rule applies to where the directory really is: .metron or
+	// .metron/state may be a symbolic link.
 	if rel, inside := s.relative(dir); inside {
 		if rel != ".metron/state" {
-			return nil, fail(status, "the state directory %s, set by %s, lies inside the repository: the state directory is either .metron/state, the default, or a directory outside the repository",
-				dir, from)
+			where := dir
+			if real := realPath(dir); real != dir {
+				where = fmt.Sprintf("%s, which resolves to %s", dir, real)
+			}
+			return nil, fail(status, "the state directory %s, set by %s, lies inside the repository: the state directory is either .metron/state, the default, or a directory outside the repository; neither .metron nor .metron/state may be a symbolic link into the repository",
+				where, from)
 		}
 		s.store, s.inRepo = store.New(defaultDir), true
 		return s, nil
@@ -115,14 +123,7 @@ func (s *site) metron(args string) string {
 	if s.flagDir == "" {
 		return "metron " + args
 	}
-	return fmt.Sprintf("metron %s --state-dir %s", args, quoteArg(s.flagDir))
-}
-
-func quoteArg(s string) string {
-	if s != "" && !strings.ContainsAny(s, " \t\"'$`\\") {
-		return s
-	}
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	return fmt.Sprintf("metron %s --state-dir %s", args, shellQuote(s.flagDir))
 }
 
 // world is everything one command observed, gathered once: the facts the core
@@ -137,8 +138,11 @@ type world struct {
 	// empty one: either way it is not initialized. ledgerEmpty tells which.
 	ledgerMissing, ledgerEmpty bool
 	contract                   *contractCheck
-	// dirty lists why the working tree is not clean.
-	dirty []vcs.TreeProblem
+	// dirty lists why the working tree is not clean. sparse and ignoreStat
+	// say whether a sparse checkout or core.ignoreStat sets the flags of
+	// hidden files; they are observed only when there are hidden files.
+	dirty              []vcs.TreeProblem
+	sparse, ignoreStat bool
 	// noCommits is set when HEAD has no commit; Facts.Candidate is then empty.
 	noCommits bool
 	// files caches storedFiles.
@@ -197,11 +201,56 @@ func (c *ctx) gather(s *site) (*world, error) {
 		return nil, err
 	}
 	w.facts.Clean = len(w.dirty) == 0
+	if slices.ContainsFunc(w.dirty, func(p vcs.TreeProblem) bool { return p.Kind == vcs.TreeHidden }) {
+		if w.sparse, err = s.repo.SparseCheckout(); err != nil {
+			return nil, err
+		}
+		if w.ignoreStat, err = s.repo.IgnoreStat(); err != nil {
+			return nil, err
+		}
+	}
 
 	if op, ok := w.state.OpenPacket(); ok {
 		w.facts.PacketProblem = w.packetFile(op)
 	}
+	if w.facts.LedgerVerified && !w.ledgerMissing {
+		if err := w.unissuedPackets(); err != nil {
+			return nil, err
+		}
+	}
 	return w, nil
+}
+
+// storedPacket is the name of a stored packet file.
+var storedPacket = regexp.MustCompile(`^P-[0-9]{4,}\.json$`)
+
+// unissuedPackets fails the ledger when a stored packet file names a packet
+// it never issued. A packet file is written after the ledger commit that
+// issues it, so that can only mean the ledger was rolled back or replaced. A
+// ledger rolled back together with its files is not detected.
+func (w *world) unissuedPackets() error {
+	entries, err := os.ReadDir(filepath.Join(w.store.Dir(), store.PacketsDir))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var unknown []string
+	for _, e := range entries {
+		if !storedPacket.MatchString(e.Name()) {
+			continue
+		}
+		if _, ok := w.state.Packet(strings.TrimSuffix(e.Name(), ".json")); !ok {
+			unknown = append(unknown, store.PacketsDir+"/"+e.Name())
+		}
+	}
+	if len(unknown) > 0 {
+		w.facts.LedgerVerified = false
+		w.facts.LedgerProblem = fmt.Sprintf("the ledger is older than its stored files: it never issued the packet stored in %s, so it was rolled back or replaced; restore the ledger from version control",
+			strings.Join(unknown, ", "))
+	}
+	return nil
 }
 
 // describe observes the commits that the fixes of a report list, relative to
@@ -254,8 +303,8 @@ type fileProblem struct {
 	Packet   string `json:"packet"`
 	Problem  string `json:"problem"`
 	Recovery string `json:"recovery"`
-	// command is the command that recovers, when one does.
-	command string
+	// usage is the template of the command that recovers, when one does.
+	usage string
 	// report is set for a report file, and clear for a packet file; detail
 	// is the problem without the file's owner. open is set for the file of the
 	// open packet, which is operational rather than evidence: metron packet
@@ -294,8 +343,8 @@ func (w *world) storedFiles() []fileProblem {
 		if why := w.packetFile(p); why != "" {
 			fp := fileProblem{Packet: p.Packet, detail: why}
 			if p.Open {
-				fp.command, fp.open = w.metron("packet"), true
-				fp.Recovery = fmt.Sprintf("run %s to void it and issue a new packet", fp.command)
+				fp.usage, fp.open = w.metron("packet"), true
+				fp.Recovery = fmt.Sprintf("run %s to void it and issue a new packet", fp.usage)
 			} else {
 				fp.Recovery = "restore the file from version control"
 			}
@@ -306,20 +355,21 @@ func (w *world) storedFiles() []fileProblem {
 		}
 		name := store.ReportsDir + "/" + p.Packet + ".json"
 		data, err := w.store.ReadReport(p.Packet)
-		ingest := w.metron("ingest <the report accepted for " + p.Packet + ">")
+		// The packet is named in prose, never inside the command.
+		ingest := w.metron("ingest <report-file>")
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
-			w.files = append(w.files, fileProblem{Packet: p.Packet, command: ingest, report: true,
+			w.files = append(w.files, fileProblem{Packet: p.Packet, usage: ingest, report: true,
 				detail:   fmt.Sprintf("its stored file %s is missing", name),
-				Recovery: "restore it from version control, or by running " + ingest + " with the identical bytes"})
+				Recovery: "restore it from version control, or by running " + ingest + " with the identical bytes of the report accepted for packet " + p.Packet})
 		case err != nil:
 			w.files = append(w.files, fileProblem{Packet: p.Packet, report: true,
 				detail:   fmt.Sprintf("its stored file %s cannot be read (%v)", name, err),
 				Recovery: "make it readable"})
 		case canon.Digest(data) != p.Report.RawDigest:
-			w.files = append(w.files, fileProblem{Packet: p.Packet, command: ingest, report: true,
+			w.files = append(w.files, fileProblem{Packet: p.Packet, usage: ingest, report: true,
 				detail:   fmt.Sprintf("its stored file %s does not match the raw digest recorded when it was accepted", name),
-				Recovery: "restore it from version control, or delete it and run " + ingest + " with the identical bytes"})
+				Recovery: "restore it from version control, or delete it and run " + ingest + " with the identical bytes of the report accepted for packet " + p.Packet})
 		}
 	}
 	for i := range w.files {
@@ -343,7 +393,7 @@ func (w *world) next() core.Action {
 		if p, r, lost := w.verdictReport(); lost {
 			return core.Action{Step: core.StepRepairLedger, Owner: core.RoleGovernance,
 				Reason: fmt.Sprintf("the gate relies on the %s verdict of round %d, carried by the report of packet %s, and %s: restore the file from version control, ingest the identical bytes again with %s, or change the candidate so that a new review is held",
-					r.Verdict, r.Number, p.Packet, p.detail, p.command)}
+					r.Verdict, r.Number, p.Packet, p.detail, p.usage)}
 		}
 	}
 	return a
@@ -404,63 +454,67 @@ func (w *world) ledgerUnusable() (string, string) {
 	return "", ""
 }
 
-// command renders the command that performs or continues an action.
-func (w *world) command(a core.Action) string {
+// instruction returns what performs or continues an action: a complete
+// command, safe to run as it stands in a POSIX shell, or a usage template
+// with <placeholders> for a step that needs a decision, a message or a file.
+// Neither ever holds text taken from the repository; the subjects of a
+// template are in their own members. Both are empty when no command helps.
+func (w *world) instruction(a core.Action) (command, usage string) {
 	switch a.Step {
 	case core.StepRepairLedger:
 		switch {
 		case w.ledgerMissing:
-			return w.metron("init")
+			return w.metron("init"), ""
 		case w.facts.LedgerVerified:
-			if p, _, lost := w.verdictReport(); lost && p.command != "" {
-				return p.command
+			if _, _, lost := w.verdictReport(); lost {
+				return "", w.metron("ingest <report-file>")
 			}
 		}
-		return w.metron("fsck")
+		return w.metron("fsck"), ""
 	case core.StepPinContract:
 		if w.facts.Contract == nil {
-			return w.metron("contract")
+			return w.metron("contract"), ""
 		}
-		return w.metron(`contract pin -m "<reason>"`)
+		return "", w.metron("contract pin -m <reason>")
 	case core.StepSubmitReport:
-		return w.metron("ingest <report-file>")
+		return "", w.metron("ingest <report-file>")
 	case core.StepAdjudicate:
-		return w.metron(fmt.Sprintf(`resolve %s -m "<decision>"`, a.Escalations[0]))
+		return "", w.metron("resolve <escalation> -m <decision>")
 	case core.StepCommitChanges:
-		return w.commitCommand()
+		return w.cleanTree()
 	case core.StepRunChecks:
-		return w.metron("check")
+		return w.metron("check"), ""
 	case core.StepReview, core.StepFix, core.StepVerify, core.StepAudit:
-		return w.metron("packet")
+		return w.metron("packet"), ""
 	}
-	return w.metron("gate")
+	return w.metron("gate"), ""
 }
 
-// commitCommand is the command that makes the working tree clean: none when
-// it is clean already and only a new commit of the candidate helps, or when
-// a symbolic link must be replaced by hand.
-func (w *world) commitCommand() string {
+// cleanTree returns what makes the working tree clean: nothing when it is
+// clean already and only a new commit of the candidate helps, or when a link
+// must be replaced by hand; for hidden files, the command that ends a sparse
+// checkout or core.ignoreStat, else the flag-clearing template; a commit
+// template otherwise.
+func (w *world) cleanTree() (command, usage string) {
 	if w.facts.Clean && !w.noCommits {
-		return ""
+		return "", ""
 	}
-	var hidden []string
-	link := false
-	for _, p := range w.dirty {
-		switch p.Kind {
-		case vcs.TreeHidden:
-			hidden = append(hidden, quoteArg(p.Path))
-		case vcs.TreeLink:
-			link = true
-		}
+	has := func(kind string) bool {
+		return slices.ContainsFunc(w.dirty, func(p vcs.TreeProblem) bool { return p.Kind == kind })
 	}
 	switch {
-	case len(hidden) > 0:
-		paths := strings.Join(hidden, " ")
-		return fmt.Sprintf("git update-index --no-skip-worktree -- %s && git update-index --no-assume-unchanged -- %s", paths, paths)
-	case link:
-		return ""
+	case has(vcs.TreeHidden) && w.sparse && w.ignoreStat:
+		return "git sparse-checkout disable && git config core.ignoreStat false", ""
+	case has(vcs.TreeHidden) && w.sparse:
+		return "git sparse-checkout disable", ""
+	case has(vcs.TreeHidden) && w.ignoreStat:
+		return "git config core.ignoreStat false", ""
+	case has(vcs.TreeHidden):
+		return "", "git update-index --no-skip-worktree -- <path> && git update-index --no-assume-unchanged -- <path>"
+	case has(vcs.TreeLink) && !has(vcs.TreeModified) && !has(vcs.TreeDeleted) && !has(vcs.TreeUntracked):
+		return "", ""
 	}
-	return "git add -A && git commit"
+	return "", "git add -A && git commit -m <message>"
 }
 
 // staleOpenPacket returns the open packet and why the core no longer

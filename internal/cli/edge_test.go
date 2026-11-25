@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"os"
 	"strings"
 	"testing"
 
@@ -49,14 +51,37 @@ func TestTreeProblems(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		make    func(r *repo)
-		want    string
+		want    []string
 		command string
+		usage   string
 	}{
 		{"skip-worktree", func(r *repo) {
 			r.git("update-index", "--skip-worktree", "--", "greeting.txt")
 			r.write("greeting.txt", "hello\n")
-		}, "greeting.txt is hidden by an assume-unchanged or skip-worktree flag: clear the flag with git update-index --no-skip-worktree -- greeting.txt",
-			"git update-index --no-skip-worktree -- greeting.txt && git update-index --no-assume-unchanged -- greeting.txt"},
+		}, []string{"Tree:         greeting.txt: hidden by an assume-unchanged or skip-worktree flag",
+			"Fix:          clear the flags of each hidden file with git update-index --no-skip-worktree -- <path> and git update-index --no-assume-unchanged -- <path>"},
+			"", "git update-index --no-skip-worktree -- <path> && git update-index --no-assume-unchanged -- <path>"},
+		{"sparse checkout", func(r *repo) {
+			r.write("docs/guide.md", "read me\n")
+			r.commit("add a guide")
+			r.git("sparse-checkout", "set", ".metron")
+		}, []string{"Tree:         docs/guide.md: hidden by an assume-unchanged or skip-worktree flag",
+			"Fix:          this is a sparse checkout, which sets the flag on every file it leaves out, so it is never clean: end it with git sparse-checkout disable"},
+			"git sparse-checkout disable", ""},
+		{"core.ignoreStat", func(r *repo) {
+			r.git("config", "core.ignoreStat", "true")
+			r.write("farewell.txt", "bye\n")
+			r.commit("add a farewell")
+		}, []string{"Tree:         farewell.txt: hidden by an assume-unchanged or skip-worktree flag",
+			"Fix:          core.ignoreStat is true, under which git flags every file it writes: set it to false with git config core.ignoreStat false"},
+			"git config core.ignoreStat false", ""},
+		{"deleted", func(r *repo) {
+			if err := os.Remove(r.path("greeting.txt")); err != nil {
+				t.Fatal(err)
+			}
+		}, []string{"Tree:         greeting.txt: deleted",
+			"Fix:          commit each deletion with git rm -- <path>, or restore the file with git checkout -- <path>"},
+			"", "git add -A && git commit -m <message>"},
 		{"link into .metron", func(r *repo) {
 			// The link is made through the index, with the working tree file
 			// holding its target as git writes it where links are
@@ -66,24 +91,22 @@ func TestTreeProblems(t *testing.T) {
 			blob := r.git("hash-object", "-w", "contract-link.yaml")
 			r.git("update-index", "--add", "--cacheinfo", "120000,"+blob+",contract-link.yaml")
 			r.git("commit", "-q", "-m", "link the contract")
-		}, "contract-link.yaml is a symbolic link into .metron/: replace the link with what it points to, or remove it, and commit", ""},
+		}, []string{"Tree:         contract-link.yaml: a symbolic link into .metron/ or .git/",
+			"Fix:          replace each such link with what it points to, or remove it, and commit",
+			"Do:           make the working tree clean as listed, then run metron next"}, "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := pinned(t)
 			tc.make(r)
 			a := r.expectNext(core.StepCommitChanges)
-			if a.Command != tc.command {
-				t.Fatalf("command %q, want %q", a.Command, tc.command)
+			if a.Command != tc.command || a.Usage != tc.usage || len(a.Tree) == 0 {
+				t.Fatalf("command %q, usage %q, tree %+v; want %q and %q", a.Command, a.Usage, a.Tree, tc.command, tc.usage)
 			}
-			out := r.must("next").out
-			contains(t, "next", out, "Tree:         "+tc.want)
-			if hidden := strings.Contains(tc.want, "skip-worktree"); hidden != strings.Contains(out, "disable the sparse checkout with git sparse-checkout disable, and set git config core.ignoreStat false") {
-				t.Errorf("the advice about sparse checkouts and core.ignoreStat appears = %t:\n%s", !hidden, out)
-			}
-			contains(t, "check", r.expect(exitNegative, "check").out, tc.want)
+			contains(t, "next", r.must("next").out, tc.want...)
+			contains(t, "check", r.expect(exitNegative, "check").out, tc.want[:2]...)
 			var st statusDoc
 			unmarshal(t, r.must("status", "--json").out, &st)
-			if st.Clean || len(st.Dirty) != 1 {
+			if st.Clean || len(st.Dirty) != len(a.Tree) {
 				t.Fatalf("status tree %+v", st.Dirty)
 			}
 		})
@@ -178,7 +201,7 @@ func TestTail(t *testing.T) {
 			}
 		})
 	}
-	if got := printable("a\tb\n\x1b[2J\r\u009b"); got != `a`+"\t"+`b`+"\n"+`\x1b[2J\x0d\u009b` {
+	if got := printable("a\tb\n\x1b[2J\r\u009b\u202egnp.exe\U000e0041"); got != `a`+"\t"+`b`+"\n"+`\x1b[2J\x0d\u009b\u202egnp.exe\U000e0041` {
 		t.Fatalf("printable = %q", got)
 	}
 }
@@ -200,4 +223,32 @@ func TestReadOnlyCommandsOnCorruptLedger(t *testing.T) {
 			t.Errorf("metron %s speaks of a change: %s", args[0], res.err)
 		}
 	}
+}
+
+// TestRepositoryWideFilter puts a filter on every JSON file of the
+// repository: the state directory must keep its bytes in a clone.
+func TestRepositoryWideFilter(t *testing.T) {
+	r := pinned(t)
+	r.git("config", "filter.shout.clean", "tr a-z A-Z")
+	r.git("config", "filter.shout.smudge", "cat")
+	r.write(".gitattributes", "*.json filter=shout\n*.jsonl filter=shout\n")
+	r.write("data.json", "{\"quiet\":true}\n")
+	r.write("greeting.txt", "hello\n")
+	r.commit("spell it right")
+	r.must("check")
+	_, sk := r.packet()
+	r.ingest(exitOK, review(t, sk, "rev-1", nil))
+	r.commit("record the state")
+	c := &repo{t: t, dir: t.TempDir(), env: map[string]string{}}
+	r.git("clone", "-q", r.dir, c.dir)
+	if got := string(c.read("data.json")); got != "{\"QUIET\":TRUE}\n" {
+		t.Fatalf("the filter did not apply to data.json (%q), so the test proves nothing", got)
+	}
+	for _, f := range []string{".metron/state/ledger.jsonl", ".metron/state/reports/P-0001.json", ".metron/state/packets/P-0001.json"} {
+		if !bytes.Equal(c.read(f), r.read(f)) {
+			t.Errorf("the clone's %s differs from the original", f)
+		}
+	}
+	c.must("fsck")
+	c.must("gate")
 }

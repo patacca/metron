@@ -4,7 +4,7 @@
   "stage": "prototype",
   "authorizes": "An internal demonstration",
   "candidate": {
-    "commit": "8e2816408a5eb87f2165cdd69897548a36a59fe1",
+    "commit": "a54727435f3166a2dd159b7e24577a98ee05cffe",
     "digest": "sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104"
   },
   "conditions": [

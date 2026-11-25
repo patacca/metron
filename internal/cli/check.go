@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/patacca/metron/internal/canon"
@@ -95,8 +96,7 @@ func runCheck(c *ctx, args []string) error {
 	if a := core.Next(before.state, before.facts); a.Step == core.StepRepairLedger || a.Step == core.StepPinContract {
 		d.Problem = a.Reason
 	} else if !before.facts.Clean {
-		d.Problem = "the working tree is not clean, so the candidate is not a commit: " + strings.Join(treeLines(before.dirty, false), "; ") +
-			"; then run the checks"
+		d.Problem = "the working tree is not clean, so the candidate is not a commit: make it clean as listed below, then run the checks"
 	}
 	if d.Problem != "" {
 		d.Next = before.actionDoc(before.next())
@@ -156,7 +156,7 @@ func runCheck(c *ctx, args []string) error {
 	d.Next = after.actionDoc(after.next())
 	if !after.facts.Clean && before.facts.Clean {
 		// What the checks left behind is removed, never committed.
-		d.Next.Command, d.Next.leftovers = "", true
+		d.Next.Command, d.Next.Usage, d.Next.leftovers = "", "", true
 		d.Next.hint = "remove what the checks left behind, then run " + after.metron("check") + " again"
 	}
 	return c.checked(d, *asJSON, after, events, d.Passed && d.Recorded)
@@ -172,8 +172,7 @@ func changedDuringChecks(before, after *world) string {
 		return fmt.Sprintf("HEAD moved from commit %s to %s while the checks ran: run them again on the new candidate",
 			short(before.facts.Candidate.Commit), short(after.facts.Candidate.Commit))
 	case !after.facts.Clean:
-		return "the checks left the working tree unclean, and a check must not change the candidate it checks: " +
-			strings.Join(treeLines(after.dirty, true), "; ") + "; make the checks write their output to an ignored or temporary path, then run them again"
+		return "the checks left the working tree unclean, and a check must not change the candidate it checks: remove what they left, as listed below, make the checks write their output to an ignored or temporary path, then run them again"
 	case after.facts.ContractDigest != before.facts.ContractDigest || ap.Digest != bp.Digest:
 		return "the contract or its pin changed while the checks ran: run them again"
 	}
@@ -266,8 +265,10 @@ func tail(output []byte) (string, bool) {
 	return s, truncated
 }
 
-// printable escapes the control characters of output other than newline and
-// tab, so that what a check printed cannot drive the terminal.
+// printable escapes the control characters other than newline and tab, and
+// the Unicode format characters (category Cf, such as the bidirectional
+// overrides), so that printed text cannot drive the terminal or disguise
+// itself.
 func printable(s string) string {
 	var b strings.Builder
 	for _, r := range s {
@@ -276,8 +277,10 @@ func printable(s string) string {
 			b.WriteRune(r)
 		case r < 0x20 || r == 0x7f:
 			fmt.Fprintf(&b, "\\x%02x", r)
-		case r >= 0x80 && r < 0xa0:
+		case r >= 0x80 && r < 0xa0, unicode.Is(unicode.Cf, r) && r <= 0xffff:
 			fmt.Fprintf(&b, "\\u%04x", r)
+		case unicode.Is(unicode.Cf, r):
+			fmt.Fprintf(&b, "\\U%08x", r)
 		default:
 			b.WriteRune(r)
 		}

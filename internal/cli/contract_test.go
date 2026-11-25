@@ -120,7 +120,7 @@ func TestContractBlocksPacket(t *testing.T) {
 	r.must("init")
 	r.write(".metron/contract.yaml", testContract)
 	res := r.expect(exitNegative, "packet")
-	contains(t, "packet error", res.err, "no contract is pinned", `Run: metron contract pin -m "<reason>"`)
+	contains(t, "packet error", res.err, "no contract is pinned", "Usage: metron contract pin -m <reason>")
 
 	r.must("contract", "pin", "-m", "first")
 	// A comment or a reformatting does not change the contract's meaning.
@@ -131,10 +131,10 @@ func TestContractBlocksPacket(t *testing.T) {
 
 	r.write(".metron/contract.yaml", strings.Replace(testContract, "An internal demonstration", "A public launch", 1))
 	res = r.expect(exitNegative, "contract")
-	contains(t, "contract output", res.out, "its meaning differs from the pinned contract", `metron contract pin -m "<reason>"`)
+	contains(t, "contract output", res.out, "its meaning differs from the pinned contract", "metron contract pin -m <reason>")
 	res = r.expect(exitNegative, "packet")
-	contains(t, "packet error", res.err, "the contract changed", `Run: metron contract pin -m "<reason>"`)
-	if a := r.expectNext(core.StepPinContract); a.Command != `metron contract pin -m "<reason>"` {
+	contains(t, "packet error", res.err, "the contract changed", "Usage: metron contract pin -m <reason>")
+	if a := r.expectNext(core.StepPinContract); a.Command != "" || a.Usage != "metron contract pin -m <reason>" {
 		t.Fatalf("next %+v", a)
 	}
 	r.expect(exitNegative, "check")

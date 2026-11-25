@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/patacca/metron/internal/core"
@@ -104,7 +105,7 @@ func TestLostVerdictReport(t *testing.T) {
 	r.expectNext(core.StepRepairLedger)
 	res := r.expect(exitNegative, "packet")
 	contains(t, "packet error", res.err, "the next action is repair-ledger, which takes no packet", "reports/P-0001.json is missing",
-		"Run: metron ingest <the report accepted for P-0001>")
+		"Usage: metron ingest <report-file>")
 	r.write("greeting.txt", "hello!\n")
 	r.commit("change the candidate")
 	r.expectNext(core.StepRunChecks)
@@ -149,4 +150,36 @@ func TestStateDirectoryInsideTree(t *testing.T) {
 	if _, err := os.Stat(r.path(".metron/elsewhere")); !os.IsNotExist(err) {
 		t.Fatalf("a refused state directory was created: %v", err)
 	}
+}
+
+// TestLedgerBehindItsFiles cuts the ledger back to the end of an earlier
+// command, as restoring an older ledger would, and leaves the later packet
+// file in place: the ledger is older than its files. Removing the files as
+// well is not detected, which the second half documents.
+func TestLedgerBehindItsFiles(t *testing.T) {
+	r := pinned(t)
+	r.must("check")
+	older := r.read(".metron/state/ledger.jsonl")
+	r.packet()
+	r.write(".metron/state/ledger.jsonl", string(older))
+
+	contains(t, "fsck", r.expect(exitNegative, "fsck").out, "the ledger is older than its stored files", "packets/P-0001.json",
+		"restore the ledger from version control")
+	contains(t, "gate", r.expect(exitEnv, "gate").err, "the gate cannot be evaluated", "older than its stored files")
+	a := r.expectNext(core.StepRepairLedger)
+	contains(t, "next reason", a.Reason, "older than its stored files")
+	var st statusDoc
+	unmarshal(t, r.must("status", "--json").out, &st)
+	if st.Ledger.Verified || !strings.Contains(st.Ledger.Problem, "older than its stored files") {
+		t.Fatalf("status ledger %+v", st.Ledger)
+	}
+	contains(t, "packet", r.expect(exitEnv, "packet").err, "older than its stored files", "so nothing was changed")
+	// A report file for a packet the ledger issued but did not answer is not
+	// a sign of age: it is ignored.
+	if err := os.Remove(r.path(".metron/state/packets/P-0001.json")); err != nil {
+		t.Fatal(err)
+	}
+	r.write(".metron/state/reports/P-0001.json", "{}")
+	r.must("fsck")
+	r.expectNext(core.StepReview)
 }

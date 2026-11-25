@@ -57,7 +57,8 @@ func TestCheckThatDirtiesTheTree(t *testing.T) {
 	before := r.read(".metron/state/ledger.jsonl")
 	res := r.expect(exitNegative, "check")
 	contains(t, "check output", res.out, "REQ-1    passed", "The checks left the working tree unclean",
-		"check-output.txt is untracked: delete it", "nothing was recorded", "Do:           remove what the checks left behind, then run metron check again")
+		"Tree:         check-output.txt: untracked", "Fix:          delete each untracked file", "nothing was recorded",
+		"Do:           remove what the checks left behind, then run metron check again")
 	if strings.Contains(res.out, "git add") || strings.Contains(res.out, "commit it") {
 		t.Fatalf("check suggests committing what it left behind:\n%s", res.out)
 	}
@@ -65,7 +66,7 @@ func TestCheckThatDirtiesTheTree(t *testing.T) {
 		t.Fatal("a check that dirtied the tree recorded something")
 	}
 	// The tree is dirty now: check refuses to start.
-	contains(t, "check output", r.expect(exitNegative, "check").out, "The working tree is not clean", "check-output.txt is untracked: commit it, delete it, or ignore it")
+	contains(t, "check output", r.expect(exitNegative, "check").out, "The working tree is not clean", "Tree:         check-output.txt: untracked", "Fix:          commit, delete or ignore each untracked file")
 	r.expectNext(core.StepCommitChanges)
 }
 

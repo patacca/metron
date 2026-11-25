@@ -1,6 +1,6 @@
 Gate: CLOSED for stage prototype
 Authorizes: An internal demonstration
-Candidate: commit 4f523456bbf0ef40f5b1640151d3cbaf7cb22b8c, sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898
+Candidate: commit fd86662859aeb61e92064f6a424faf89d3ab36d9, sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898
 
 [FAIL] C  Every applicable requirement is satisfied in the reviewer report of the latest round
           - no round of stage prototype has a verdict

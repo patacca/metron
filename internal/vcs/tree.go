@@ -1,29 +1,34 @@
 package vcs
 
 import (
-	"bytes"
 	"cmp"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 )
 
 // Kinds of TreeProblem.
 const (
 	// TreeModified is a tracked path that git status reports as changed,
-	// staged or not.
+	// staged or not, other than a deletion.
 	TreeModified = "modified"
+	// TreeDeleted is a tracked path that git status reports as deleted,
+	// staged or not.
+	TreeDeleted = "deleted"
 	// TreeUntracked is a file git status reports as untracked.
 	TreeUntracked = "untracked"
 	// TreeHidden is a tracked file with the assume-unchanged or skip-worktree
-	// flag, under which git reports a modified file as unchanged. A sparse
-	// checkout sets skip-worktree on the files it leaves out.
+	// flag, under which git reports a modified file as unchanged, in the
+	// repository or in one of its submodules. A sparse checkout sets
+	// skip-worktree on the files it leaves out.
 	TreeHidden = "hidden"
-	// TreeLink is a tracked symbolic link that points into .metron/, whose
-	// content is not part of the candidate.
+	// TreeLink is a tracked symbolic link that resolves into .metron/ or the
+	// git directory, whose content is not part of the candidate.
 	TreeLink = "link"
 )
 
@@ -31,7 +36,8 @@ const (
 type TreeProblem struct {
 	// Path is relative to the root and slash-separated.
 	Path string
-	// Kind is TreeModified, TreeUntracked, TreeHidden or TreeLink.
+	// Kind is TreeModified, TreeDeleted, TreeUntracked, TreeHidden or
+	// TreeLink.
 	Kind string
 }
 
@@ -55,14 +61,21 @@ func (r *Repo) TreeProblems() ([]TreeProblem, error) {
 	return slices.Compact(problems), nil
 }
 
+// strictStat keeps a repository's configuration from making git skip a
+// changed file: no file system monitor, and git's default, strictest
+// comparison of file times. core.fileMode and core.ignoreCase are left as
+// configured, because forcing them breaks honest setups on Windows and on
+// case-insensitive file systems.
+var strictStat = []string{"-c", "core.fsmonitor=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true"}
+
 // statusProblems returns what `git status --porcelain` reports.
 func (r *Repo) statusProblems() ([]TreeProblem, error) {
 	// The flags pin down what configuration could otherwise change:
 	// untracked files are listed one by one, submodules are not ignored,
 	// renames are reported as a deletion and an addition, and there is no
 	// branch header.
-	out, err := git(r.root, "status", "--porcelain", "-z", "--untracked-files=all",
-		"--ignore-submodules=none", "--no-renames", "--no-branch")
+	out, err := git(r.root, append(slices.Clone(strictStat), "status", "--porcelain", "-z",
+		"--untracked-files=all", "--ignore-submodules=none", "--no-renames", "--no-branch")...)
 	if err != nil {
 		return nil, err
 	}
@@ -73,10 +86,7 @@ func (r *Repo) statusProblems() ([]TreeProblem, error) {
 			return nil, fmt.Errorf("unexpected git status entry %q", entry)
 		}
 		rest = after
-		kind := TreeModified
-		if entry[:2] == "??" {
-			kind = TreeUntracked
-		}
+		kind := statusKind(entry[:2])
 		changed := []string{entry[3:]}
 		if strings.ContainsAny(entry[:2], "RC") {
 			// The original path follows as a field of its own.
@@ -96,17 +106,33 @@ func (r *Repo) statusProblems() ([]TreeProblem, error) {
 	return problems, nil
 }
 
-// indexProblems returns the hidden files and the links into .metron/ that
-// the index records.
+// statusKind classifies a porcelain status code. Unmerged paths are
+// modified, whatever each side did.
+func statusKind(xy string) string {
+	switch {
+	case xy == "??":
+		return TreeUntracked
+	case xy == "DD" || xy == "AA" || strings.Contains(xy, "U"):
+		return TreeModified
+	case strings.Contains(xy, "D"):
+		return TreeDeleted
+	default:
+		return TreeModified
+	}
+}
+
+// indexProblems returns the hidden files and the links into .metron/ or the
+// git directory that the index records, submodules included.
 func (r *Repo) indexProblems() ([]TreeProblem, error) {
 	// Each entry is "<tag> <mode> <object> <stage>\t<path>". The tag is
-	// lower case for assume-unchanged and S for skip-worktree.
-	out, err := git(r.root, "ls-files", "-v", "-s", "-z")
+	// lower case for assume-unchanged and S for skip-worktree. Entries of
+	// submodules carry their full path.
+	out, err := git(r.root, append(slices.Clone(strictStat), "ls-files", "-v", "-s", "-z", "--recurse-submodules")...)
 	if err != nil {
 		return nil, err
 	}
 	var problems []TreeProblem
-	var links, objects []string
+	var links []string
 	for rest := string(out); rest != ""; {
 		entry, after, ok := strings.Cut(rest, "\x00")
 		rest = after
@@ -123,65 +149,142 @@ func (r *Repo) indexProblems() ([]TreeProblem, error) {
 		}
 		if fields[1] == "120000" {
 			links = append(links, p)
-			objects = append(objects, fields[2])
 		}
 	}
-	targets, err := r.blobs(objects)
+	if len(links) == 0 {
+		return problems, nil
+	}
+	scope, err := r.excluded()
 	if err != nil {
 		return nil, err
 	}
-	for i, link := range links {
-		if r.pointsIntoMetron(link, targets[i]) {
+	for _, link := range links {
+		into, err := r.linkInto(link, scope)
+		if err != nil {
+			return nil, err
+		}
+		if into {
 			problems = append(problems, TreeProblem{Path: link, Kind: TreeLink})
 		}
 	}
 	return problems, nil
 }
 
-// blobs returns the contents of blobs, given by object name, in order.
-func (r *Repo) blobs(objects []string) ([]string, error) {
-	if len(objects) == 0 {
-		return nil, nil
-	}
-	out, err := gitInput(r.root, strings.Join(objects, "\n")+"\n", "cat-file", "--batch")
-	if err != nil {
-		return nil, err
-	}
-	// Each answer is "<object> <type> <size>\n<content>\n".
-	contents := make([]string, 0, len(objects))
-	for range objects {
-		header, rest, ok := bytes.Cut(out, []byte("\n"))
-		fields := strings.Fields(string(header))
-		if !ok || len(fields) != 3 || fields[1] != "blob" {
-			return nil, fmt.Errorf("unexpected git cat-file answer %q", header)
-		}
-		size, err := strconv.Atoi(fields[2])
-		if err != nil || size < 0 || size+1 > len(rest) || rest[size] != '\n' {
-			return nil, fmt.Errorf("unexpected git cat-file answer %q", header)
-		}
-		contents = append(contents, string(rest[:size]))
-		out = rest[size+1:]
-	}
-	return contents, nil
+// excludedDirs holds the directories no tracked link may reach: the roots
+// under which .metron/ lies, as git spells the root and fully resolved, and
+// the git directories.
+type excludedDirs struct {
+	roots, gitDirs []string
 }
 
-// pointsIntoMetron reports whether a link's target, resolved lexically, is
-// .metron/ at the root or lies under it. A relative target is resolved from
-// the link's directory as an absolute path, so that one which leaves the
-// repository and comes back in is resolved like any other. Backslashes count
-// as separators and the directory name is compared without regard to case,
-// so that the answer is the same on every platform and errs towards
-// reporting a problem.
-func (r *Repo) pointsIntoMetron(link, target string) bool {
+func (r *Repo) excluded() (excludedDirs, error) {
+	out, err := git(r.root, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+	if err != nil {
+		return excludedDirs{}, err
+	}
+	withResolved := func(dirs ...string) []string {
+		var all []string
+		for _, d := range dirs {
+			all = append(all, d)
+			if real, err := filepath.EvalSymlinks(d); err == nil && real != d {
+				all = append(all, real)
+			}
+		}
+		return all
+	}
+	var gitDirs []string
+	for _, line := range strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") {
+		gitDirs = append(gitDirs, filepath.FromSlash(line))
+	}
+	return excludedDirs{roots: withResolved(r.root), gitDirs: withResolved(gitDirs...)}, nil
+}
+
+// contains reports whether the absolute path p is .metron/ at the root, lies
+// under it, or lies in a git directory. The name .metron is compared without
+// regard to case, which errs towards reporting a problem.
+func (x excludedDirs) contains(p string) bool {
+	for _, root := range x.roots {
+		if rel, err := filepath.Rel(root, p); err == nil {
+			first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
+			if strings.EqualFold(first, strings.TrimSuffix(ExcludedDir, "/")) {
+				return true
+			}
+		}
+	}
+	for _, d := range x.gitDirs {
+		if rel, err := filepath.Rel(d, p); err == nil && rel != ".." && !strings.HasPrefix(filepath.ToSlash(rel), "../") {
+			return true
+		}
+	}
+	return false
+}
+
+// linkInto reports whether a tracked link reaches an excluded directory. The
+// link is resolved through the file system, following every link on the
+// way. When it does not resolve, because it dangles or loops, or when the
+// platform checked it out as a file holding its target, its target is
+// resolved lexically instead. A link missing from the working tree is
+// reported by git status.
+func (r *Repo) linkInto(link string, x excludedDirs) (bool, error) {
+	full := filepath.Join(r.root, filepath.FromSlash(link))
+	info, err := os.Lstat(full)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var target string
+	switch {
+	case info.Mode()&fs.ModeSymlink != 0:
+		if resolved, err := filepath.EvalSymlinks(full); err == nil {
+			return x.contains(resolved), nil
+		}
+		if target, err = os.Readlink(full); err != nil {
+			return false, err
+		}
+	case info.Mode().IsRegular():
+		content, err := os.ReadFile(full)
+		if err != nil {
+			return false, err
+		}
+		target = string(content)
+	default:
+		return false, nil
+	}
+	// Lexically, from the link's directory. Backslashes count as separators,
+	// so that the answer is the same on every platform.
 	target = strings.ReplaceAll(target, `\`, "/")
 	native := filepath.FromSlash(target)
 	if !path.IsAbs(target) && !filepath.IsAbs(native) {
 		native = filepath.Join(r.root, filepath.FromSlash(path.Dir(link)), native)
 	}
-	rel, err := filepath.Rel(r.root, filepath.Clean(native))
-	if err != nil {
-		return false
+	return x.contains(filepath.Clean(native)), nil
+}
+
+// SparseCheckout reports whether the working tree is a sparse checkout. The
+// files a sparse checkout leaves out carry skip-worktree, so its tree is never
+// clean.
+func (r *Repo) SparseCheckout() (bool, error) {
+	return r.configBool("core.sparseCheckout")
+}
+
+// IgnoreStat reports whether core.ignoreStat is set. Under it git marks the
+// files it writes assume-unchanged, so the tree is not clean.
+func (r *Repo) IgnoreStat() (bool, error) {
+	return r.configBool("core.ignoreStat")
+}
+
+// configBool reads a boolean setting, false when unset. A value git cannot
+// read as a boolean is an error.
+func (r *Repo) configBool(key string) (bool, error) {
+	out, err := git(r.root, "config", "-z", "--type=bool", "--get", key)
+	var ge *Error
+	if errors.As(err, &ge) && ge.ExitCode == 1 {
+		return false, nil
 	}
-	first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
-	return strings.EqualFold(first, strings.TrimSuffix(ExcludedDir, "/"))
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSuffix(string(out), "\x00") == "true", nil
 }

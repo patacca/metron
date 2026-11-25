@@ -51,8 +51,9 @@ var metronFiles = []metronFile{
 `, []string{"/state/lock", "/state/*.tmp", "/work/"}},
 	// Stored reports are compared byte for byte with what was ingested.
 	{".gitattributes", `# Written by metron init. Stored reports are compared byte for byte with what
-# was ingested, so git must never convert line endings under state/.
-`, []string{"state/** -text"}},
+# was ingested, so git must never convert line endings, apply a filter or
+# expand an identifier under state/, nor merge two ledgers line by line.
+`, []string{"state/** -text -filter -ident -merge"}},
 }
 
 // ensure creates a .metron/ file, or adds the lines an existing one lacks,

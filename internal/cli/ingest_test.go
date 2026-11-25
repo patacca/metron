@@ -87,12 +87,12 @@ func TestIngestAgainAndRestore(t *testing.T) {
 	if err := os.Remove(r.path(stored)); err != nil {
 		t.Fatal(err)
 	}
-	contains(t, "fsck", r.expect(exitNegative, "fsck").out, "reports/P-0001.json is missing", "metron ingest <the report accepted for P-0001>")
+	contains(t, "fsck", r.expect(exitNegative, "fsck").out, "reports/P-0001.json is missing", "metron ingest <report-file> with the identical bytes of the report accepted for packet P-0001")
 	contains(t, "gate", r.expect(exitNegative, "gate").out, "[FAIL] I", "reports/P-0001.json is missing")
 	a := r.expectNext(core.StepRepairLedger)
 	contains(t, "next reason", a.Reason, "the gate relies on the GREEN verdict of round 1, carried by the report of packet P-0001, and its stored file reports/P-0001.json is missing",
 		"restore the file from version control", "ingest the identical bytes again", "change the candidate so that a new review is held")
-	if a.Command != "metron ingest <the report accepted for P-0001>" {
+	if a.Command != "" || a.Usage != "metron ingest <report-file>" {
 		t.Fatalf("next %+v", a)
 	}
 	contains(t, "ingest reformatted", r.ingest(exitNegative, reformatted).err,

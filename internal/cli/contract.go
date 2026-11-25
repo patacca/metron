@@ -288,7 +288,7 @@ func printContract(out io.Writer, s *site, d contractDoc) error {
 	if d.LedgerProblem != "" {
 		fmt.Fprintf(&b, "Ledger:          %s\n", d.LedgerProblem)
 	}
-	pin := s.metron(`contract pin -m "<reason>"`)
+	pin := s.metron("contract pin -m <reason>")
 	switch {
 	case !d.Valid:
 		fmt.Fprintf(&b, "Result: INVALID. Fix every problem listed, then run %s again.\n", s.metron("contract"))

@@ -120,7 +120,7 @@ func runPacket(c *ctx, args []string) error {
 	// else is refused with what next says instead.
 	if a := w.next(); a.Step != core.StepSubmitReport {
 		if _, ok := a.Step.PacketRole(); !ok {
-			return fail(exitNegative, "the next action is %s, which takes no packet: %s\nRun: %s", a.Step, a.Reason, w.command(a))
+			return fail(exitNegative, "the next action is %s, which takes no packet: %s\n%s", a.Step, a.Reason, w.howTo(a))
 		}
 	}
 	if err := w.candidate(); err != nil {
@@ -129,8 +129,7 @@ func runPacket(c *ctx, args []string) error {
 	plan, err := core.PlanPacket(w.state, w.facts)
 	var r *core.Rejection
 	if errors.As(err, &r) {
-		a := w.next()
-		return fail(exitNegative, "%sRun: %s", rejectionText(r), w.command(a))
+		return fail(exitNegative, "%s%s", rejectionText(r), w.howTo(w.next()))
 	}
 	if err != nil {
 		return err

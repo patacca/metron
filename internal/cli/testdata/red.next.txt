@@ -2,4 +2,4 @@ Next step:    fix (owner: implementer)
 Reason:       blocking finding F-0001 is open: fix or dispute it
 Findings:     F-0001
 Run:          metron packet
-Then:         give the packet to the implementer (--format prompt renders it for reading) and submit the report with metron ingest <report-file>
+Then:         give the packet to the implementer (--format prompt renders it for reading; --format skeleton -o .metron/work/report.json writes the report to fill in) and submit the report with metron ingest <report-file>
