@@ -34,6 +34,23 @@ the ledger back. It is copied to the trial directory when the arm ends.
 | `unrestricted` | One agent, one prompt: review, fix, commit, decide | `approved`, `not-ready`, `role-failure` |
 | `bounded` | Reviewer and fixer, fresh agents each step, at most 3 rounds | `approved`, `cap`, `role-failure` |
 
+The anchoring experiment asks whether a reviewer who is shown the ledger
+misses a defect that the ledger says is resolved:
+
+```
+eval/run/anchoring.sh ledger <results-root>/listings/anchoring-ledger/<trial>
+eval/run/anchoring.sh fresh  <results-root>/listings/anchoring-fresh/<trial>
+```
+
+Both build the same history of the listings case with scripted reports and
+no agent (`run/anchoring.py`, texts from `cases/listings/NOTES.md`): a RED
+review with P1 and P2, the reference fix claimed for both, a verification
+confirming both, then a refactoring commit that brings P1 back while P2 stays
+fixed. The script checks that the fixture's tests pass on that tree, that
+P1's oracle fails and P2's pass. `ledger` then runs one reviewer step on that
+state; `fresh` runs one on a new repository whose single commit has the same
+tree, under a new ledger. Each ends `reviewed:<verdict>`, or `role-failure`.
+
 A variant case holds a one-line `base` file naming the case whose `repo/`
 and `oracle/` it shares; its own `contract.yaml` and `truth.json` apply.
 
