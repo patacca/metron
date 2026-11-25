@@ -233,6 +233,8 @@ func readLedger(events []core.Event) (ledgerFacts, error) {
 			_, err = payload[core.EscalationResolved](e)
 		case core.EventDirectiveIssued:
 			_, err = payload[core.DirectiveIssued](e)
+		case core.EventDecisionSuperseded:
+			_, err = payload[core.DecisionSuperseded](e)
 		default:
 			err = fmt.Errorf("event %d has the unknown type %q", e.Seq, e.Type)
 		}

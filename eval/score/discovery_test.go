@@ -90,6 +90,17 @@ func TestReopeningIsADiscovery(t *testing.T) {
 	}
 }
 
+func TestEveryAuditEventIsRead(t *testing.T) {
+	f := newFixture(t)
+	f.add(spec{arm: armMetron, name: "1", end: "governance:suspension", ledger: [][]core.Draft{{
+		{Type: core.EventDirectiveIssued, Data: core.DirectiveIssued{Packet: "P-0001", Text: "Fix the cause once."}},
+		{Type: core.EventDecisionSuperseded, Data: core.DecisionSuperseded{Decision: "D-0001", Packet: "P-0002", Rationale: "No longer needed."}},
+	}}})
+	if ts, _ := f.scoreOne("shop", armMetron); ts.Governance == nil {
+		t.Fatalf("the trial is not scored as a stop for governance: %+v", ts)
+	}
+}
+
 func TestUnexpectedApproval(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
