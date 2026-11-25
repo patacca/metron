@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "50a91b2214c584fb911b65961766467c36f0114ae168fdca5f8e6a362f9ec59d",
   "type": "verdict.recorded",
+  "more": 0,
   "data": {
     "round": 1,
     "verdict": "RED",

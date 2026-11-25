@@ -72,8 +72,8 @@ func TestReplayGenesis(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, err := Replay(tc.events)
 			if tc.about == nil {
-				if err != nil || s.Initialized() != (len(tc.events) > 0) {
-					t.Fatalf("replay: initialized %t, %v", s.Initialized(), err)
+				if err != nil || s.initialized != (len(tc.events) > 0) {
+					t.Fatalf("replay: initialized %t, %v", s.initialized, err)
 				}
 				return
 			}
@@ -124,14 +124,14 @@ func TestFindingHistory(t *testing.T) {
 		{Event: EventFindingFixConfirmed, Round: 1, Packet: "P-0007", Note: "ran the repro"},
 		{Event: EventFindingReopened, Round: 2, Packet: "P-0008", Note: "invalid-verification: the repro still fails"},
 	}
-	if f, _ := h.state.Finding("F-0001"); !reflect.DeepEqual(f.History, want) {
+	if f, _ := lookup(h.state, "F-0001"); !reflect.DeepEqual(f.History, want) {
 		t.Fatalf("history\n got %+v\nwant %+v", f.History, want)
 	}
 	wantDecisions := []Decision{
 		{Source: DecisionDirective, Packet: "P-0003", By: RoleAuditor, Text: "test empty input"},
 		{Source: DecisionResolution, Escalation: "E-0001", Packet: "P-0003", By: RoleAuditor, Text: "it is critical"},
 	}
-	if d := h.state.Decisions(); !reflect.DeepEqual(d, wantDecisions) {
+	if d := h.state.decisions; !reflect.DeepEqual(d, wantDecisions) {
 		t.Fatalf("decisions %+v", d)
 	}
 }
@@ -172,18 +172,18 @@ func TestViews(t *testing.T) {
 	if b := h.state.Backlog(); len(b) != 1 || b[0].ID != "F-0002" {
 		t.Fatalf("backlog %+v", b)
 	}
-	if r, ok := h.state.LatestRound(); !ok || r.Verdict != VerdictRed || r.Reviewer != "rev-1" {
+	if r, ok := h.state.latestRound(); !ok || r.Verdict != VerdictRed || r.Reviewer != "rev-1" {
 		t.Fatalf("latest round %+v", r)
 	}
 	if p, ok := h.state.Packet("P-0001"); !ok || p.Open || p.Report == nil || p.Report.Author.ID != "rev-1" {
 		t.Fatalf("packet %+v", p)
 	}
-	if !h.state.Initialized() || h.state.Protocol() != ProtocolVersion || h.state.Events() != len(h.events) || len(h.state.Pins()) != 1 {
+	if !h.state.initialized || h.state.Protocol() != ProtocolVersion || h.state.Events() != len(h.events) || len(h.state.pins) != 1 {
 		t.Fatal("ledger summary views")
 	}
 	fs := h.state.Findings()
 	fs[0].Status = StatusWithdrawn
-	if x, _ := h.state.Finding("F-0001"); x.Status != StatusOpen {
+	if x, _ := lookup(h.state, "F-0001"); x.Status != StatusOpen {
 		t.Fatal("a view shares its list with the state")
 	}
 }

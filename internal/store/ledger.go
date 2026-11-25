@@ -38,10 +38,10 @@ func (e *LedgerError) Error() string {
 }
 
 // VerifyLedger parses ledger bytes and verifies every line: the envelope
-// form, sequence numbers, prev links and hashes, as docs/architecture.md
-// section 7 defines them. Lines may end in CRLF. Empty data is a ledger with
-// no events. The error, if any, is a *LedgerError for the first line that
-// fails.
+// form, sequence numbers, prev links, hashes and batch markers, as
+// docs/architecture.md section 7 defines them. Lines may end in CRLF. Empty
+// data is a ledger with no events. The error, if any, is a *LedgerError for
+// the first line that fails.
 func VerifyLedger(data []byte) ([]core.Event, error) {
 	if len(data) == 0 {
 		return nil, nil
@@ -56,6 +56,10 @@ func VerifyLedger(data []byte) ([]core.Event, error) {
 			if len(line) != 0 {
 				return nil, &LedgerError{Line: i + 1, Msg: "no newline at the end of the line; the ledger is truncated or was edited"}
 			}
+			if i > 0 && events[i-1].More > 0 {
+				return nil, &LedgerError{Line: i, Msg: fmt.Sprintf("the ledger was cut off in the middle of a command: "+
+					"this event announces %d more events of its batch; restore the ledger from version control", events[i-1].More)}
+			}
 			break
 		}
 		line = bytes.TrimSuffix(line, []byte("\r"))
@@ -68,6 +72,15 @@ func VerifyLedger(data []byte) ([]core.Event, error) {
 		}
 		if e.Prev != prev {
 			return nil, &LedgerError{Line: i + 1, Msg: "prev does not match the hash of the previous event"}
+		}
+		if i > 0 && events[i-1].More > 0 {
+			before := events[i-1]
+			if e.More != before.More-1 {
+				return nil, &LedgerError{Line: i + 1, Msg: fmt.Sprintf("more is %d, but the previous event announced %d more events of its command, so it must be %d", e.More, before.More, before.More-1)}
+			}
+			if e.Time != before.Time {
+				return nil, &LedgerError{Line: i + 1, Msg: fmt.Sprintf("time %s differs from %s, the time of the previous event of the same command", e.Time, before.Time)}
+			}
 		}
 		prev = e.Hash
 		events = append(events, e)
@@ -93,7 +106,7 @@ func parseLine(line []byte) (core.Event, error) {
 		return core.Event{}, fmt.Errorf("hash is not 64 lowercase hexadecimal digits")
 	}
 	if !bytes.Equal(appendLine(nil, e), line) {
-		return core.Event{}, fmt.Errorf("not in envelope form: members seq, time, prev, type, data, hash in this order, without whitespace")
+		return core.Event{}, fmt.Errorf("not in envelope form: members seq, time, prev, type, more, data, hash in this order, without whitespace")
 	}
 	// The hash covers the line up to the last occurrence of the marker,
 	// followed by a closing brace.
@@ -116,6 +129,9 @@ func checkEvent(e core.Event) error {
 	}
 	if !isHex64(e.Prev) {
 		return fmt.Errorf("prev is not 64 lowercase hexadecimal digits")
+	}
+	if e.More < 0 {
+		return fmt.Errorf("more %d is negative", e.More)
 	}
 	if e.Type == "" || strings.Trim(string(e.Type), "abcdefghijklmnopqrstuvwxyz0123456789.-") != "" {
 		return fmt.Errorf("type %q is not made of lowercase letters, digits, '.' and '-'", e.Type)
@@ -151,27 +167,30 @@ func appendBody(b []byte, e core.Event) []byte {
 	b = append(b, e.Prev...)
 	b = append(b, `","type":"`...)
 	b = append(b, e.Type...)
-	b = append(b, `","data":`...)
+	b = append(b, `","more":`...)
+	b = strconv.AppendInt(b, int64(e.More), 10)
+	b = append(b, `,"data":`...)
 	b = append(b, e.Data...)
 	return append(b, '}')
 }
 
-// Seal turns drafts into events that extend the ledger whose last event is
-// prev, or start a ledger when prev is nil. Every event gets the given time,
-// which must be RFC 3339 UTC with second precision (TimeFormat). A payload is
-// written in its canonical JSON form.
+// Seal turns the drafts of one command into a batch of events that extends
+// the ledger whose last event is prev, or starts a ledger when prev is nil.
+// Every event gets the given time, which must be RFC 3339 UTC with second
+// precision (TimeFormat), and the number of events of the batch that follow
+// it. A payload is written in its canonical JSON form.
 func Seal(prev *core.Event, time string, drafts []core.Draft) ([]core.Event, error) {
 	seq, hash := 0, GenesisPrev
 	if prev != nil {
 		seq, hash = prev.Seq, prev.Hash
 	}
 	events := make([]core.Event, 0, len(drafts))
-	for _, d := range drafts {
+	for i, d := range drafts {
 		data, err := canon.Marshal(d.Data)
 		if err != nil {
 			return nil, fmt.Errorf("seal %s event: payload: %w", d.Type, err)
 		}
-		e := core.Event{Seq: seq + 1, Time: time, Prev: hash, Type: d.Type, Data: data}
+		e := core.Event{Seq: seq + 1, Time: time, Prev: hash, Type: d.Type, More: len(drafts) - 1 - i, Data: data}
 		if err := checkEvent(e); err != nil {
 			return nil, fmt.Errorf("seal %s event: %w", d.Type, err)
 		}

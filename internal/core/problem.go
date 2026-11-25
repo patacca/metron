@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Layer names the validation layer that refused a document or a command.
@@ -84,14 +85,21 @@ func ptr(parts ...any) string {
 	return b.String()
 }
 
-func blank(s string) bool { return strings.TrimSpace(s) == "" }
+// blank reports whether s has no content: no rune that is graphic and not
+// a space. U+00A0 is a space; U+200B, U+FEFF and U+2060 are format
+// characters, not graphic, so none of them is content either.
+func blank(s string) bool {
+	for _, r := range s {
+		if unicode.IsGraphic(r) && !unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
+}
 
 // count writes n with the singular or the plural noun, as English needs.
 func count(n int, one, many string) string {
-	if n == 1 {
-		return "1 " + one
-	}
-	return fmt.Sprintf("%d %s", n, many)
+	return fmt.Sprintf("%d %s", n, pick(n, one, many))
 }
 
 func lowerHex(s string) bool {
@@ -118,6 +126,25 @@ func validCommit(h string) bool {
 
 func validCandidate(c Candidate) bool {
 	return validCommit(c.Commit) && validDigest(c.Digest)
+}
+
+// candidateProblem says in words what is missing or wrong in a candidate, or
+// returns "" when it is well formed.
+func candidateProblem(c Candidate) string {
+	var ps []string
+	switch {
+	case c.Commit == "":
+		ps = append(ps, "the commit is unknown")
+	case !validCommit(c.Commit):
+		ps = append(ps, fmt.Sprintf("commit %q is not a full commit hash", c.Commit))
+	}
+	switch {
+	case c.Digest == "":
+		ps = append(ps, "the candidate digest is unknown")
+	case !validDigest(c.Digest):
+		ps = append(ps, fmt.Sprintf("candidate digest %q is not \"sha256:\" followed by 64 lowercase hex digits", c.Digest))
+	}
+	return strings.Join(ps, " and ")
 }
 
 const timeLayout = "2006-01-02T15:04:05Z"

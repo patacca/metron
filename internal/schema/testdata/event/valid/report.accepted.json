@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "6b737fa349652ca7b4a531428c3ae62f37f0c4627bc4276fe553273b87818949",
   "type": "report.accepted",
+  "more": 0,
   "data": {
     "packet": "P-0001",
     "role": "reviewer",

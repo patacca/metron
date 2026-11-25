@@ -89,7 +89,7 @@ func Gate(s State, f Facts) GateResult {
 	}
 	switch {
 	case !validCandidate(f.Candidate):
-		i = append(i, fmt.Sprintf("the current candidate %+v is malformed", f.Candidate))
+		i = append(i, "the current candidate cannot be identified: "+candidateProblem(f.Candidate))
 	case !reviewed:
 		i = append(i, noRound)
 	case latest.Candidate.Digest != f.Candidate.Digest:
@@ -108,10 +108,23 @@ func Gate(s State, f Facts) GateResult {
 		if latest.Candidate.Digest != f.Candidate.Digest {
 			v = append(v, fmt.Sprintf("the verdict of round %d is for candidate %s, not %s", latest.Number, latest.Candidate.Digest, f.Candidate.Digest))
 		}
-		if !pinned || latest.Contract != pin.Digest {
+		switch {
+		case !pinned:
+			// Cannot occur in a replayable ledger: a round opens only under
+			// a pin and pins are never removed. Kept as the fail-closed default.
+			v = append(v, fmt.Sprintf("the verdict of round %d is under contract %s, but no contract is pinned", latest.Number, latest.Contract))
+		case latest.Contract != pin.Digest:
 			v = append(v, fmt.Sprintf("the verdict of round %d was issued under contract %s, not the pinned one", latest.Number, latest.Contract))
 		}
-		if blank(latest.Reviewer) || s.actedAs(latest.Reviewer, RoleImplementer) {
+		switch {
+		case blank(latest.Reviewer):
+			// Cannot occur in a replayable ledger: Apply records a verdict
+			// only for the non-blank author of the round's accepted report.
+			// Kept as the fail-closed default.
+			v = append(v, fmt.Sprintf("the verdict of round %d names no reviewer", latest.Number))
+		case s.actedAs(latest.Reviewer, RoleImplementer):
+			// Ingest refuses such a report, but Apply does not enforce role
+			// separation, so a hand-edited ledger that replays can hold one.
 			v = append(v, fmt.Sprintf("the verdict of round %d was issued by %q, who acted as implementer", latest.Number, latest.Reviewer))
 		}
 	}

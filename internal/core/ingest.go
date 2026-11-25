@@ -31,6 +31,19 @@ func Ingest(s State, f Facts, r Report, digest, rawDigest string) (drafts []Draf
 		return nil, false, ps.err(LayerTransition)
 	}
 	pk := s.packets[i]
+	// Identifiers repeat across ledgers; the recorded digest does not. This
+	// comes first so that nothing, not even the duplicate shortcut, accepts a
+	// report written for another packet.
+	if r.PacketDigest != pk.Digest {
+		var ps problems
+		if r.PacketDigest == "" {
+			ps.add("/packet_digest", "the report names no packet digest: copy packet_digest from packet %s and submit it again", pk.Packet)
+		} else {
+			ps.add("/packet_digest", "the report was written for a different packet %s (digest %s, but this ledger issued %s): it comes from another ledger, another repository or an earlier issue of the same identifier; get the current packet again and answer it",
+				pk.Packet, r.PacketDigest, pk.Digest)
+		}
+		return nil, false, ps.err(LayerTransition)
+	}
 	if pk.Report != nil && pk.Report.Digest == digest {
 		return nil, true, nil
 	}

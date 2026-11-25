@@ -1,6 +1,6 @@
 // Package vcs observes a git repository through the git executable: the
-// candidate commit and its digest, working-tree cleanliness, history between
-// candidates, and the configured identity.
+// candidate commit and its digest, working-tree cleanliness, the commits a
+// report lists, and the configured identity.
 //
 // docs/architecture.md, section 5, defines the candidate digest and
 // cleanliness.
@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/patacca/metron/internal/canon"
@@ -97,96 +98,142 @@ func (r *Repo) CandidateDigest(commit string) (string, error) {
 	return canon.Digest(kept), nil
 }
 
-// DirtyPaths returns the paths, relative to the root and slash-separated,
-// that `git status --porcelain` reports outside .metron/, untracked files
-// included. The working tree is clean when there are none.
-func (r *Repo) DirtyPaths() ([]string, error) {
-	// The flags pin down what configuration could otherwise change:
-	// untracked files are listed one by one, submodules are not ignored,
-	// renames are reported as a deletion and an addition, and there is no
-	// branch header.
-	out, err := git(r.root, "status", "--porcelain", "-z", "--untracked-files=all",
-		"--ignore-submodules=none", "--no-renames", "--no-branch")
-	if err != nil {
-		return nil, err
-	}
-	paths := []string{}
-	rest := string(out)
-	for rest != "" {
-		entry, after, ok := strings.Cut(rest, "\x00")
-		if !ok || len(entry) < 4 || entry[2] != ' ' {
-			return nil, fmt.Errorf("unexpected git status entry %q", entry)
-		}
-		rest = after
-		changed := []string{entry[3:]}
-		if strings.ContainsAny(entry[:2], "RC") {
-			// The original path follows as a field of its own.
-			from, after, ok := strings.Cut(rest, "\x00")
-			if !ok {
-				return nil, fmt.Errorf("git status entry %q lacks its original path", entry)
-			}
-			rest = after
-			changed = append(changed, from)
-		}
-		for _, p := range changed {
-			if !strings.HasPrefix(p, ExcludedDir) {
-				paths = append(paths, p)
-			}
-		}
-	}
-	return paths, nil
-}
-
-// CommitsSince returns the commits reachable from HEAD and not from base,
-// newest first. A commit is substantive when its candidate digest differs
-// from its first parent's, merge commits included; a root commit is
-// substantive when its tree has an entry outside .metron/. A commit that
-// touches only .metron/, or nothing, is not.
-func (r *Repo) CommitsSince(base string) ([]core.Commit, error) {
+// Describe describes the commits a report lists, one entry per hash in input
+// order, relative to HEAD and to base, the commit the round reviewed:
+//
+//   - Reachable: the hash names a commit that is HEAD or an ancestor of it.
+//   - InBase: the hash names a commit that is base or an ancestor of it. It is
+//     false when base no longer exists, for example after history was
+//     rewritten and garbage-collected.
+//   - Substantive: the hash names a commit whose candidate digest differs
+//     from its first parent's, merges included, or a root commit whose tree
+//     has an entry outside .metron/.
+//
+// A hash that is unknown, malformed or names another kind of object is
+// described with every flag false. Only a failure to run git is an error.
+func (r *Repo) Describe(base string, commits []string) ([]core.Commit, error) {
 	if !isHash(base) {
 		return nil, fmt.Errorf("invalid base commit %q: expected a full hexadecimal commit hash", base)
 	}
-	// Each line is a commit followed by its parents.
-	out, err := git(r.root, "rev-list", "--parents", "HEAD", "^"+base+"^{commit}")
+	var listed []string
+	for _, c := range commits {
+		if isHash(c) && !slices.Contains(listed, c) {
+			listed = append(listed, c)
+		}
+	}
+	// One query says which names are commits: the listed hashes, base and
+	// HEAD, which does not exist before the first commit.
+	names := append(slices.Clone(listed), base, "HEAD")
+	out, err := gitInput(r.root, strings.Join(names, "\n")+"\n", "cat-file", "--batch-check=%(objectname) %(objecttype)")
 	if err != nil {
 		return nil, err
 	}
-	// Digests are cached: each costs one git process, and a commit's first
-	// parent is usually the next commit listed.
-	digests := map[string]string{}
-	digestOf := func(commit string) (string, error) {
-		if d, ok := digests[commit]; ok {
-			return d, nil
-		}
-		d, err := r.CandidateDigest(commit)
-		digests[commit] = d
-		return d, err
+	lines := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
+	if len(lines) != len(names) {
+		return nil, fmt.Errorf("git cat-file answered %d of %d queries", len(lines), len(names))
 	}
-	commits := []core.Commit{}
-	for _, line := range strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") {
-		if line == "" {
-			continue
+	isCommit := make([]bool, len(names))
+	for i, line := range lines {
+		isCommit[i] = strings.HasSuffix(line, " commit")
+	}
+	baseExists, headExists := isCommit[len(names)-2], isCommit[len(names)-1]
+
+	var existing []string
+	for i, c := range listed {
+		if isCommit[i] {
+			existing = append(existing, c)
 		}
+	}
+	parents, err := r.parents(existing)
+	if err != nil {
+		return nil, err
+	}
+	described := map[string]core.Commit{}
+	for _, c := range existing {
+		d := core.Commit{Hash: c}
+		if headExists {
+			if d.Reachable, err = r.isAncestor(c, "HEAD"); err != nil {
+				return nil, err
+			}
+		}
+		if baseExists {
+			if d.InBase, err = r.isAncestor(c, base); err != nil {
+				return nil, err
+			}
+		}
+		if d.Substantive, err = r.substantive(c, parents[c]); err != nil {
+			return nil, err
+		}
+		described[c] = d
+	}
+	result := make([]core.Commit, len(commits))
+	for i, c := range commits {
+		if d, ok := described[c]; ok {
+			result[i] = d
+		} else {
+			result[i] = core.Commit{Hash: c}
+		}
+	}
+	return result, nil
+}
+
+// parents returns the parents of existing commits, first parent first.
+func (r *Repo) parents(commits []string) (map[string][]string, error) {
+	parents := map[string][]string{}
+	if len(commits) == 0 {
+		return parents, nil
+	}
+	out, err := git(r.root, append([]string{"rev-list", "--no-walk=unsorted", "--parents"}, commits...)...)
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") {
 		hashes := strings.Fields(line)
 		for _, h := range hashes {
 			if !isHash(h) {
 				return nil, fmt.Errorf("git rev-list returned %q, not a commit hash", h)
 			}
 		}
-		digest, err := digestOf(hashes[0])
-		if err != nil {
-			return nil, err
+		if len(hashes) > 0 {
+			parents[hashes[0]] = hashes[1:]
 		}
-		// A root commit is compared with an empty tree.
-		parent := canon.Digest(nil)
-		if len(hashes) > 1 {
-			if parent, err = digestOf(hashes[1]); err != nil {
-				return nil, err
-			}
-		}
-		commits = append(commits, core.Commit{Hash: hashes[0], Substantive: digest != parent})
 	}
-	return commits, nil
+	return parents, nil
+}
+
+// isAncestor reports whether commit a is b or an ancestor of b.
+func (r *Repo) isAncestor(a, b string) (bool, error) {
+	_, err := git(r.root, "merge-base", "--is-ancestor", a, b)
+	var ge *Error
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.As(err, &ge) && ge.ExitCode == 1:
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+// substantive reports whether a commit changes an entry outside .metron/
+// relative to its first parent, or, for a root commit, has one. Comparing
+// the two trees path by path is equivalent to comparing their candidate
+// digests, and costs only the size of the difference.
+func (r *Repo) substantive(commit string, parents []string) (bool, error) {
+	if len(parents) == 0 {
+		d, err := r.CandidateDigest(commit)
+		return d != canon.Digest(nil), err
+	}
+	out, err := git(r.root, "diff-tree", "-r", "-z", "--name-only", "--no-renames", "--ignore-submodules=none", parents[0], commit)
+	if err != nil {
+		return false, err
+	}
+	for _, path := range strings.Split(string(out), "\x00") {
+		if path != "" && !strings.HasPrefix(path, ExcludedDir) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Identity returns the user.name and user.email configured for the
@@ -237,8 +284,14 @@ func (e *Error) Error() string {
 // repository never competes with the user's git commands. Replace refs are
 // ignored so that a commit always means its own tree.
 func git(dir string, args ...string) ([]byte, error) {
+	return gitInput(dir, "", args...)
+}
+
+// gitInput is git with input on its standard input.
+func gitInput(dir, input string, args ...string) ([]byte, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(input)
 	cmd.Env = append(os.Environ(), "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_NO_REPLACE_OBJECTS=1")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

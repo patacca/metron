@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -23,27 +24,60 @@ type site struct {
 	// flagDir is --state-dir as given, repeated in the commands metron prints
 	// so that following them reaches the same state directory.
 	flagDir string
+	// inRepo is set when the state directory lies under .metron/, where it
+	// is committed together with the work.
+	inRepo bool
 }
 
 // open locates the repository that contains the working directory and the
 // state directory: --state-dir, else $METRON_STATE_DIR, else .metron/state
-// under the repository root.
+// under the repository root. A state directory elsewhere in the working tree
+// is refused: every write to it would make the tree unclean.
 func (c *ctx) open(flagDir string) (*site, error) {
 	repo, err := vcs.Open(c.Dir)
 	if err != nil {
 		return nil, fail(exitEnv, "%v\nmetron works inside a git repository: run it there, or create one with git init", err)
 	}
-	dir := flagDir
+	s := &site{repo: repo, flagDir: flagDir}
+	dir, from, status := flagDir, "--state-dir", exitUsage
 	if dir == "" {
-		dir = c.Getenv(envStateDir)
+		dir, from, status = c.Getenv(envStateDir), "$"+envStateDir, exitEnv
 	}
-	switch {
-	case dir == "":
-		dir = filepath.Join(repo.Root(), ".metron", "state")
-	case !filepath.IsAbs(dir):
+	if dir == "" {
+		s.store, s.inRepo = store.New(filepath.Join(repo.Root(), ".metron", "state")), true
+		return s, nil
+	}
+	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(c.Dir, dir)
 	}
-	return &site{repo: repo, store: store.New(filepath.Clean(dir)), flagDir: flagDir}, nil
+	dir = filepath.Clean(dir)
+	if rel, err := filepath.Rel(realPath(repo.Root()), realPath(dir)); err == nil && !filepath.IsAbs(rel) &&
+		rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if rel = filepath.ToSlash(rel); rel != ".metron" && !strings.HasPrefix(rel, ".metron/") {
+			return nil, fail(status, "the state directory %s, set by %s, lies inside the working tree but outside .metron/, so every write to it would make the tree unclean: use a directory outside the repository, or leave the default .metron/state",
+				dir, from)
+		}
+		s.inRepo = true
+	}
+	s.store = store.New(dir)
+	return s, nil
+}
+
+// realPath resolves the symbolic links in the longest prefix of path that
+// exists, so that paths can be compared with the repository root git reports.
+func realPath(path string) string {
+	rest := ""
+	for p := path; ; {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return filepath.Join(r, rest)
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return path
+		}
+		rest = filepath.Join(filepath.Base(p), rest)
+		p = parent
+	}
 }
 
 // show renders a path for output: relative to the repository root, with
@@ -78,10 +112,12 @@ type world struct {
 	facts  core.Facts
 	state  core.State
 	events []core.Event
-	// ledgerMissing is set when the state directory has no ledger yet.
-	ledgerMissing bool
-	contract      *contractCheck
-	dirty         []string
+	// ledgerMissing is set when the state directory has no ledger yet, or an
+	// empty one: either way it is not initialized. ledgerEmpty tells which.
+	ledgerMissing, ledgerEmpty bool
+	contract                   *contractCheck
+	// dirty lists why the working tree is not clean.
+	dirty []vcs.TreeProblem
 	// noCommits is set when HEAD has no commit; Facts.Candidate is then empty.
 	noCommits bool
 	// files caches storedFiles.
@@ -90,10 +126,9 @@ type world struct {
 }
 
 // gather observes the time, the ledger, the contract, the candidate, the
-// working tree and the open packet's stored file. With commits set it also
-// lists the commits since the base of an open fix packet, which only an
-// implementer report needs.
-func (c *ctx) gather(s *site, commits bool) (*world, error) {
+// working tree and the open packet's stored file. The commits an implementer
+// report lists are described separately, by describe.
+func (c *ctx) gather(s *site) (*world, error) {
 	w := &world{site: s}
 	w.facts.Time = c.Now().UTC().Format(store.TimeFormat)
 
@@ -104,6 +139,9 @@ func (c *ctx) gather(s *site, commits bool) (*world, error) {
 		w.facts.LedgerVerified = true
 	case err != nil:
 		w.facts.LedgerProblem = err.Error()
+	case len(events) == 0:
+		w.ledgerMissing, w.ledgerEmpty = true, true
+		w.facts.LedgerVerified = true
 	default:
 		st, err := core.Replay(events)
 		if err != nil {
@@ -134,20 +172,43 @@ func (c *ctx) gather(s *site, commits bool) (*world, error) {
 		w.facts.Candidate = core.Candidate{Commit: head, Digest: digest}
 	}
 
-	if w.dirty, err = s.repo.DirtyPaths(); err != nil {
+	if w.dirty, err = s.repo.TreeProblems(); err != nil {
 		return nil, err
 	}
 	w.facts.Clean = len(w.dirty) == 0
 
 	if op, ok := w.state.OpenPacket(); ok {
 		w.facts.PacketProblem = w.packetFile(op)
-		if commits && !w.noCommits && op.Role == core.RoleImplementer && op.Base != nil {
-			if w.facts.Commits, err = s.repo.CommitsSince(op.Base.Commit); err != nil {
-				return nil, fmt.Errorf("list the commits since the base of packet %s: %w", op.Packet, err)
-			}
-		}
 	}
 	return w, nil
+}
+
+// describe observes the commits that the fixes of a report list, relative to
+// HEAD and to the base of the report's packet. A report that lists none, or
+// whose packet has no base, needs no description: the core judges it without.
+func (w *world) describe(r core.Report) error {
+	var body struct {
+		Fixes []struct {
+			Commits []string `json:"commits"`
+		} `json:"fixes"`
+	}
+	if json.Unmarshal(r.Body, &body) != nil {
+		return nil
+	}
+	var hashes []string
+	for _, f := range body.Fixes {
+		hashes = append(hashes, f.Commits...)
+	}
+	rec, ok := w.state.Packet(r.Packet)
+	if len(hashes) == 0 || !ok || rec.Base == nil {
+		return nil
+	}
+	commits, err := w.repo.Describe(rec.Base.Commit, hashes)
+	if err != nil {
+		return fmt.Errorf("describe the commits the report lists: %w", err)
+	}
+	w.facts.Commits = commits
+	return nil
 }
 
 // packetFile says what is wrong with an issued packet's stored file, or
@@ -174,17 +235,29 @@ type fileProblem struct {
 	Recovery string `json:"recovery"`
 	// command is the command that recovers, when one does.
 	command string
-	// open is set for the open packet, which metron packet voids and issues
-	// again.
-	open bool
+	// report is set for a report file, and clear for a packet file; detail
+	// is the problem without the file's owner.
+	report bool
+	detail string
 }
 
 func (p fileProblem) String() string { return p.Problem + ": " + p.Recovery }
 
+// withProblem fills in Problem from the file's owner and the detail.
+func (p fileProblem) withProblem() fileProblem {
+	owner := "packet " + p.Packet
+	if p.report {
+		owner = "report of packet " + p.Packet
+	}
+	p.Problem = owner + ": " + p.detail
+	return p
+}
+
 // storedFiles checks the files the ledger refers to: the file of every packet
 // that is open or answered, and the file of every accepted report. A voided
 // packet binds nothing, so its file is not checked: voiding is how a packet
-// whose file was lost is recovered.
+// whose file was lost is recovered. A report file whose packet has no
+// accepted report is not the ledger's, and is ignored.
 func (w *world) storedFiles() []fileProblem {
 	if w.filesSet {
 		return w.files
@@ -195,9 +268,9 @@ func (w *world) storedFiles() []fileProblem {
 			continue
 		}
 		if why := w.packetFile(p); why != "" {
-			fp := fileProblem{Packet: p.Packet, Problem: fmt.Sprintf("packet %s: %s", p.Packet, why)}
+			fp := fileProblem{Packet: p.Packet, detail: why}
 			if p.Open {
-				fp.open, fp.command = true, w.metron("packet")
+				fp.command = w.metron("packet")
 				fp.Recovery = fmt.Sprintf("run %s to void it and issue a new packet", fp.command)
 			} else {
 				fp.Recovery = "restore the file from version control"
@@ -212,65 +285,99 @@ func (w *world) storedFiles() []fileProblem {
 		ingest := w.metron("ingest <the report accepted for " + p.Packet + ">")
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
-			w.files = append(w.files, fileProblem{Packet: p.Packet, command: ingest,
-				Problem:  fmt.Sprintf("report of packet %s: its stored file %s is missing", p.Packet, name),
-				Recovery: "restore it by running " + ingest})
+			w.files = append(w.files, fileProblem{Packet: p.Packet, command: ingest, report: true,
+				detail:   fmt.Sprintf("its stored file %s is missing", name),
+				Recovery: "restore it from version control, or by running " + ingest + " with the identical bytes"})
 		case err != nil:
-			w.files = append(w.files, fileProblem{Packet: p.Packet,
-				Problem:  fmt.Sprintf("report of packet %s: its stored file %s cannot be read (%v)", p.Packet, name, err),
+			w.files = append(w.files, fileProblem{Packet: p.Packet, report: true,
+				detail:   fmt.Sprintf("its stored file %s cannot be read (%v)", name, err),
 				Recovery: "make it readable"})
 		case canon.Digest(data) != p.Report.RawDigest:
-			w.files = append(w.files, fileProblem{Packet: p.Packet,
-				Problem:  fmt.Sprintf("report of packet %s: its stored file %s does not match the raw digest recorded when it was accepted", p.Packet, name),
-				Recovery: "delete the file and run " + ingest + ", or restore it from version control"})
+			w.files = append(w.files, fileProblem{Packet: p.Packet, command: ingest, report: true,
+				detail:   fmt.Sprintf("its stored file %s does not match the raw digest recorded when it was accepted", name),
+				Recovery: "restore it from version control, or delete it and run " + ingest + " with the identical bytes"})
 		}
+	}
+	for i := range w.files {
+		w.files[i] = w.files[i].withProblem()
 	}
 	return w.files
 }
 
-// next is the single next action: the core's, except that a stored file that
-// does not match the ledger is an integrity failure to repair first (the open
-// packet's file excepted: the core ignores that packet and metron packet
-// voids it), and that a repository without commits has no candidate.
+// next is the single next action: the core's, except that a repository
+// without commits has no candidate, and that a gate the core finds open still
+// needs the report carrying its verdict stored intact.
 func (w *world) next() core.Action {
 	a := core.Next(w.state, w.facts)
-	if a.Step == core.StepRepairLedger {
+	switch {
+	case a.Step == core.StepRepairLedger:
 		return a
-	}
-	var why []string
-	for _, p := range w.storedFiles() {
-		if !p.open {
-			why = append(why, p.String())
-		}
-	}
-	if len(why) > 0 {
-		return core.Action{Step: core.StepRepairLedger, Owner: core.RoleGovernance,
-			Reason: "stored files do not match the ledger: " + strings.Join(why, "; ")}
-	}
-	if w.noCommits && a.Step != core.StepPinContract {
+	case w.noCommits && a.Step != core.StepPinContract:
 		return core.Action{Step: core.StepCommitChanges, Owner: core.RoleImplementer,
 			Reason: "the repository has no commits: commit the work to review"}
+	case a.Step == core.StepNone:
+		if p, r, lost := w.verdictReport(); lost {
+			return core.Action{Step: core.StepRepairLedger, Owner: core.RoleGovernance,
+				Reason: fmt.Sprintf("the gate relies on the %s verdict of round %d, carried by the report of packet %s, and %s: restore the file from version control, ingest the identical bytes again with %s, or change the candidate so that a new review is held",
+					r.Verdict, r.Number, p.Packet, p.detail, p.command)}
+		}
 	}
 	return a
 }
 
-// gate is the core's gate with the stored files added to integrity: a file
-// that does not match the ledger keeps the gate closed.
+// gate is the core's gate with one stored file added to integrity: the
+// report carrying the verdict it relies on must be stored intact. Other
+// stored-file problems are for fsck and status; they do not close it.
 func (w *world) gate() core.GateResult {
 	g := core.Gate(w.state, w.facts)
-	files := w.storedFiles()
+	p, _, lost := w.verdictReport()
 	for i := range g.Conditions {
 		cd := &g.Conditions[i]
 		if cd.Name != core.ConditionIntegrity {
 			continue
 		}
-		cd.Description += "; every stored packet and report file matches the ledger"
-		for _, p := range files {
+		cd.Description += "; the report carrying the verdict is stored intact"
+		if lost {
 			cd.Reasons = append(cd.Reasons, p.String())
 			cd.Satisfied, g.Open = false, false
 		}
 	}
 	return g
+}
+
+// verdictReport returns the problem with the stored file of the reviewer
+// report of the latest round of the current stage that has a verdict, and
+// that round, if its file is not intact.
+func (w *world) verdictReport() (fileProblem, core.Round, bool) {
+	rounds := w.state.StageRounds()
+	for i := len(rounds) - 1; i >= 0; i-- {
+		if rounds[i].Verdict == "" {
+			continue
+		}
+		for _, p := range w.storedFiles() {
+			if p.report && p.Packet == rounds[i].Packet {
+				return p, rounds[i], true
+			}
+		}
+		break
+	}
+	return fileProblem{}, core.Round{}, false
+}
+
+// ledgerUnusable says why the ledger cannot be evaluated at all, with the
+// command that starts the recovery, or returns "".
+func (w *world) ledgerUnusable() (string, string) {
+	switch {
+	case w.ledgerEmpty:
+		return fmt.Sprintf("metron is not initialized here: the ledger in %s is empty", w.show(w.store.Dir())), w.metron("init")
+	case w.ledgerMissing:
+		return fmt.Sprintf("metron is not initialized here: %s has no ledger", w.show(w.store.Dir())), w.metron("init")
+	case !w.facts.LedgerVerified:
+		return "the ledger fails verification: " + w.facts.LedgerProblem, w.metron("fsck")
+	case w.state.Protocol() != core.ProtocolVersion:
+		return fmt.Sprintf("the ledger was written under protocol %q, which this metron does not implement (%s)", w.state.Protocol(), core.ProtocolVersion), w.metron("version")
+	}
+	return "", ""
 }
 
 // command renders the command that performs or continues an action.
@@ -281,10 +388,8 @@ func (w *world) command(a core.Action) string {
 		case w.ledgerMissing:
 			return w.metron("init")
 		case w.facts.LedgerVerified:
-			for _, p := range w.storedFiles() {
-				if !p.open && p.command != "" {
-					return p.command
-				}
+			if p, _, lost := w.verdictReport(); lost && p.command != "" {
+				return p.command
 			}
 		}
 		return w.metron("fsck")
@@ -298,7 +403,7 @@ func (w *world) command(a core.Action) string {
 	case core.StepAdjudicate:
 		return w.metron(fmt.Sprintf(`resolve %s -m "<decision>"`, a.Escalations[0]))
 	case core.StepCommitChanges:
-		return "git add -A && git commit"
+		return w.commitCommand()
 	case core.StepRunChecks:
 		return w.metron("check")
 	case core.StepReview, core.StepFix, core.StepVerify, core.StepAudit:
@@ -307,19 +412,46 @@ func (w *world) command(a core.Action) string {
 	return w.metron("gate")
 }
 
-// staleOpenPacket returns the open packet when the core no longer considers
-// it valid, so that output can say that metron packet will void it.
-func (w *world) staleOpenPacket(a core.Action) (core.PacketRecord, bool) {
+// commitCommand is the command that makes the working tree clean: none when
+// it is clean already and only a new commit of the candidate helps, or when
+// a symbolic link must be replaced by hand.
+func (w *world) commitCommand() string {
+	if w.facts.Clean && !w.noCommits {
+		return ""
+	}
+	var hidden []string
+	link := false
+	for _, p := range w.dirty {
+		switch p.Kind {
+		case vcs.TreeHidden:
+			hidden = append(hidden, quoteArg(p.Path))
+		case vcs.TreeLink:
+			link = true
+		}
+	}
+	switch {
+	case len(hidden) > 0:
+		paths := strings.Join(hidden, " ")
+		return fmt.Sprintf("git update-index --no-skip-worktree -- %s && git update-index --no-assume-unchanged -- %s", paths, paths)
+	case link:
+		return ""
+	}
+	return "git add -A && git commit"
+}
+
+// staleOpenPacket returns the open packet and why the core no longer
+// considers it valid, so that output can say that metron packet voids it.
+func (w *world) staleOpenPacket(a core.Action) (core.PacketRecord, string, bool) {
 	op, ok := w.state.OpenPacket()
 	if !ok || a.Step == core.StepSubmitReport || a.Step == core.StepRepairLedger || a.Step == core.StepPinContract {
-		return core.PacketRecord{}, false
+		return core.PacketRecord{}, "", false
 	}
-	return op, true
+	return op, core.PacketInvalid(w.state, w.facts), true
 }
 
 // lock takes the state directory's lock and gathers the facts under it. The
 // caller closes the writer after committing.
-func (c *ctx) lock(s *site, commits bool) (*store.Writer, *world, error) {
+func (c *ctx) lock(s *site) (*store.Writer, *world, error) {
 	wr, err := s.store.Lock()
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, fail(exitEnv, "metron is not initialized here: the state directory %s does not exist; run %s",
@@ -328,29 +460,29 @@ func (c *ctx) lock(s *site, commits bool) (*store.Writer, *world, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	w, err := c.gather(s, commits)
+	w, err := c.gather(s)
 	if err != nil {
 		wr.Close()
 		return nil, nil, err
 	}
-	if err := w.writable(); err != nil {
+	if err := w.usable(true); err != nil {
 		wr.Close()
 		return nil, nil, err
 	}
 	return wr, w, nil
 }
 
-// writable refuses to change a ledger that is missing or does not verify.
-func (w *world) writable() error {
-	switch {
-	case w.ledgerMissing:
-		return fail(exitEnv, "metron is not initialized here: %s has no ledger; run %s",
-			w.show(w.store.Dir()), w.metron("init"))
-	case !w.facts.LedgerVerified:
-		return fail(exitEnv, "the ledger fails verification, so nothing was changed: %s\nRun %s, then restore the ledger from version control.",
-			w.facts.LedgerProblem, w.metron("fsck"))
+// usable refuses a command that needs a ledger when there is none, or when
+// it cannot be evaluated. writing says the command came to change it.
+func (w *world) usable(writing bool) error {
+	why, run := w.ledgerUnusable()
+	if why == "" {
+		return nil
 	}
-	return nil
+	if writing && !w.facts.LedgerVerified {
+		why += ", so nothing was changed"
+	}
+	return fail(exitEnv, "%s\nRun %s.", why, run)
 }
 
 // candidate refuses a command that binds something to the candidate in a
@@ -376,16 +508,18 @@ func (w *world) commit(wr *store.Writer, drafts []core.Draft) ([]core.Event, err
 	if err != nil {
 		return nil, err
 	}
+	// Fold first: an event the state machine would not replay must never
+	// reach the ledger, or every later command would fail to load it.
+	folded := w.state
+	for _, e := range events {
+		if folded, err = core.Apply(folded, e); err != nil {
+			return nil, fmt.Errorf("the %s event the core decided on does not fold, so nothing was written: %w", e.Type, err)
+		}
+	}
 	if err := wr.Append(events); err != nil {
 		return nil, err
 	}
-	for _, e := range events {
-		s, err := core.Apply(w.state, e)
-		if err != nil {
-			return nil, fmt.Errorf("fold the committed %s event: %w", e.Type, err)
-		}
-		w.state = s
-	}
+	w.state = folded
 	w.events = append(w.events, events...)
 	w.refresh()
 	return events, nil

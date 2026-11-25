@@ -42,10 +42,11 @@ func Instructions(p core.Packet) (string, error) {
 
 // Prompt renders a self-contained prompt for p: the brief, the packet's
 // content laid out for reading, the report skeleton and how to submit the
-// report. The brief is p.Instructions when set, so that a prompt for an issued
-// packet shows exactly what the packet says; otherwise it is rendered.
-func Prompt(p core.Packet) (string, error) {
-	v, err := newView(p)
+// report. digest is the digest of the stored packet, which the skeleton
+// carries. The brief is p.Instructions when set, so that a prompt for an
+// issued packet shows exactly what the packet says; otherwise it is rendered.
+func Prompt(p core.Packet, digest string) (string, error) {
+	v, err := newDigestView(p, digest)
 	if err != nil {
 		return "", err
 	}
@@ -68,14 +69,42 @@ func Prompt(p core.Packet) (string, error) {
 // entry per applicable requirement for a review, one fix per subject for a
 // fix, one verification per claimed fix for a verification, and one
 // resolution per escalation and one adjudication per adjudicable finding for
-// an audit. Every judgment is left empty, so the skeleton fails validation
-// until the role completes it.
-func Skeleton(p core.Packet) ([]byte, error) {
-	v, err := newView(p)
+// an audit. digest is the digest of the stored packet; the skeleton carries
+// it so that the report is bound to this exact packet. Every judgment is left
+// empty, so the skeleton fails validation until the role completes it.
+func Skeleton(p core.Packet, digest string) ([]byte, error) {
+	v, err := newDigestView(p, digest)
 	if err != nil {
 		return nil, err
 	}
 	return skeleton(v)
+}
+
+// newDigestView is newView for the entry points that bind a report to the
+// stored packet, which must be identified by a well-formed digest.
+func newDigestView(p core.Packet, digest string) (*view, error) {
+	if !validDigest(digest) {
+		return nil, fmt.Errorf("packet digest %q for packet %s is not \"sha256:\" followed by 64 lowercase hex digits; pass the digest of the stored packet", digest, p.ID)
+	}
+	v, err := newView(p)
+	if err != nil {
+		return nil, err
+	}
+	v.Digest = digest
+	return v, nil
+}
+
+func validDigest(s string) bool {
+	hex, ok := strings.CutPrefix(s, "sha256:")
+	if !ok || len(hex) != 64 {
+		return false
+	}
+	for _, c := range hex {
+		if !('0' <= c && c <= '9' || 'a' <= c && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func instructions(v *view) (string, error) {
@@ -153,10 +182,11 @@ func skeleton(v *view) ([]byte, error) {
 		return nil, fmt.Errorf("encode the report skeleton for packet %s: %w", v.ID, err)
 	}
 	out, err := json.MarshalIndent(core.Report{
-		Schema: core.SchemaReport,
-		Packet: v.ID,
-		Role:   v.Role,
-		Body:   raw,
+		Schema:       core.SchemaReport,
+		Packet:       v.ID,
+		PacketDigest: v.Digest,
+		Role:         v.Role,
+		Body:         raw,
 	}, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("encode the report skeleton for packet %s: %w", v.ID, err)

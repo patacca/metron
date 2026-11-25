@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "1bfd948295ac75aa8236c956128d6fd06b52b8d615ab9db9766583e21ac7c60e",
   "type": "finding.reclassified",
+  "more": 0,
   "data": {
     "id": "F-0001",
     "packet": "P-0006",

@@ -19,7 +19,7 @@ func lockFile(f *os.File) error {
 		case errors.Is(err, syscall.EINTR):
 			continue
 		case errors.Is(err, syscall.EWOULDBLOCK):
-			return errLockHeld
+			return errLocked
 		default:
 			return err
 		}

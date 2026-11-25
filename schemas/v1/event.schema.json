@@ -17,6 +17,9 @@
     "type": {
       "$ref": "defs.schema.json#/$defs/eventType"
     },
+    "more": {
+      "$ref": "defs.schema.json#/$defs/count"
+    },
     "data": {
       "type": "object"
     },
@@ -29,6 +32,7 @@
     "time",
     "prev",
     "type",
+    "more",
     "data",
     "hash"
   ],

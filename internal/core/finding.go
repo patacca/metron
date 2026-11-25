@@ -75,8 +75,8 @@ type Finding struct {
 	// RootCauseRequired is set once Recurrences reaches the contract's
 	// threshold. The next fix must then include a root-cause analysis.
 	RootCauseRequired bool `json:"root_cause_required"`
-	// Disputed is set once the finding has been disputed. It cannot be
-	// disputed again.
+	// Disputed is set once the finding has been disputed under the pinned
+	// contract. It cannot be disputed again until a contract is pinned.
 	Disputed bool `json:"disputed"`
 	// Fix is the most recent claimed fix, if any.
 	Fix *Fix `json:"fix,omitempty"`

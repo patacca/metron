@@ -29,12 +29,9 @@ const (
 	fileNameExt = ".json"
 )
 
-// ErrLocked is returned by Lock when another process holds the lock.
-var ErrLocked = errors.New("another metron process is running")
-
-// errLockHeld is what the platform lock functions return when the lock is
-// held elsewhere.
-var errLockHeld = errors.New("lock held")
+// errLocked is what the platform lock functions return, and Lock wraps, when
+// another process holds the lock.
+var errLocked = errors.New("another metron process is running")
 
 // Store is a state directory. Reading needs no lock; writing goes through a
 // Writer, which holds it.
@@ -94,7 +91,7 @@ type Writer struct {
 }
 
 // Lock acquires the state directory's lock without waiting. If another
-// process holds it, the error wraps ErrLocked. The state directory must
+// process holds it, the error says so. The state directory must
 // exist. Acquiring the lock discards a temporary file left by an interrupted
 // write.
 func (s *Store) Lock() (*Writer, error) {
@@ -108,8 +105,8 @@ func (s *Store) Lock() (*Writer, error) {
 	}
 	if err := lockFile(f); err != nil {
 		f.Close()
-		if errors.Is(err, errLockHeld) {
-			return nil, fmt.Errorf("%s is locked: %w; wait for it to finish and retry", path, ErrLocked)
+		if errors.Is(err, errLocked) {
+			return nil, fmt.Errorf("%s is locked: %w; wait for it to finish and retry", path, err)
 		}
 		return nil, fmt.Errorf("lock %s: %w", path, err)
 	}
@@ -142,8 +139,9 @@ func (w *Writer) held() error {
 	return nil
 }
 
-// Append commits sealed events at the end of the ledger, all or none. The
-// events must extend the ledger as it is on disk; see Seal. The complete new
+// Append commits the sealed batch of one command at the end of the ledger,
+// all or none. The events must extend the ledger as it is on disk and count
+// down their batch marker to 0; see Seal. The complete new
 // ledger is written to a temporary file, synced and renamed over the old one.
 // A missing ledger is treated as empty.
 func (w *Writer) Append(batch []core.Event) error {
@@ -163,9 +161,12 @@ func (w *Writer) Append(batch []core.Event) error {
 		return fmt.Errorf("%s does not verify, nothing was written: %w", path, err)
 	}
 	content := bytes.Clone(old)
-	for _, e := range batch {
+	for i, e := range batch {
 		if err := checkEvent(e); err != nil {
 			return fmt.Errorf("event %d: %w; nothing was written", e.Seq, err)
+		}
+		if want := len(batch) - 1 - i; e.More != want {
+			return fmt.Errorf("event %d of a batch of %d has more %d, want %d (seal the batch in one call), nothing was written", i+1, len(batch), e.More, want)
 		}
 		content = append(appendLine(content, e), '\n')
 	}
@@ -182,24 +183,32 @@ func (w *Writer) WritePacket(id string, data []byte) error {
 	return w.writeOnce(PacketsDir, "packet", id, data)
 }
 
-// WriteReport stores an accepted report, exactly as submitted, under the
-// identifier of the packet it answers. Reports are immutable like packets.
+// WriteReport stores the report accepted for a packet, exactly as submitted.
+// Like packets, it is write-once: it restores a lost file, and refuses to
+// change an existing one.
 func (w *Writer) WriteReport(packet string, data []byte) error {
 	return w.writeOnce(ReportsDir, "report for packet", packet, data)
 }
 
+// ReplaceReport writes the report file for a packet exactly as submitted,
+// replacing whatever file is there, before the ledger commit that accepts the
+// report. The caller must use it only for a packet the ledger has not yet
+// recorded a report for: until that commit the file belongs to no accepted
+// report. The replacement is atomic: the old file or the new one, never a
+// partial file.
+func (w *Writer) ReplaceReport(packet string, data []byte) error {
+	path, err := w.filePath(ReportsDir, packet)
+	if err != nil {
+		return err
+	}
+	return w.writeAtomic(path, data)
+}
+
 func (w *Writer) writeOnce(sub, what, id string, data []byte) error {
-	if err := w.held(); err != nil {
+	path, err := w.filePath(sub, id)
+	if err != nil {
 		return err
 	}
-	if !validPacketID(id) {
-		return fmt.Errorf("invalid packet identifier %q: expected P- followed by at least four digits", id)
-	}
-	dir := filepath.Join(w.dir, sub)
-	if err := os.MkdirAll(dir, dirMode); err != nil {
-		return err
-	}
-	path := filepath.Join(dir, id+fileNameExt)
 	existing, err := os.ReadFile(path)
 	switch {
 	case err == nil && bytes.Equal(existing, data):
@@ -210,6 +219,22 @@ func (w *Writer) writeOnce(sub, what, id string, data []byte) error {
 		return err
 	}
 	return w.writeAtomic(path, data)
+}
+
+// filePath checks that the lock is held and the identifier is valid, creates
+// the subdirectory, and returns the path of the identifier's file in it.
+func (w *Writer) filePath(sub, id string) (string, error) {
+	if err := w.held(); err != nil {
+		return "", err
+	}
+	if !validPacketID(id) {
+		return "", fmt.Errorf("invalid packet identifier %q: expected P- followed by at least four digits", id)
+	}
+	dir := filepath.Join(w.dir, sub)
+	if err := os.MkdirAll(dir, dirMode); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, id+fileNameExt), nil
 }
 
 // writeAtomic replaces path with data through a synced temporary file in the

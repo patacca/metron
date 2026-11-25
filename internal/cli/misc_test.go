@@ -15,7 +15,8 @@ func pinnedWith(t *testing.T, command string) *repo {
 	t.Helper()
 	r := newRepo(t)
 	r.must("init")
-	r.write(".metron/contract.yaml", strings.Replace(testContract, "git ls-files --error-unmatch greeting.txt", command, 1))
+	quoted := "'" + strings.ReplaceAll(command, "'", "''") + "'"
+	r.write(".metron/contract.yaml", strings.Replace(testContract, `"git ls-files --error-unmatch greeting.txt"`, quoted, 1))
 	r.must("contract", "pin", "-m", "first contract")
 	r.commit("pin the contract")
 	return r
@@ -43,16 +44,28 @@ func TestFailingCheck(t *testing.T) {
 	r.expectNext(core.StepReview)
 }
 
+// TestPOSIXCheckCommand runs a check that only a POSIX shell understands, so
+// that the Windows CI job exercises the sh that ships with Git.
+func TestPOSIXCheckCommand(t *testing.T) {
+	r := pinnedWith(t, `name=$(git ls-files greeting.txt) && [ "$name" = greeting.txt ] && test -n "${name%.txt}"`)
+	contains(t, "check output", r.must("check").out, "REQ-1    passed")
+	r.expectNext(core.StepReview)
+}
+
 func TestCheckThatDirtiesTheTree(t *testing.T) {
 	r := pinnedWith(t, "echo checked> check-output.txt")
 	before := r.read(".metron/state/ledger.jsonl")
 	res := r.expect(exitNegative, "check")
-	contains(t, "check output", res.out, "REQ-1    passed", "The checks left the working tree dirty (check-output.txt)", "nothing was recorded")
+	contains(t, "check output", res.out, "REQ-1    passed", "The checks left the working tree unclean",
+		"check-output.txt is untracked: delete it", "nothing was recorded", "Do:           remove what the checks left behind, then run metron check again")
+	if strings.Contains(res.out, "git add") || strings.Contains(res.out, "commit it") {
+		t.Fatalf("check suggests committing what it left behind:\n%s", res.out)
+	}
 	if !bytes.Equal(before, r.read(".metron/state/ledger.jsonl")) {
 		t.Fatal("a check that dirtied the tree recorded something")
 	}
 	// The tree is dirty now: check refuses to start.
-	contains(t, "check output", r.expect(exitNegative, "check").out, "commit or discard them", "(check-output.txt)")
+	contains(t, "check output", r.expect(exitNegative, "check").out, "The working tree is not clean", "check-output.txt is untracked: commit it, delete it, or ignore it")
 	r.expectNext(core.StepCommitChanges)
 }
 
@@ -83,11 +96,17 @@ func TestTamperedLedger(t *testing.T) {
 	ledger := r.read(".metron/state/ledger.jsonl")
 	r.write(".metron/state/ledger.jsonl", strings.Replace(string(ledger), `"reviewer":"rev-1"`, `"reviewer":"rev-2"`, 1))
 	contains(t, "fsck", r.expect(exitNegative, "fsck").out, "1 problem found", "hash does not match the content of the line", "restore the ledger from version control")
-	res := r.run("gate")
-	if res.code == exitOK {
-		t.Fatal("the gate opened on a tampered ledger")
+	// The gate cannot be evaluated, which is not the same as closed.
+	res := r.expect(exitEnv, "gate")
+	contains(t, "gate", res.err, "the gate cannot be evaluated: the ledger fails verification", "Run metron fsck.")
+	if res.out != "" {
+		t.Fatalf("gate printed an evaluation it could not make: %q", res.out)
 	}
-	contains(t, "gate", res.out, "Gate: CLOSED", "the ledger failed verification")
+	var e errorDoc
+	unmarshal(t, r.expect(exitEnv, "gate", "--json").out, &e)
+	if e.Schema != "metron.error/v1" || e.Status != exitEnv || !strings.Contains(e.Message, "the gate cannot be evaluated") {
+		t.Fatalf("gate --json error document %+v", e)
+	}
 	if a := r.expectNext(core.StepRepairLedger); a.Command != "metron fsck" {
 		t.Fatalf("next %+v", a)
 	}
@@ -96,6 +115,45 @@ func TestTamperedLedger(t *testing.T) {
 	}
 	contains(t, "status", r.must("status").out, "hash does not match", "Next step:    repair-ledger")
 	contains(t, "init", r.expect(exitEnv, "init").err, "fails verification")
+}
+
+func TestNotInitialized(t *testing.T) {
+	r := newRepo(t)
+	if a := r.expectNext(core.StepRepairLedger); a.Command != "metron init" {
+		t.Fatalf("next %+v", a)
+	}
+	contains(t, "gate", r.expect(exitEnv, "gate").err, "the gate cannot be evaluated: metron is not initialized here", "Run metron init.")
+	contains(t, "fsck", r.expect(exitNegative, "fsck").out, ".metron/state/ledger.jsonl does not exist: run metron init")
+	r.expect(exitEnv, "packet")
+	r.must("status")
+}
+
+// TestEventSchema checks that fsck holds every event to the published schema,
+// beyond what replaying it requires.
+func TestEventSchema(t *testing.T) {
+	r := pinned(t)
+	st := store.New(r.path(".metron/state"))
+	events, err := st.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("0", 64)
+	sealed, err := store.Seal(&events[len(events)-1], "2026-01-02T03:04:05Z", []core.Draft{{Type: core.EventEvidenceRecorded,
+		Data: core.Evidence{Requirement: "lint", Command: "true", Candidate: digest, Passed: true, OutputDigest: digest}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := st.Lock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = w.Append(sealed)
+	w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	contains(t, "fsck", r.expect(exitNegative, "fsck").out,
+		"ledger event 3 (evidence.recorded) does not satisfy the event schema: /data/requirement: must be a requirement identifier")
 }
 
 func TestNotARepository(t *testing.T) {
@@ -117,8 +175,9 @@ func TestRepositoryWithoutCommits(t *testing.T) {
 	r.must("contract", "pin", "-m", "first contract")
 	a := r.expectNext(core.StepCommitChanges)
 	contains(t, "next reason", a.Reason, "the repository has no commits")
-	contains(t, "packet error", r.expect(exitEnv, "packet").err, "commit the work to review first")
-	r.expect(exitEnv, "gate")
+	contains(t, "packet error", r.expect(exitNegative, "packet").err, "the next action is commit-changes", "the repository has no commits")
+	contains(t, "gate error", r.expect(exitEnv, "gate").err, "commit the work to review first")
+	r.expect(exitEnv, "check")
 	contains(t, "status", r.must("status").out, "Candidate:    none: the repository has no commits")
 }
 

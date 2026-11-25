@@ -20,7 +20,7 @@ func TestIngestRejections(t *testing.T) {
 		{"duplicate keys", func(t *testing.T, sk core.Report) []byte {
 			return []byte(`{"schema":"metron.report/v1","schema":"metron.report/v1"}`)
 		}, reportStructural, `duplicate member "schema"`},
-		{"structural", func(t *testing.T, sk core.Report) []byte { return marshal(t, sk) }, reportStructural, "/author/id: must not be blank"},
+		{"structural", func(t *testing.T, sk core.Report) []byte { return marshal(t, sk) }, reportStructural, "/author/id: must be 1 to 128 printable ASCII characters"},
 		{"semantic", func(t *testing.T, sk core.Report) []byte {
 			return review(t, sk, "rev-1", map[string]string{"REQ-2": core.RequirementViolated})
 		}, core.LayerSemantic, "/body/requirements/1/status: REQ-2 is violated but no blocking finding"},
@@ -82,18 +82,23 @@ func TestIngestAgainAndRestore(t *testing.T) {
 		t.Fatal("ingesting the same report again changed the ledger")
 	}
 
-	// A lost report file closes the gate until the same report restores it.
+	// Losing the report that carries the verdict closes the gate until the
+	// identical bytes restore it.
 	if err := os.Remove(r.path(stored)); err != nil {
 		t.Fatal(err)
 	}
 	contains(t, "fsck", r.expect(exitNegative, "fsck").out, "reports/P-0001.json is missing", "metron ingest <the report accepted for P-0001>")
 	contains(t, "gate", r.expect(exitNegative, "gate").out, "[FAIL] I", "reports/P-0001.json is missing")
-	if a := r.expectNext(core.StepRepairLedger); a.Command != "metron ingest <the report accepted for P-0001>" {
+	a := r.expectNext(core.StepRepairLedger)
+	contains(t, "next reason", a.Reason, "the gate relies on the GREEN verdict of round 1, carried by the report of packet P-0001, and its stored file reports/P-0001.json is missing",
+		"restore the file from version control", "ingest the identical bytes again", "change the candidate so that a new review is held")
+	if a.Command != "metron ingest <the report accepted for P-0001>" {
 		t.Fatalf("next %+v", a)
 	}
-	contains(t, "ingest reformatted", r.ingest(exitOK, reformatted).out, "these bytes differ from the ones accepted")
+	contains(t, "ingest reformatted", r.ingest(exitNegative, reformatted).err,
+		"the stored report reports/P-0001.json is missing, and this file is the same report in a different byte form", "restore the stored report from version control")
 	r.expect(exitNegative, "fsck")
-	contains(t, "ingest original", r.ingest(exitOK, report).out, "Note: restored the stored report file of packet P-0001.")
+	contains(t, "ingest original", r.ingest(exitOK, report).out, "Note: restored the stored report file reports/P-0001.json.")
 	if !bytes.Equal(r.read(stored), report) {
 		t.Fatal("the restored report differs from the bytes submitted")
 	}
@@ -103,10 +108,53 @@ func TestIngestAgainAndRestore(t *testing.T) {
 		t.Fatal("restoring the report changed the ledger")
 	}
 
-	// An altered report file cannot be overwritten, only replaced.
+	// An altered report file is never overwritten: it is deleted first.
 	r.write(stored, strings.Replace(string(report), "rev-1", "rev-2", 1))
 	contains(t, "fsck", r.expect(exitNegative, "fsck").out, "does not match the raw digest recorded")
-	contains(t, "ingest original", r.ingest(exitOK, report).out, "delete it, then ingest the exact file that was accepted")
+	r.expect(exitNegative, "gate")
+	contains(t, "ingest original", r.ingest(exitNegative, report).err, "never overwritten", "delete it and ingest this file again")
+	if err := os.Remove(r.path(stored)); err != nil {
+		t.Fatal(err)
+	}
+	r.ingest(exitOK, report)
+	r.must("gate")
+}
+
+// TestStrayReportFile leaves a report file that the ledger does not record,
+// as a crash between storing a report and accepting it would: fsck ignores
+// it, and the next ingestion for the packet replaces it.
+func TestStrayReportFile(t *testing.T) {
+	r := pinned(t)
+	r.write("greeting.txt", "hello\n")
+	r.commit("spell it right")
+	r.must("check")
+	_, sk := r.packet()
+	stored := ".metron/state/reports/P-0001.json"
+	r.write(stored, "half a report")
+	r.must("fsck")
+	report := review(t, sk, "rev-1", nil)
+	r.ingest(exitOK, report)
+	if !bytes.Equal(r.read(stored), report) {
+		t.Fatal("the stored report is not the one accepted")
+	}
+	r.must("fsck")
+	r.must("gate")
+}
+
+// TestReportForAnotherLedger submits a report written for P-0001 of one
+// repository to P-0001 of another: the packet digest tells them apart.
+func TestReportForAnotherLedger(t *testing.T) {
+	a, b := pinned(t), pinned(t)
+	b.write("greeting.txt", "hello\n")
+	b.commit("spell it right")
+	for _, r := range []*repo{a, b} {
+		r.must("check")
+	}
+	_, sk := a.packet()
+	b.packet()
+	res := b.ingest(exitNegative, review(t, sk, "rev-1", nil))
+	contains(t, "ingest error", res.err, "rejected by the transition layer", "/packet_digest: the report was written for a different packet P-0001")
+	a.ingest(exitOK, review(t, sk, "rev-1", nil))
 }
 
 func TestIngestFixWithoutChange(t *testing.T) {

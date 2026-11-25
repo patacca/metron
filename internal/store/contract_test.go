@@ -19,10 +19,7 @@ import (
 
 func TestParseContractValid(t *testing.T) {
 	path := filepath.Join("testdata", "contract", "valid.yaml")
-	c, err := ReadContract(path)
-	if err != nil {
-		t.Fatalf("ReadContract: %v", err)
-	}
+	c := parseFile(t, path)
 	want := map[string]any{
 		"schema": "metron.contract/v1",
 		"project": map[string]any{
@@ -49,8 +46,8 @@ func TestParseContractValid(t *testing.T) {
 			"quoted_date": "2026-01-01", "flag": true, "off": false, "unicode": "naïve é 😀",
 		},
 	}
-	if !reflect.DeepEqual(c.Value, want) {
-		t.Fatalf("value:\n got %#v\nwant %#v", c.Value, want)
+	if value, err := canon.Parse(c.Canonical); err != nil || !reflect.DeepEqual(value, want) {
+		t.Fatalf("value:\n got %#v, %v\nwant %#v", value, err, want)
 	}
 	golden := `{"authorizes":"Internal use by the team","convergence":{"convergence_audit_after":3,"flag":true,"off":false,` +
 		`"process_audit_after":-5,"quoted_date":"2026-01-01","root_cause_after":2,"unicode":"naïve é 😀"},"not_applicable":[],` +
@@ -67,33 +64,26 @@ func TestParseContractValid(t *testing.T) {
 	if want := "sha256:" + hex.EncodeToString(sum[:]); c.Digest != want {
 		t.Fatalf("Digest = %s, want %s", c.Digest, want)
 	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sum = sha256.Sum256(raw)
-	if want := "sha256:" + hex.EncodeToString(sum[:]); c.RawDigest != want {
-		t.Fatalf("RawDigest = %s, want %s", c.RawDigest, want)
-	}
 
 	// Formatting, comments, quoting and member order do not change the
-	// contract digest; they change the raw digest.
-	other, err := ReadContract(filepath.Join("testdata", "contract", "valid-reformatted.yaml"))
-	if err != nil {
-		t.Fatalf("ReadContract: %v", err)
-	}
+	// contract digest.
+	other := parseFile(t, filepath.Join("testdata", "contract", "valid-reformatted.yaml"))
 	if other.Digest != c.Digest || !bytes.Equal(other.Canonical, c.Canonical) {
 		t.Fatalf("reformatted contract has another digest:\n%s", other.Canonical)
 	}
-	if other.RawDigest == c.RawDigest {
-		t.Fatal("reformatted contract has the same raw digest")
-	}
 }
 
-func TestReadContractMissing(t *testing.T) {
-	if _, err := ReadContract(filepath.Join(t.TempDir(), "contract.yaml")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("ReadContract = %v, want os.ErrNotExist", err)
+func parseFile(t *testing.T, path string) *ContractFile {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
+	c, err := ParseContract(data)
+	if err != nil {
+		t.Fatalf("ParseContract(%s): %v", path, err)
+	}
+	return c
 }
 
 // Every fixture in testdata/contract/reject is rejected at the expected
@@ -145,12 +135,16 @@ func TestParseContractRejectsFixtures(t *testing.T) {
 				t.Fatalf("fixture %s has no expectation", name)
 			}
 			path := filepath.Join(dir, name)
-			_, err := ReadContract(path)
-			if err == nil {
-				t.Fatal("ReadContract succeeded")
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
 			}
-			if !strings.HasPrefix(err.Error(), path+": ") || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("error %q does not name the file and contain %q", err, tt.want)
+			_, err = ParseContract(data)
+			if err == nil {
+				t.Fatal("ParseContract succeeded")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error %q does not contain %q", err, tt.want)
 			}
 			var ce *ContractError
 			if hasPosition := errors.As(err, &ce); hasPosition != (tt.line != 0) {
@@ -259,8 +253,8 @@ func FuzzParseContract(f *testing.F) {
 		if err != nil || !bytes.Equal(again, c.Canonical) {
 			t.Fatalf("canonical form is not canonical: %q, %v", c.Canonical, err)
 		}
-		if c.Digest != canon.Digest(c.Canonical) || c.RawDigest != canon.Digest(data) {
-			t.Fatal("digests do not match")
+		if c.Digest != canon.Digest(c.Canonical) {
+			t.Fatal("the digest does not match the canonical form")
 		}
 	})
 }

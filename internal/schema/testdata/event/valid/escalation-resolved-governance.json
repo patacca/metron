@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "907cebbfd6d3f5bb600e98337d91b71cdc932507cdac7ea63dfa90cb1bd74bad",
   "type": "escalation.resolved",
+  "more": 0,
   "data": {
     "id": "E-0002",
     "by": "governance",

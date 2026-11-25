@@ -2,7 +2,7 @@
   "schema": "metron.next/v1",
   "step": "fix",
   "owner": "implementer",
-  "reason": "blocking findings F-0001 are open: fix or dispute each",
+  "reason": "blocking finding F-0001 is open: fix or dispute it",
   "findings": [
     "F-0001"
   ],

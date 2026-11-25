@@ -199,7 +199,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/text"
+          "$ref": "#/$defs/authorId"
         },
         "kind": {
           "type": "string",
@@ -550,6 +550,10 @@
         "round"
       ],
       "additionalProperties": false
+    },
+    "authorId": {
+      "type": "string",
+      "pattern": "^[!-~]{1,128}$"
     }
   }
 }

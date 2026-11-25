@@ -2,22 +2,18 @@
 
 package cli
 
-import (
-	"os"
-	"os/exec"
-	"syscall"
-)
+import "os/exec"
 
-// shell returns the process that runs a check command through the platform
-// shell. The command line is passed to cmd.exe verbatim: /s makes it strip
-// only the outer quotes, so the command runs exactly as written in the
-// contract.
-func shell(command string) *exec.Cmd {
-	comspec := os.Getenv("ComSpec")
-	if comspec == "" {
-		comspec = "cmd.exe"
+// shellCommand returns the process that runs a check command through a POSIX
+// shell, the sh that ships with Git for Windows, so that a command means the
+// same on every platform.
+func shellCommand(command string) (*exec.Cmd, error) {
+	sh, err := findShell(exec.LookPath, func() (string, error) {
+		out, err := exec.Command("git", "--exec-path").Output()
+		return string(out), err
+	}, "sh.exe")
+	if err != nil {
+		return nil, err
 	}
-	cmd := exec.Command(comspec)
-	cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: `"` + comspec + `" /d /s /c "` + command + `"`}
-	return cmd
+	return exec.Command(sh, "-c", command), nil
 }

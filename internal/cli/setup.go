@@ -22,9 +22,10 @@ var cmdInit = &command{
 	summary:  "Create .metron/ with a contract template and an initialized ledger",
 	about: `Init prepares the repository for Metron. It creates .metron/contract.yaml from
 a commented template, a .metron/.gitignore that keeps the state directory's
-lock and temporary file out of git, the state directory, and an initialized
-ledger. It never overwrites anything: it creates what is missing and says
-what it found.`,
+lock and temporary file out of git, a .metron/.gitattributes that stops git
+from converting line endings under state/, the state directory, and an
+initialized ledger. It never overwrites anything: it creates what is missing
+and says what it found.`,
 	run: runInit,
 }
 
@@ -35,6 +36,14 @@ const gitignore = `# Written by metron init. The lock and the temporary file are
 # together with the work.
 /state/lock
 /state/*.tmp
+`
+
+// gitattributes keeps git from converting line endings in the state
+// directory: stored reports are compared byte for byte with what was
+// ingested.
+const gitattributes = `# Written by metron init. Stored reports are compared byte for byte with what
+# was ingested, so git must never convert line endings under state/.
+state/** -text
 `
 
 func runInit(c *ctx, args []string) error {
@@ -60,6 +69,7 @@ func runInit(c *ctx, args []string) error {
 	}{
 		{filepath.Join(meta, "contract.yaml"), contractTemplate},
 		{filepath.Join(meta, ".gitignore"), []byte(gitignore)},
+		{filepath.Join(meta, ".gitattributes"), []byte(gitattributes)},
 	} {
 		made, err := createFile(f.path, f.data)
 		if err != nil {
@@ -80,7 +90,7 @@ func runInit(c *ctx, args []string) error {
 		io.WriteString(c.Stdout, b.String())
 		return err
 	}
-	w, err := c.gather(s, false)
+	w, err := c.gather(s)
 	if err != nil {
 		io.WriteString(c.Stdout, b.String())
 		return err
@@ -89,11 +99,11 @@ func runInit(c *ctx, args []string) error {
 		fmt.Fprintf(&b, "\nFill in %s: every empty value is a decision for\ngovernance, and the comments explain each member. %s lists what\nis still missing.\n",
 			s.show(w.contract.path), s.metron("contract"))
 	}
-	if !filepath.IsAbs(s.show(s.store.Dir())) {
+	if s.inRepo {
 		b.WriteString("Commit .metron/, state included, together with the work: git history is the\nonly anchor the ledger has.\n")
 	}
 	b.WriteString("\n")
-	writeNext(&b, w, w.next())
+	writeNext(&b, w, w.actionDoc(w.next()))
 	_, err = io.WriteString(c.Stdout, b.String())
 	return err
 }
@@ -107,7 +117,11 @@ func initLedger(c *ctx, s *site, ledger string, b *strings.Builder) error {
 	defer wr.Close()
 	events, err := s.store.Load()
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, fs.ErrNotExist), err == nil && len(events) == 0:
+		verb := "Created"
+		if err == nil {
+			verb = "Initialized the empty"
+		}
 		drafts, err := core.Initialize(core.State{})
 		if err != nil {
 			return err
@@ -119,7 +133,7 @@ func initLedger(c *ctx, s *site, ledger string, b *strings.Builder) error {
 		if err := wr.Append(sealed); err != nil {
 			return err
 		}
-		fmt.Fprintf(b, "Created %s, protocol %s.\n", ledger, core.ProtocolVersion)
+		fmt.Fprintf(b, "%s %s, protocol %s.\n", verb, ledger, core.ProtocolVersion)
 		return nil
 	case err != nil:
 		return fail(exitEnv, "found %s, but it fails verification: %v\nRun %s and restore the ledger from version control.", ledger, err, s.metron("fsck"))
@@ -229,7 +243,7 @@ type versionDoc struct {
 
 func runVersion(c *ctx, args []string) error {
 	fs := c.flags()
-	asJSON := jsonFlag(fs)
+	asJSON := c.jsonFlag(fs)
 	args, err := c.parse(fs, args)
 	if err != nil {
 		return err
@@ -252,7 +266,7 @@ func runVersion(c *ctx, args []string) error {
 		}
 	}
 	if *asJSON {
-		return writeJSON(c.Stdout, d)
+		return c.emit(d)
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "metron %s\n", d.Version)

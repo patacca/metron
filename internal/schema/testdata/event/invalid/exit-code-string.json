@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "1248b7c394ca668965c78ca5d6f28406098181e5d99ea9424f39c4d7cbacf376",
   "type": "evidence.recorded",
+  "more": 0,
   "data": {
     "requirement": "REQ-1",
     "command": "go test ./internal/ledger -run TestBalanced",

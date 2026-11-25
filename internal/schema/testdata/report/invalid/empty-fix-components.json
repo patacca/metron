@@ -1,6 +1,7 @@
 {
   "schema": "metron.report/v1",
   "packet": "P-0008",
+  "packet_digest": "sha256:a030b95e9a512d12f1ab363b694e1c24f8a9ec58c4b2e5a7360c538d1fb8b510",
   "role": "implementer",
   "author": {
     "id": "claude-implementer-1",

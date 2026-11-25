@@ -46,6 +46,9 @@ func (e *SyntaxError) Error() string {
 // invalid UTF-8, unpaired surrogate escapes and a byte order mark.
 func Parse(data []byte) (any, error) {
 	p := parser{data: data}
+	if bytes.HasPrefix(data, []byte("\xef\xbb\xbf")) {
+		return nil, p.errorf("a byte-order mark is not allowed; remove it and save the file as UTF-8 without one")
+	}
 	p.space()
 	v, err := p.value(0)
 	if err != nil {

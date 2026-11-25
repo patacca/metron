@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "6a38d3c81a4b7e859191ce5b95e96bfd1fc561e3cc20c44d6bacf8fd34aa4fc0",
   "type": "directive.issued",
+  "more": 0,
   "data": {
     "packet": "P-0006",
     "text": "Every fix to internal/ledger includes a race test."

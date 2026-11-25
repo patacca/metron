@@ -45,6 +45,11 @@ func (s *State) onPinned(data []byte) error {
 	if op, open := s.openPacket(); open {
 		return fmt.Errorf("packet %s is still open; a pin must void it first", op.Packet)
 	}
+	// A finding is judged against a new contract now, so it may be disputed
+	// again.
+	for i := range s.findings {
+		s.findings[i].Disputed = false
+	}
 	if cur, ok := s.pin(); !ok || cur.Stage != p.Stage {
 		s.epochStart = len(s.rounds)
 		s.streak = 0
@@ -104,7 +109,7 @@ func (s *State) onRoundOpened(data []byte) error {
 	case p.Round != len(s.rounds)+1:
 		return fmt.Errorf("round %d opened; the next round is %d", p.Round, len(s.rounds)+1)
 	case !validCandidate(p.Candidate):
-		return fmt.Errorf("candidate %+v is malformed", p.Candidate)
+		return fmt.Errorf("the candidate cannot be identified: %s", candidateProblem(p.Candidate))
 	}
 	s.rounds = append(s.rounds, Round{Number: p.Round, Stage: p.Stage, Candidate: p.Candidate, Contract: p.Contract})
 	return nil
@@ -134,7 +139,7 @@ func (s *State) onPacketIssued(data []byte) error {
 	case p.Contract != pin.Digest:
 		return fmt.Errorf("the packet is under contract %s but %s is pinned", p.Contract, pin.Digest)
 	case !validCandidate(p.Candidate):
-		return fmt.Errorf("candidate %+v is malformed", p.Candidate)
+		return fmt.Errorf("the candidate cannot be identified: %s", candidateProblem(p.Candidate))
 	case !validDigest(p.Digest):
 		return fmt.Errorf("packet digest %q is malformed", p.Digest)
 	case p.Round < 0:

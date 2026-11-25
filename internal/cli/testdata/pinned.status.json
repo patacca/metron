@@ -2,7 +2,7 @@
   "schema": "metron.status/v1",
   "state_dir": ".metron/state",
   "ledger": {
-    "exists": true,
+    "initialized": true,
     "events": 2,
     "verified": true,
     "protocol": "metron.protocol/v1"
@@ -14,7 +14,7 @@
     "pinned": true
   },
   "candidate": {
-    "commit": "4184c5a109d83294c4c1d72fda715bd93569c3c2",
+    "commit": "7d5c5d22e74de0b672771eb912b636e6554b1dd4",
     "digest": "sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898"
   },
   "clean": true,

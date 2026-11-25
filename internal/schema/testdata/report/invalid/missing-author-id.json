@@ -1,6 +1,7 @@
 {
   "schema": "metron.report/v1",
   "packet": "P-0007",
+  "packet_digest": "sha256:9fcf09f58941fc002f41a445772ac4039256b4c12ff75337710cdd7ed8adb28a",
   "role": "reviewer",
   "author": {
     "kind": "agent",

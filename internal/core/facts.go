@@ -33,18 +33,23 @@ type Facts struct {
 	// Clean is true when the working tree has no change outside .metron/,
 	// untracked files included.
 	Clean bool
-	// Commits lists the commits reachable from HEAD but not from the base of
-	// the packet being answered (git rev-list <base>..HEAD), with the base
-	// taken from PacketRecord.Base. Only an implementer report needs it.
+	// Commits describes every commit listed by the fixes of the implementer
+	// report being ingested, relative to HEAD and to the base of its packet
+	// (PacketRecord.Base). It is empty for a report with no fixes.
 	Commits []Commit
 }
 
-// Commit is a commit between a packet's base and HEAD.
+// Commit describes a commit that an implementer report lists.
 type Commit struct {
-	// Hash is the full commit hash.
 	Hash string
-	// Substantive is true when the commit changes a path outside .metron/.
-	// A commit that changes nothing else fixes nothing.
+	// Reachable reports whether the commit exists and is HEAD or one of
+	// its ancestors.
+	Reachable bool
+	// InBase reports whether the round's candidate commit still exists
+	// and already contains this commit.
+	InBase bool
+	// Substantive reports whether the commit changes something outside
+	// .metron/ relative to its first parent.
 	Substantive bool
 }
 
@@ -101,18 +106,28 @@ func contractProblem(s State, f Facts) string {
 func packetInvalid(s State, f Facts, p PacketRecord) string {
 	pin, ok := s.pin()
 	switch {
-	case f.PacketProblem != "" && blank(f.PacketProblem):
-		return "the stored packet file is missing or damaged"
 	case f.PacketProblem != "":
 		return f.PacketProblem
 	case !ok || pin.Digest != p.Contract:
-		return "the pinned contract changed"
+		return "the contract was re-pinned"
 	case !p.Role.ReadOnly():
 		return ""
 	case f.Candidate.Digest != p.Candidate.Digest:
 		return fmt.Sprintf("the candidate changed from %s to %s", p.Candidate.Digest, f.Candidate.Digest)
 	case !f.Clean:
 		return "the working tree is not clean"
+	}
+	return ""
+}
+
+// PacketInvalid says why the open packet can no longer be answered: the
+// contract was re-pinned, the candidate changed, the tree is not clean, or
+// its stored file is unusable. It returns "" when the open packet is valid or
+// no packet is open. Next ignores an invalid packet and the next packet voids
+// it.
+func PacketInvalid(s State, f Facts) string {
+	if op, ok := s.openPacket(); ok {
+		return packetInvalid(s, f, op)
 	}
 	return ""
 }
@@ -131,8 +146,8 @@ func ready(s State, f Facts) error {
 // checkCandidate rejects malformed candidate facts, which are an internal
 // error of the caller.
 func checkCandidate(f Facts) error {
-	if !validCandidate(f.Candidate) {
-		return fmt.Errorf("facts: candidate %+v is malformed", f.Candidate)
+	if p := candidateProblem(f.Candidate); p != "" {
+		return fmt.Errorf("facts: the current candidate cannot be identified: %s", p)
 	}
 	return nil
 }

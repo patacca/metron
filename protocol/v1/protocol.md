@@ -77,9 +77,11 @@ the same ledger, and an auditor is never also a reviewer or verifier. A
 reviewer who wrote the code reviews their intentions instead of the code; a
 verifier who made the fix confirms what they meant to do. The same underlying
 model can serve in several roles; what must differ is the identity, the
-context and the authority with which it acts. In Metron's local trust mode
-the identity is declared, not proven, so separation is a rule that
-cooperating parties follow.
+context and the authority with which it acts. An `author.id` is 1 to 128
+printable ASCII characters without spaces: separation is decided by comparing
+identities, so two of them must never differ only by something invisible. In
+Metron's local trust mode the identity is declared, not proven, so
+separation is a rule that cooperating parties follow.
 
 The reviewer, verifier and auditor are read-only. No agent protocol can
 enforce that, so Metron checks it after the fact: their report is rejected if
@@ -365,7 +367,8 @@ check actually exercises the criterion.
 ## 10. What each role produces
 
 Every role answers its packet with a report: a JSON document with an
-envelope (`schema`, `packet`, `role`, `author`) and a role-specific `body`.
+envelope (`schema`, `packet`, `packet_digest`, `role`, `author`) and a
+role-specific `body`.
 The role briefs describe every member; this section describes what the
 report must accomplish.
 
@@ -602,10 +605,15 @@ changes nothing and the error says what to correct.
    contract and the packet.
 3. **Transition**: the state machine permits it now.
 
-The report must name the open packet and carry that packet's role. A packet
-is consumed by the first report accepted for it and its identifier is never
-reused, so a report cannot be replayed against a later state. Submitting the
-same report again succeeds and changes nothing.
+The report must name the open packet, carry that packet's role, and carry
+its `packet_digest`, copied unchanged from the report skeleton. The
+identifier alone is not enough: packet identifiers repeat from one ledger to
+the next, so a report written for another repository, another ledger or an
+earlier issue of the same identifier would otherwise be accepted. The digest
+does not repeat, and a report carrying any other packet's digest is refused.
+A packet is consumed by the first report accepted for it and its identifier
+is never reused within a ledger, so a report cannot be replayed against a
+later state. Submitting the same report again succeeds and changes nothing.
 
 ## 16. The gate
 

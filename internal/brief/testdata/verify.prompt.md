@@ -128,8 +128,9 @@ answers and who wrote it:
 | --- | --- |
 | `schema` | `metron.report/v1` |
 | `packet` | `P-0012`, the packet you are answering |
+| `packet_digest` | The packet's digest, copied unchanged from the report skeleton. Packet identifiers repeat from one ledger to the next, but the digest does not, so it ties your report to this exact packet; a report that carries any other packet's digest is refused. |
 | `role` | `verifier` |
-| `author` | Who you are. `id` is a stable name for whoever acts in this role; Metron enforces role separation on it. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
+| `author` | Who you are. `id` is a stable name for whoever acts in this role, 1 to 128 printable ASCII characters with no spaces: Metron decides role separation on it, so two identities must not differ only by something invisible. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |
 
 Your author `id` must never have been used by an implementer or an auditor in
@@ -190,6 +191,7 @@ information the brief above refers to.
 ## Identification
 
 - Packet: `P-0012`, issued 2026-11-20T14:03:09Z under protocol `metron.protocol/v1`
+- Packet digest: `sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef`
 - Action: `verify`, for the `verifier`, round 2
 - Candidate: commit `c3e5a7b9d1f30246813579bdf02468ace1357902`, digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`
 - Reviewed commit: `9b2d4f6a8c0e1357924680ace13579bdf0246813`, digest `sha256:2222222222222222222222222222222222222222222222222222222222222222`
@@ -472,6 +474,7 @@ empty value where one is required.
 {
   "schema": "metron.report/v1",
   "packet": "P-0012",
+  "packet_digest": "sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
   "role": "verifier",
   "author": {
     "id": "",

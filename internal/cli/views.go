@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/patacca/metron/internal/core"
+	"github.com/patacca/metron/internal/schema"
 )
 
 // The read-only views: gate, status, findings, log and fsck. None takes the
@@ -28,8 +30,9 @@ each with the reasons it does not hold:
   V  the latest round's verdict is GREEN, for this candidate, under this
      contract, by an author who never acted as implementer
 
-It exits 0 only when all five hold, 1 when the gate is closed, and 3 when it
-cannot be evaluated. With --json it prints a metron.gate/v1 document.`,
+It exits 0 only when all five hold, 1 when the gate was evaluated and is
+closed, and 3 when it cannot be evaluated: the ledger is missing, unreadable
+or fails verification. With --json it prints a metron.gate/v1 document.`,
 	run: runGate,
 }
 
@@ -40,7 +43,7 @@ type gateDoc struct {
 
 func runGate(c *ctx, args []string) error {
 	fs := c.flags()
-	dir, asJSON := stateFlag(fs), jsonFlag(fs)
+	dir, asJSON := stateFlag(fs), c.jsonFlag(fs)
 	args, err := c.parse(fs, args)
 	if err != nil {
 		return err
@@ -52,16 +55,19 @@ func runGate(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	w, err := c.gather(s, false)
+	w, err := c.gather(s)
 	if err != nil {
 		return err
+	}
+	if why, run := w.ledgerUnusable(); why != "" {
+		return fail(exitEnv, "the gate cannot be evaluated: %s\nRun %s.", why, run)
 	}
 	if err := w.candidate(); err != nil {
 		return err
 	}
 	g := w.gate()
 	if *asJSON {
-		err = writeJSON(c.Stdout, gateDoc{Schema: "metron.gate/v1", GateResult: g})
+		err = c.emit(gateDoc{Schema: "metron.gate/v1", GateResult: g})
 	} else {
 		var b strings.Builder
 		writeGate(&b, g)
@@ -118,7 +124,7 @@ type statusDoc struct {
 	Contract        contractSummary   `json:"contract"`
 	Candidate       *core.Candidate   `json:"candidate"`
 	Clean           bool              `json:"clean"`
-	Dirty           []string          `json:"dirty"`
+	Dirty           []treeDoc         `json:"dirty"`
 	Stage           core.Stage        `json:"stage,omitempty"`
 	Rounds          []core.Round      `json:"rounds"`
 	FailedStreak    int               `json:"failed_streak"`
@@ -131,12 +137,19 @@ type statusDoc struct {
 	Next            *actionDoc        `json:"next"`
 }
 
+// treeDoc is one reason the working tree is not clean.
+type treeDoc struct {
+	Path string `json:"path"`
+	// Kind is modified, untracked, hidden or link.
+	Kind string `json:"kind"`
+}
+
 type ledgerDoc struct {
-	Exists   bool   `json:"exists"`
-	Events   int    `json:"events"`
-	Verified bool   `json:"verified"`
-	Protocol string `json:"protocol,omitempty"`
-	Problem  string `json:"problem,omitempty"`
+	Initialized bool   `json:"initialized"`
+	Events      int    `json:"events"`
+	Verified    bool   `json:"verified"`
+	Protocol    string `json:"protocol,omitempty"`
+	Problem     string `json:"problem,omitempty"`
 }
 
 type contractSummary struct {
@@ -154,8 +167,8 @@ type openPacketDoc struct {
 	Round  int       `json:"round"`
 	// Valid is true while the packet can still be answered.
 	Valid bool `json:"valid"`
-	// FileProblem says what is wrong with its stored file.
-	FileProblem string `json:"file_problem,omitempty"`
+	// Invalid says why the packet can no longer be answered.
+	Invalid string `json:"invalid,omitempty"`
 }
 
 type findingCounts struct {
@@ -181,7 +194,7 @@ type checkStatus struct {
 
 func runStatus(c *ctx, args []string) error {
 	fs := c.flags()
-	dir, asJSON := stateFlag(fs), jsonFlag(fs)
+	dir, asJSON := stateFlag(fs), c.jsonFlag(fs)
 	args, err := c.parse(fs, args)
 	if err != nil {
 		return err
@@ -193,13 +206,13 @@ func runStatus(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	w, err := c.gather(s, false)
+	w, err := c.gather(s)
 	if err != nil {
 		return err
 	}
 	d := w.status()
 	if *asJSON {
-		return writeJSON(c.Stdout, d)
+		return c.emit(d)
 	}
 	var b strings.Builder
 	writeStatus(&b, w, d)
@@ -213,15 +226,21 @@ func (w *world) status() statusDoc {
 	d := statusDoc{
 		Schema:   "metron.status/v1",
 		StateDir: w.show(w.store.Dir()),
-		Ledger: ledgerDoc{Exists: !w.ledgerMissing, Events: st.Events(), Verified: w.facts.LedgerVerified && !w.ledgerMissing,
+		Ledger: ledgerDoc{Initialized: !w.ledgerMissing, Events: st.Events(), Verified: w.facts.LedgerVerified && !w.ledgerMissing,
 			Protocol: st.Protocol(), Problem: w.facts.LedgerProblem},
 		Contract: contractSummary{Valid: w.facts.Contract != nil, Problem: w.facts.ContractProblem, Digest: w.facts.ContractDigest},
-		Clean:    w.facts.Clean, Dirty: w.dirty, Stage: st.Stage(), Rounds: st.StageRounds(), FailedStreak: st.FailedStreak(),
+		Clean:    w.facts.Clean, Dirty: []treeDoc{}, Stage: st.Stage(), Rounds: st.StageRounds(), FailedStreak: st.FailedStreak(),
 		OpenEscalations: []core.Escalation{}, Checks: []checkStatus{}, StoredFiles: w.storedFiles(),
 		GateOpen: w.gate().Open, Next: w.actionDoc(a),
 	}
-	if w.ledgerMissing {
-		d.Ledger.Problem = "the ledger does not exist: run " + w.metron("init")
+	if why, run := w.ledgerUnusable(); why != "" && w.ledgerMissing {
+		d.Ledger.Problem = why + ": run " + run
+	}
+	if d.StoredFiles == nil {
+		d.StoredFiles = []fileProblem{}
+	}
+	for _, p := range w.dirty {
+		d.Dirty = append(d.Dirty, treeDoc{Path: p.Path, Kind: p.Kind})
 	}
 	if pin, ok := st.Pin(); ok {
 		d.Contract.PinnedDigest = pin.Digest
@@ -233,12 +252,9 @@ func (w *world) status() statusDoc {
 	if d.Rounds == nil {
 		d.Rounds = []core.Round{}
 	}
-	if d.StoredFiles == nil {
-		d.StoredFiles = []fileProblem{}
-	}
 	if op, ok := st.OpenPacket(); ok {
 		d.OpenPacket = &openPacketDoc{Packet: op.Packet, Action: op.Action, Role: op.Role, Round: op.Round,
-			Valid: a.Step == core.StepSubmitReport && a.Packet == op.Packet, FileProblem: w.facts.PacketProblem}
+			Valid: a.Step == core.StepSubmitReport && a.Packet == op.Packet, Invalid: core.PacketInvalid(st, w.facts)}
 	}
 	d.Findings = findingCounts{Blocking: []string{}, Backlog: []string{}}
 	for _, f := range st.Findings() {
@@ -311,7 +327,11 @@ func writeStatus(b *strings.Builder, w *world, d statusDoc) {
 	if d.Candidate != nil {
 		tree := "clean"
 		if !d.Clean {
-			tree = fmt.Sprintf("dirty (%s)", strings.Join(d.Dirty, ", "))
+			var why []string
+			for _, p := range d.Dirty {
+				why = append(why, p.Path+" "+p.Kind)
+			}
+			tree = fmt.Sprintf("not clean (%s)", strings.Join(why, ", "))
 		}
 		candidate = fmt.Sprintf("commit %s, %s, tree %s", short(d.Candidate.Commit), d.Candidate.Digest, tree)
 	}
@@ -332,8 +352,8 @@ func writeStatus(b *strings.Builder, w *world, d statusDoc) {
 	if op := d.OpenPacket; op != nil {
 		packet = fmt.Sprintf("%s, %s for the %s, round %d", op.Packet, op.Action, op.Role, op.Round)
 		switch {
-		case op.FileProblem != "":
-			packet += "; " + op.FileProblem
+		case op.Invalid != "":
+			packet += "; no longer valid: " + op.Invalid
 		case !op.Valid:
 			packet += "; no longer valid"
 		}
@@ -366,7 +386,7 @@ func writeStatus(b *strings.Builder, w *world, d statusDoc) {
 		gate = "OPEN"
 	}
 	fmt.Fprintf(b, "Gate:         %s\n\n", gate)
-	writeNext(b, w, d.Next.Action)
+	writeNext(b, w, d.Next)
 }
 
 var cmdFindings = &command{
@@ -389,7 +409,7 @@ type findingsDoc struct {
 
 func runFindings(c *ctx, args []string) error {
 	fs := c.flags()
-	dir, asJSON := stateFlag(fs), jsonFlag(fs)
+	dir, asJSON := stateFlag(fs), c.jsonFlag(fs)
 	backlog := fs.Bool("backlog", false, "list the open non-blocking findings")
 	all := fs.Bool("all", false, "list every finding")
 	args, err := c.parse(fs, args)
@@ -424,7 +444,7 @@ func runFindings(c *ctx, args []string) error {
 		d.Filter = "backlog"
 	}
 	if *asJSON {
-		return writeJSON(c.Stdout, d)
+		return c.emit(d)
 	}
 	var b strings.Builder
 	if len(d.Findings) == 0 {
@@ -494,11 +514,11 @@ func runLog(c *ctx, args []string) error {
 
 // readable gathers the facts for a view that needs a usable ledger.
 func (c *ctx) readable(s *site) (*world, error) {
-	w, err := c.gather(s, false)
+	w, err := c.gather(s)
 	if err != nil {
 		return nil, err
 	}
-	if err := w.writable(); err != nil {
+	if err := w.usable(false); err != nil {
 		return nil, err
 	}
 	return w, nil
@@ -508,9 +528,10 @@ var cmdFsck = &command{
 	name:     "fsck",
 	synopsis: "fsck",
 	summary:  "Verify the ledger and the stored packet and report files",
-	about: `Fsck verifies the ledger's hash chain, replays every event, checks the protocol
-version, and checks that the stored file of every open or answered packet and
-of every accepted report matches the digest the ledger records. It prints how
+	about: `Fsck verifies the ledger's hash chain, replays every event, validates each
+against the event schema, checks the protocol version, and checks that the
+stored file of every open or answered packet and of every accepted report
+matches the digest the ledger records. It prints how
 to recover from each problem it finds and exits 1 if it finds any.`,
 	run: runFsck,
 }
@@ -529,7 +550,7 @@ func runFsck(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	w, err := c.gather(s, false)
+	w, err := c.gather(s)
 	if err != nil {
 		return err
 	}
@@ -537,6 +558,8 @@ func runFsck(c *ctx, args []string) error {
 	var problems []string
 	ledger := w.show(w.store.Dir()) + "/ledger.jsonl"
 	switch {
+	case w.ledgerEmpty:
+		problems = append(problems, fmt.Sprintf("%s is empty, so metron is not initialized: run %s", ledger, w.metron("init")))
 	case w.ledgerMissing:
 		problems = append(problems, fmt.Sprintf("%s does not exist: run %s", ledger, w.metron("init")))
 	case !w.facts.LedgerVerified:
@@ -545,6 +568,19 @@ func runFsck(c *ctx, args []string) error {
 		problems = append(problems, fmt.Sprintf("the ledger was written under protocol %q, not %q: use a matching metron", w.state.Protocol(), core.ProtocolVersion))
 	default:
 		fmt.Fprintf(&b, "Ledger:  %s, %s, hash chain and replay verified, protocol %s\n", ledger, plural(w.state.Events(), "event"), w.state.Protocol())
+		for _, e := range w.events {
+			line, err := json.Marshal(e)
+			if err != nil {
+				return err
+			}
+			ps, err := schema.ValidateJSON(schema.Event, line)
+			if err != nil {
+				return err
+			}
+			for _, p := range ps {
+				problems = append(problems, fmt.Sprintf("ledger event %d (%s) does not satisfy the event schema: %s", e.Seq, e.Type, p))
+			}
+		}
 		var packets, voided, reports int
 		for _, p := range w.state.Packets() {
 			switch {

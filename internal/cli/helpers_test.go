@@ -208,12 +208,16 @@ func (r *repo) next() actionDoc {
 	return a
 }
 
-// expectNext checks the next step.
+// expectNext checks the next step, and that next and gate agree: the step
+// is none exactly when the gate is open.
 func (r *repo) expectNext(step core.Step) actionDoc {
 	r.t.Helper()
 	a := r.next()
 	if a.Step != step {
 		r.t.Fatalf("next is %s (%s), want %s", a.Step, a.Reason, step)
+	}
+	if g := r.run("gate"); (g.code == exitOK) != (a.Step == core.StepNone) {
+		r.t.Fatalf("next is %s but gate exits %d:\n%s%s", a.Step, g.code, g.out, g.err)
 	}
 	return a
 }

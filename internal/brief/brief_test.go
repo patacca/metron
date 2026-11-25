@@ -36,7 +36,7 @@ func TestGolden(t *testing.T) {
 			t.Fatalf("Instructions(%s): %v", action, err)
 		}
 		p.Instructions = instructions
-		prompt, err := Prompt(p)
+		prompt, err := Prompt(p, packetDigest)
 		if err != nil {
 			t.Fatalf("Prompt(%s): %v", action, err)
 		}
@@ -70,11 +70,11 @@ func render(t *testing.T, p core.Packet) map[string]string {
 	if err != nil {
 		t.Fatalf("Instructions: %v", err)
 	}
-	prompt, err := Prompt(p)
+	prompt, err := Prompt(p, packetDigest)
 	if err != nil {
 		t.Fatalf("Prompt: %v", err)
 	}
-	skeleton, err := Skeleton(p)
+	skeleton, err := Skeleton(p, packetDigest)
 	if err != nil {
 		t.Fatalf("Skeleton: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestDeterministic(t *testing.T) {
 func TestPromptKeepsIssuedInstructions(t *testing.T) {
 	p := full(core.StepReview)
 	p.Instructions = "The instructions this packet was issued with.\n"
-	prompt, err := Prompt(p)
+	prompt, err := Prompt(p, packetDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestSkeleton(t *testing.T) {
 	for _, action := range actions {
 		for name, p := range map[string]core.Packet{"minimal": minimal(action), "full": full(action)} {
 			t.Run(string(action)+"/"+name, func(t *testing.T) {
-				data, err := Skeleton(p)
+				data, err := Skeleton(p, packetDigest)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -176,8 +176,9 @@ func TestSkeleton(t *testing.T) {
 				if err := decodeStrict(data, &r); err != nil {
 					t.Fatalf("skeleton does not decode into core.Report: %v", err)
 				}
-				if r.Schema != core.SchemaReport || r.Packet != p.ID || r.Role != p.Role {
-					t.Errorf("envelope = %q %q %q, want %q %q %q", r.Schema, r.Packet, r.Role, core.SchemaReport, p.ID, p.Role)
+				if r.Schema != core.SchemaReport || r.Packet != p.ID || r.PacketDigest != packetDigest || r.Role != p.Role {
+					t.Errorf("envelope = %q %q %q %q, want %q %q %q %q", r.Schema, r.Packet, r.PacketDigest, r.Role,
+						core.SchemaReport, p.ID, packetDigest, p.Role)
 				}
 				if r.Author != (core.Author{}) {
 					t.Errorf("author = %+v, want it left empty", r.Author)
@@ -367,13 +368,37 @@ func TestRefusesInconsistentPackets(t *testing.T) {
 			if _, err := Instructions(p); err == nil {
 				t.Errorf("Instructions accepted the packet")
 			}
-			if _, err := Prompt(p); err == nil {
+			if _, err := Prompt(p, packetDigest); err == nil {
 				t.Errorf("Prompt accepted the packet")
 			}
-			if _, err := Skeleton(p); err == nil {
+			if _, err := Skeleton(p, packetDigest); err == nil {
 				t.Errorf("Skeleton accepted the packet")
 			}
 		})
+	}
+}
+
+func TestRefusesMalformedPacketDigest(t *testing.T) {
+	hex := strings.Repeat("ab", 32)
+	for _, digest := range []string{
+		"",
+		hex,
+		"sha256:",
+		"sha256:" + hex[:63],
+		"sha256:" + hex + "a",
+		"sha256:" + strings.ToUpper(hex),
+		"sha256:" + hex[:63] + "g",
+		"SHA256:" + hex,
+		"sha512:" + hex,
+		" sha256:" + hex,
+	} {
+		p := full(core.StepReview)
+		if _, err := Skeleton(p, digest); err == nil {
+			t.Errorf("Skeleton accepted packet digest %q", digest)
+		}
+		if _, err := Prompt(p, digest); err == nil {
+			t.Errorf("Prompt accepted packet digest %q", digest)
+		}
 	}
 }
 

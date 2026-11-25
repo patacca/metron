@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "c1c6e9564f2ddfaab41b7e82ea8e7e1e564f49e2ea44d5272c511a06ad139052",
   "type": "escalation.raised",
+  "more": 0,
   "data": {
     "id": "E-0001",
     "kind": "component-churn",

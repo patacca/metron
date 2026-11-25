@@ -181,54 +181,6 @@ func TestResolveRules(t *testing.T) {
 	rejection(t, d, err, LayerTransition, "")
 }
 
-func TestNextRows(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		state func(h *harness) State
-		facts func(f *Facts)
-		want  Step
-		owner Role
-		about string
-	}{
-		{name: "ledger unverified", facts: func(f *Facts) { f.LedgerVerified = false }, want: StepRepairLedger, owner: RoleGovernance, about: "failed verification"},
-		{name: "ledger empty", state: func(h *harness) State { return State{} }, want: StepRepairLedger, owner: RoleGovernance, about: "not initialized"},
-		{name: "nothing pinned", state: func(h *harness) State {
-			s, _ := Replay(h.events[:1])
-			return s
-		}, want: StepPinContract, owner: RoleGovernance, about: "no contract is pinned"},
-		{name: "contract unavailable", facts: func(f *Facts) { f.Contract, f.ContractProblem = nil, "anchors are not allowed" }, want: StepPinContract, about: "anchors"},
-		{name: "contract invalid", facts: func(f *Facts) {
-			c := *f.Contract
-			c.Authorizes = ""
-			f.Contract = &c
-		}, want: StepPinContract, about: "/authorizes"},
-		{name: "contract edited", facts: func(f *Facts) { f.ContractDigest = digestOf("edited") }, want: StepPinContract, about: "differs from the pinned"},
-		{name: "tree dirty", facts: func(f *Facts) { f.Clean = false }, want: StepCommitChanges, owner: RoleImplementer},
-		{name: "checks missing", want: StepRunChecks, owner: RoleImplementer, about: "REQ-1 has no recorded result"},
-		{name: "checks failing", state: func(h *harness) State { h.checks(false); return h.state }, want: StepRunChecks, about: "REQ-1 failed"},
-		{name: "review", state: func(h *harness) State { h.checks(true); return h.state }, want: StepReview, owner: RoleReviewer},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h := newHarness(t)
-			s := h.state
-			if tc.state != nil {
-				s = tc.state(h)
-			}
-			f := h.facts()
-			if tc.facts != nil {
-				tc.facts(&f)
-			}
-			a := Next(s, f)
-			if a.Step != tc.want || (tc.owner != "" && a.Owner != tc.owner) || !strings.Contains(a.Reason, tc.about) {
-				t.Fatalf("next %+v, want %s by %s about %q", a, tc.want, tc.owner, tc.about)
-			}
-			if Gate(s, f).Open {
-				t.Fatal("the gate is open")
-			}
-		})
-	}
-}
-
 func TestPacketProblem(t *testing.T) {
 	h := newHarness(t)
 	h.checks(true)
@@ -264,19 +216,5 @@ func TestPacketProblem(t *testing.T) {
 	f.PacketProblem = "anything"
 	if !reflect.DeepEqual(Next(h.state, f), h.next()) || !Gate(h.state, f).Open {
 		t.Fatal("a packet problem changed the outcome while no packet is open")
-	}
-}
-
-func TestPacketProblemBlank(t *testing.T) {
-	h := newHarness(t)
-	h.checks(true)
-	h.packet()
-	f := h.facts()
-	f.PacketProblem = " "
-	p, _ := PlanPacket(h.state, f)
-	p.Packet.Instructions = "brief"
-	d := h.must(IssuePacket(h.state, f, p.Packet, digestOf("p2")))
-	if v := d[0].Data.(PacketVoided); blank(v.Reason) {
-		t.Fatalf("void %+v", v)
 	}
 }

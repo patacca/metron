@@ -24,14 +24,18 @@ What it provides:
 
 What it does not provide:
 
-- **Tamper resistance.** The hash chain detects accidental corruption and
-  partial edits. It is not anchored to anything outside the state directory, so
-  an actor who can write the ledger can rewrite it consistently. Git history
-  and review of `.metron/state/` are the only external check.
-- **Reviewer identity.** `author.id` is whatever the submitter declares.
-  Packet binding proves that a report answers a specific packet. It does not
-  prove who wrote the report. Role separation is therefore a rule cooperating
-  parties follow, not a guarantee.
+- **Tamper resistance.** The hash chain detects accidental corruption, edits
+  to a line, removed or reordered lines, and a ledger cut off in the middle of
+  a command's batch of events. It does not detect a ledger rolled back to the
+  end of an earlier command, and it is not anchored to anything outside the
+  state directory, so an actor who can write the ledger can rewrite it
+  consistently. Git history and review of `.metron/state/` are the only
+  external check.
+- **Reviewer identity.** `author.id` is whatever the submitter declares. A
+  report carries the digest of the packet it answers, which shows that it was
+  written for that exact packet and not for another ledger or an earlier
+  issue. It does not show who wrote it. Role separation is therefore a rule
+  cooperating parties follow, not a guarantee.
 - **Protected evaluation.** Whoever runs `metron gate` can also run a modified
   binary. The exit status is only as trustworthy as the environment it ran in.
 - **Role isolation.** An agent with shell access can request any packet and

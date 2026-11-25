@@ -90,6 +90,7 @@ func TestContractLayers(t *testing.T) {
 func TestUntouchedTemplate(t *testing.T) {
 	r := newRepo(t)
 	contains(t, "init output", r.must("init").out, "Created .metron/contract.yaml", "Created .metron/.gitignore",
+		"Created .metron/.gitattributes", "Commit .metron/, state included",
 		"Created .metron/state/ledger.jsonl", "Next step:    pin-contract (owner: governance)", "Run:          metron contract")
 	res := r.expect(exitNegative, "contract")
 	contains(t, "contract output", res.out, "12 problems found by the structural layer:", ": /project/name: must not be blank",

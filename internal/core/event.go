@@ -29,10 +29,13 @@ const (
 // Event is one line of the ledger. Members are serialized in this order; the
 // hash chain depends on it.
 type Event struct {
-	Seq  int             `json:"seq"`
-	Time string          `json:"time"`
-	Prev string          `json:"prev"`
-	Type EventType       `json:"type"`
+	Seq  int       `json:"seq"`
+	Time string    `json:"time"`
+	Prev string    `json:"prev"`
+	Type EventType `json:"type"`
+	// More is the number of events of the same command that follow this one.
+	// It counts down to 0 within a batch; the last line of a ledger has 0.
+	More int             `json:"more"`
 	Data json.RawMessage `json:"data"`
 	Hash string          `json:"hash"`
 }

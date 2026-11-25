@@ -1,0 +1,36 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0008",
+  "packet_digest": "sha256:a030b95e9a512d12f1ab363b694e1c24f8a9ec58c4b2e5a7360c538d1fb8b510",
+  "role": "implementer",
+  "author": {
+    "id": "",
+    "kind": "agent",
+    "model": "claude-opus-5-5",
+    "harness": "claude-code",
+    "session": "7d1c9a52"
+  },
+  "body": {
+    "fixes": [
+      {
+        "finding": "F-0001",
+        "commits": [
+          "1bae936e7b396d2b9b480493db6e6d09d6bc2d87"
+        ],
+        "summary": "Hold the book mutex across the read-modify-write in Post.",
+        "components": [
+          "internal/ledger/post.go"
+        ],
+        "root_cause": "The balance cache was introduced without a lock discipline.",
+        "tests": "Added TestConcurrentPost."
+      }
+    ],
+    "disputes": [
+      {
+        "finding": "F-0002",
+        "rationale": "The input F-0002 describes is outside the operating envelope."
+      }
+    ],
+    "notes": "F-0003 from the backlog is left for the next round."
+  }
+}

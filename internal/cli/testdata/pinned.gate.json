@@ -4,7 +4,7 @@
   "stage": "prototype",
   "authorizes": "An internal demonstration",
   "candidate": {
-    "commit": "4184c5a109d83294c4c1d72fda715bd93569c3c2",
+    "commit": "7d5c5d22e74de0b672771eb912b636e6554b1dd4",
     "digest": "sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898"
   },
   "conditions": [
@@ -31,7 +31,7 @@
     },
     {
       "name": "I",
-      "description": "The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version; every stored packet and report file matches the ledger",
+      "description": "The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version; the report carrying the verdict is stored intact",
       "satisfied": false,
       "reasons": [
         "no round of stage prototype has a verdict"

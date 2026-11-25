@@ -87,7 +87,17 @@ Project configuration and operational state are separate.
 The state directory is `--state-dir`, else `$METRON_STATE_DIR`, else
 `.metron/state`. In cooperative use, commit `state/` together with the work:
 git history is the only anchor it has. In a protected environment, point the
-state directory outside the repository, at a location agents cannot write.
+state directory outside the repository, at a location agents cannot write. A
+state directory inside the working tree but outside `.metron/` is refused:
+every write to it would make the tree unclean.
+
+`metron init` also writes `.metron/.gitattributes`, which stops git from
+converting line endings under `state/`. Stored reports are compared byte for
+byte with what was ingested.
+
+Nothing under `.metron/` is part of the candidate, so nothing that affects the
+outcome of a review belongs there: a check script kept under `.metron/` could
+change without invalidating its recorded result.
 
 The ledger is the single source of truth. Finding lists, the improvement
 backlog, status summaries and decision history are views computed from it by
@@ -106,9 +116,21 @@ Excluding `.metron/` is what lets the ledger live in the repository it governs:
 committing ledger updates does not change the candidate, while any change to
 any other tracked file does.
 
-The working tree is **clean** when `git status --porcelain` reports nothing
-outside `.metron/`, untracked files included. Metron requires a clean tree
-whenever it binds something to a candidate.
+The working tree is **clean** when all of the following hold outside
+`.metron/`:
+
+- `git status --porcelain` reports nothing, untracked files included.
+- No tracked file carries the `assume-unchanged` or `skip-worktree` index
+  flag. Either flag makes git report a modified file as unchanged, so checks
+  and reviewers would see content that is not the candidate.
+- No tracked symbolic link points into `.metron/`, whose content is not part
+  of the candidate.
+
+Metron requires a clean tree whenever it binds something to a candidate.
+
+Ignored files are outside the candidate and are not examined, whichever ignore
+mechanism hides them. A check result is therefore only as reproducible as the
+environment it ran in, as with any locally run test.
 
 Read-only roles are checked after the fact, because no agent protocol can
 enforce them: a reviewer, verifier or auditor report is rejected if the
@@ -144,6 +166,10 @@ optional `command` (an automated check Metron runs itself) and an optional
 `from` is not later than the contract's `stage`. This is how acceptance is made
 lifecycle-aware: a requirement that only matters in production is written down
 now and starts blocking when the contract targets production.
+
+A `command` is run by a POSIX shell (`sh -c`) from the repository root, on
+every platform, so that the same command text means the same thing wherever a
+result is recorded. On Windows, Metron uses the `sh` that ships with Git.
 
 There are no gate settings. The gate conditions are fixed (section 11).
 
@@ -186,10 +212,16 @@ numbers, so its number rule reduces to plain integers.
 **Pinning.** `metron contract pin -m <reason>` records the current contract
 digest as authorized. If the file's contract digest differs from the pinned
 one, every command that depends on the contract refuses to proceed until
-governance pins it. A new pin voids the open packet and invalidates any verdict
-issued under the old one. Pinning the digest that is already pinned is
-refused. When a pin changes `stage`, the count of consecutive failed rounds
-restarts; round numbers and findings carry over.
+governance pins it. A new pin voids the open packet. A verdict counts only
+while the pinned digest is the one it was issued under: pinning a different
+contract sets every earlier verdict aside, and pinning the earlier contract
+again, unchanged, lets its verdicts count again. Pinning the digest that is
+already pinned is refused. A finding that was disputed can be disputed again
+after a new pin, because the contract it is judged against has changed.
+
+When a pin changes `stage`, the count of consecutive failed rounds, the
+non-convergence flag and the component-churn counts restart; round numbers and
+findings carry over.
 
 ## 7. Ledger
 
@@ -203,12 +235,18 @@ A command yields its events in a defined order, and the same state, command
 and facts always yield the same events.
 
 **Envelope.** Each line is a JSON object without insignificant whitespace,
-with members in exactly this order: `seq`, `time`, `prev`, `type`, `data`,
-`hash`. Who caused an event is part of its payload where that is meaningful.
+with members in exactly this order: `seq`, `time`, `prev`, `type`, `more`,
+`data`, `hash`. Who caused an event is part of its payload where that is
+meaningful.
 
 - `seq` starts at 1 and increases by 1.
-- `time` is RFC 3339 UTC with second precision.
+- `time` is RFC 3339 UTC with second precision. The events of one command
+  share one time.
 - `prev` is the previous event's `hash`, or 64 zeros for the first event.
+- `more` is the number of events of the same command that follow this one. It
+  counts down to 0 within a command's batch, and the last line of a ledger has
+  `more` 0. A ledger cut off in the middle of a batch therefore fails
+  verification, even though what remains is a valid chain.
 - `hash` is the lowercase hex SHA-256 of the line's bytes up to, but excluding,
   the last occurrence of `,"hash":"`, followed by a closing `}`.
 
@@ -225,12 +263,22 @@ holds an exclusive operating-system lock on `<state>/lock` from before it reads
 the ledger until after it commits; the lock disappears with the process, so a
 crash never leaves it held.
 
-Packet and report files are written after the ledger commit that refers to
-them, so the ledger never trails a file. A crash in between leaves an event
-whose file is missing, which is detectable and recoverable: an open packet
-without a matching file is voided and issued again, and a report file is
-restored by ingesting the same report again. `metron fsck` and the gate treat
-a missing or mismatching file as an integrity failure.
+A packet file is written after the ledger commit that issues the packet. A
+crash in between leaves an open packet without its file, which is detected:
+the packet is voided and issued again.
+
+A report file is written before the ledger commit that accepts the report,
+because the exact bytes submitted cannot be recreated afterwards. Until that
+commit the file belongs to no accepted report and may be replaced. A crash in
+between leaves a file the ledger does not refer to, which the next ingestion
+for that packet overwrites.
+
+`metron fsck` reports every missing or mismatching file of an accepted report
+or of a packet that was not voided. The gate requires less: the report that
+carries the verdict it relies on must be stored intact. A lost report file can
+be restored from version control or by ingesting the identical bytes again;
+failing that, a change to the candidate leads to a new review and a new
+report, so the loss of a file never closes the gate for good.
 
 **Event types**
 
@@ -364,8 +412,9 @@ A report is a versioned envelope around a role-specific body:
 | --- | --- |
 | `schema` | `metron.report/v1` |
 | `packet` | The packet this report answers |
+| `packet_digest` | The digest of that packet, copied from the skeleton. Packet identifiers repeat from one ledger to the next; the digest does not, so a report written for another repository, another ledger or an earlier issue of the same identifier is refused |
 | `role` | The role that produced it |
-| `author` | Declared identity: `id`, `kind` (`agent` or `human`), optionally `model`, `harness`, `session` |
+| `author` | Declared identity: `id`, `kind` (`agent` or `human`), optionally `model`, `harness`, `session`. `id` is 1 to 128 printable ASCII characters without spaces, so that two identities cannot differ only by something invisible |
 | `body` | The role-specific content |
 
 `metron ingest` validates a report in three separate layers and accepts it only
@@ -393,7 +442,10 @@ the digest of its canonical JSON form.
 **Reviewer body**
 
 - `coverage` has exactly one entry per domain: `assessed` or `not-applicable`,
-  each with a summary or rationale.
+  each with a summary or rationale. A domain in which an applicable
+  requirement lies is always `assessed`.
+- A finding of any tier that cites a requirement cites an applicable one, and
+  one that cites a risk cites an unacceptable one.
 - `requirements` has exactly one entry per applicable requirement: `satisfied`,
   `violated` or `unverified`, each with evidence.
 - A blocking finding cites an applicable `requirement` or an unacceptable
@@ -420,15 +472,19 @@ the digest of its canonical JSON form.
 
 - Addresses every blocking finding in the packet with either a fix or a
   dispute. It may also fix non-blocking findings from the backlog.
-- Each fix lists full commit hashes that lie between the round's candidate and
-  the current one, and names at least one component. The tree is clean.
-- Every listed commit changes something outside `.metron/`, and for every
-  finding it fixes, the candidate differs from the one on which that finding
-  was last opened, reopened or had a fix rejected. A fix committed before the
-  packet was requested is therefore valid; claiming a rejected fix again
-  without a new change is not.
+- Each fix lists full commit hashes and names at least one component. The
+  tree is clean.
+- Every listed commit is part of the current candidate's history, changes
+  something outside `.metron/`, and is not already contained in the round's
+  candidate. The last condition is checked only while that commit still
+  exists; history may have been rewritten since.
+- For every finding it fixes, the candidate differs from the one on which
+  that finding was last opened, reopened or had a fix rejected. A fix
+  committed before the packet was requested is therefore valid; claiming a
+  rejected fix again without a new change is not.
 - A finding flagged root-cause-required carries a root-cause analysis.
-- A finding can be disputed once. After an auditor upholds it, it must be fixed.
+- A finding can be disputed once per pinned contract. After an auditor upholds
+  it, it must be fixed, unless the contract is pinned again.
 
 **Verifier body**
 
@@ -454,7 +510,7 @@ gate closed and takes priority in `metron next`.
 | --- | --- | --- | --- |
 | `dispute` | An implementer disputes a finding | auditor | Adjudication |
 | `contradiction` | A finding declares that it reverses an earlier resolution | auditor | Adjudication |
-| `component-churn` | The same component is fixed in 3 distinct rounds | auditor | Component-level audit |
+| `component-churn` | The same component is fixed in 3 distinct rounds of a stage; raised once per component per stage | auditor | Component-level audit |
 | `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes it confirms | auditor | Redesign assessment |
 | `non-convergence` | Consecutive rounds without GREEN reach 3; raised once per streak | auditor | Convergence analysis |
 | `process-audit` | Every 5th consecutive round ends without GREEN | auditor | Independent process audit |
@@ -480,7 +536,7 @@ G = C ∧ B ∧ E ∧ I ∧ V
 | C | Acceptance criteria satisfied | Every applicable requirement is `satisfied` in the reviewer report of the latest round |
 | B | No blockers | No unresolved T0 or T1 finding, and no open escalation |
 | E | Evidence sufficient | Every applicable requirement with a `command` has a passing result recorded for this candidate and this command text |
-| I | Integrity | The current candidate digest equals the reviewed one; the tree is clean; the contract digest equals the pinned one; the ledger verifies and was written under this protocol version |
+| I | Integrity | The current candidate digest equals the reviewed one; the tree is clean; the contract digest equals the pinned one; the ledger verifies and was written under this protocol version; the report carrying the verdict is stored intact |
 | V | Independent verdict | The latest round's verdict is `GREEN`, issued for this candidate under this contract digest, by an author who never acted as implementer |
 
 `metron gate` exits 0 only when all five hold. Anything else, including an
@@ -499,11 +555,11 @@ A GREEN gate approves one candidate for one stage and the activity named in
 | `metron contract pin -m <reason>` | Governance: authorize the current contract |
 | `metron next` | Print the single next permitted action and the command that performs it |
 | `metron check` | Run the applicable requirements' check commands on the candidate and record the results |
-| `metron packet [-o file] [--format json\|prompt]` | Issue, or return again, the packet for the next action |
+| `metron packet [-o file] [--format json\|prompt\|skeleton]` | Issue, or return again, the packet for the next action: as JSON, as a self-contained prompt, or as a report skeleton to fill in |
 | `metron ingest <file\|->` | Validate and ingest a role report |
 | `metron resolve <E-id> -m <decision>` | Governance: discharge a governance-owned escalation |
 | `metron gate` | Evaluate the gate |
-| `metron status`, `metron findings`, `metron log` | Read-only views of the ledger |
+| `metron status`, `metron findings [--backlog\|--all]`, `metron log` | Read-only views of the ledger. `findings` lists what is unresolved, the non-blocking backlog, or everything |
 | `metron fsck` | Verify the ledger's hash chain and replay |
 | `metron schema [name]`, `metron protocol` | Print the embedded schemas and protocol text |
 | `metron version` | Print version information |
@@ -518,6 +574,12 @@ Exit status is part of the public interface:
 | 1 | A negative outcome: gate closed, report rejected, contract invalid, a check failed |
 | 2 | Usage error |
 | 3 | Environment or internal error: I/O, git unavailable, ledger corrupt, lock held |
+
+For `metron gate` the distinction matters to an orchestrator: 1 means the
+gate was evaluated and is closed, so the loop continues; 3 means it could not
+be evaluated, because the ledger is missing, unreadable or fails verification,
+so someone has to intervene. `metron next` and `metron status` report a ledger
+problem as their result and exit 0; `metron fsck` exits 1 when it finds one.
 
 ## 13. Code layout
 

@@ -1,6 +1,7 @@
 {
   "schema": "metron.report/v1",
   "packet": "P-0010",
+  "packet_digest": "sha256:6de99282b0ed31c79feed9a418f08ff289253c90b46205ec5eb6381ec7b9aa51",
   "role": "auditor",
   "author": {
     "id": "claude-auditor-1",

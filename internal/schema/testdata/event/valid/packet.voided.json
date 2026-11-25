@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "b82e000cbef9d5a19b63c28407727eddf49fcd1dd9682568423c2ad3cbb477a6",
   "type": "packet.voided",
+  "more": 0,
   "data": {
     "packet": "P-0001",
     "reason": "The contract was pinned again."

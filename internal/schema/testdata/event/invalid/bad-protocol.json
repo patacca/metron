@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "0000000000000000000000000000000000000000000000000000000000000000",
   "type": "ledger.initialized",
+  "more": 0,
   "data": {
     "protocol": "metron.protocol/v0"
   },

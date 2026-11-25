@@ -68,11 +68,13 @@ operating_envelope:
 #              perform and agree with, such as "The tests under tests/import
 #              pass and include a statement imported twice". Avoid criteria
 #              nobody can check, such as "it works well".
-#   command    Optional. A shell command that `metron check` runs from the
+#   command    Optional. A command that `metron check` runs with a POSIX
+#              shell (sh -c, on Windows the sh that ships with Git) from the
 #              repository root, such as "go test ./...". It passes when it
 #              exits with status 0. The gate needs a passing result on the
 #              exact candidate and for the exact command text, and the
-#              command must leave the working tree clean.
+#              command must leave the working tree clean. Keep what it runs
+#              outside .metron/, which is not part of the candidate.
 #   from       Optional. The first stage at which the requirement applies,
 #              prototype when absent. A requirement from a later stage is
 #              written down now and starts blocking once the contract

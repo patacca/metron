@@ -225,7 +225,7 @@ func runContract(c *ctx, args []string) error {
 		return runPin(c, args[1:])
 	}
 	fs := c.flags()
-	dir, asJSON := stateFlag(fs), jsonFlag(fs)
+	dir, asJSON := stateFlag(fs), c.jsonFlag(fs)
 	args, err := c.parse(fs, args)
 	if err != nil {
 		return err
@@ -237,7 +237,7 @@ func runContract(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	w, err := c.gather(s, false)
+	w, err := c.gather(s)
 	if err != nil {
 		return err
 	}
@@ -260,7 +260,7 @@ func runContract(c *ctx, args []string) error {
 	}
 	doc.Pinned = doc.Valid && doc.PinnedDigest != "" && doc.PinnedDigest == doc.Digest
 	if *asJSON {
-		err = writeJSON(c.Stdout, doc)
+		err = c.emit(doc)
 	} else {
 		err = printContract(c.Stdout, s, doc)
 	}
@@ -322,7 +322,7 @@ func runPin(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	wr, w, err := c.lock(s, false)
+	wr, w, err := c.lock(s)
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func runPin(c *ctx, args []string) error {
 		fmt.Fprintf(&b, "  %s\n", describe(e))
 	}
 	b.WriteString("\n")
-	writeNext(&b, w, w.next())
+	writeNext(&b, w, w.actionDoc(w.next()))
 	_, err = io.WriteString(c.Stdout, b.String())
 	return err
 }

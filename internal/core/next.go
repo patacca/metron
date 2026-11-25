@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -21,8 +22,21 @@ type Action struct {
 
 // Next returns the single next action: the first row of the table in
 // docs/architecture.md, section 8, whose condition holds. It returns StepNone
-// exactly when Gate reports the gate open.
+// exactly when Gate reports the gate open. When an open packet can no longer
+// be answered, the reason says so, in the words of PacketInvalid.
 func Next(s State, f Facts) Action {
+	a := next(s, f)
+	if a.Step == StepRepairLedger {
+		return a
+	}
+	if why := PacketInvalid(s, f); why != "" {
+		op, _ := s.openPacket()
+		a.Reason = fmt.Sprintf("packet %s can no longer be answered (%s) and the next packet voids it; %s", op.Packet, why, a.Reason)
+	}
+	return a
+}
+
+func next(s State, f Facts) Action {
 	if p := ledgerProblem(s, f); p != "" {
 		return Action{Step: StepRepairLedger, Owner: RoleGovernance, Reason: p}
 	}
@@ -35,7 +49,8 @@ func Next(s State, f Facts) Action {
 	}
 	if ids := s.openEscalations(RoleGovernance); len(ids) > 0 {
 		return Action{Step: StepAdjudicate, Owner: RoleGovernance, Escalations: ids,
-			Reason: fmt.Sprintf("%s await a governance decision: amend the contract and pin it, or dismiss with a rationale, then resolve each", strings.Join(ids, ", "))}
+			Reason: fmt.Sprintf("%s %s a governance decision: amend the contract and pin it, or dismiss with a rationale, then resolve %s",
+				strings.Join(ids, ", "), pick(len(ids), "awaits", "await"), pick(len(ids), "it", "each"))}
 	}
 	if !f.Clean {
 		return Action{Step: StepCommitChanges, Owner: RoleImplementer,
@@ -47,11 +62,10 @@ func Next(s State, f Facts) Action {
 	}
 	if ids := s.findingIDs(func(x Finding) bool { return x.Status == StatusClaimed }); len(ids) > 0 {
 		return Action{Step: StepVerify, Owner: RoleVerifier, Findings: ids,
-			Reason: fmt.Sprintf("the fixes of %s are claimed and must be verified", strings.Join(ids, ", "))}
+			Reason: fmt.Sprintf("the %s of %s %s claimed and must be verified", pick(len(ids), "fix", "fixes"), strings.Join(ids, ", "), pick(len(ids), "is", "are"))}
 	}
 	if ids := s.findingIDs(func(x Finding) bool { return x.Status == StatusOpen && x.Tier.Blocking() }); len(ids) > 0 {
-		return Action{Step: StepFix, Owner: RoleImplementer, Findings: ids,
-			Reason: fmt.Sprintf("blocking findings %s are open: fix or dispute each", strings.Join(ids, ", "))}
+		return Action{Step: StepFix, Owner: RoleImplementer, Findings: ids, Reason: s.fixReason(ids)}
 	}
 	if ids, reasons := missingChecks(s, *f.Contract, f.Candidate.Digest); len(ids) > 0 {
 		return Action{Step: StepRunChecks, Owner: RoleImplementer, Requirements: ids,
@@ -63,7 +77,11 @@ func Next(s State, f Facts) Action {
 	}
 	var why []string
 	for _, c := range g.Conditions {
-		why = append(why, c.Reasons...)
+		for _, r := range c.Reasons {
+			if !slices.Contains(why, r) {
+				why = append(why, r)
+			}
+		}
 	}
 	if r := s.resubmission(f); r != "" {
 		return Action{Step: StepCommitChanges, Owner: RoleImplementer, Reason: r}
@@ -151,4 +169,36 @@ func (s State) resubmission(f Facts) string {
 			f.Candidate.Digest, r.Verdict, r.Number, r.Stage)
 	}
 	return ""
+}
+
+// pick returns the singular or the plural form for n items.
+func pick(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// fixReason names the open blocking findings and offers a dispute only for
+// those that have not been disputed under the pinned contract.
+func (s State) fixReason(ids []string) string {
+	var disputed, open []string
+	for _, id := range ids {
+		if s.findings[s.findingIndex(id)].Disputed {
+			disputed = append(disputed, id)
+		} else {
+			open = append(open, id)
+		}
+	}
+	n := len(ids)
+	list := strings.Join(ids, ", ")
+	switch {
+	case len(disputed) == 0:
+		return fmt.Sprintf("blocking %s %s %s open: fix or dispute %s", pick(n, "finding", "findings"), list, pick(n, "is", "are"), pick(n, "it", "each"))
+	case len(open) == 0:
+		return fmt.Sprintf("blocking %s %s %s open and %s already disputed: fix %s", pick(n, "finding", "findings"), list,
+			pick(n, "is", "are"), pick(n, "was", "were"), pick(n, "it", "each"))
+	}
+	return fmt.Sprintf("blocking findings %s are open: fix %s, which %s already disputed, and fix or dispute %s",
+		list, strings.Join(disputed, ", "), pick(len(disputed), "was", "were"), strings.Join(open, ", "))
 }

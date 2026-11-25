@@ -12,6 +12,9 @@
     "packet": {
       "$ref": "defs.schema.json#/$defs/packetId"
     },
+    "packet_digest": {
+      "$ref": "defs.schema.json#/$defs/sha256"
+    },
     "role": {
       "type": "string",
       "enum": [
@@ -31,20 +34,12 @@
   "required": [
     "schema",
     "packet",
+    "packet_digest",
     "role",
     "author",
     "body"
   ],
   "additionalProperties": false,
-  "role": {
-    "type": "string",
-    "enum": [
-      "reviewer",
-      "implementer",
-      "verifier",
-      "auditor"
-    ]
-  },
   "allOf": [
     {
       "if": {

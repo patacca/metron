@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -36,7 +37,7 @@ findings, escalations, requirements and command.`,
 
 func runNext(c *ctx, args []string) error {
 	fs := c.flags()
-	dir, asJSON := stateFlag(fs), jsonFlag(fs)
+	dir, asJSON := stateFlag(fs), c.jsonFlag(fs)
 	args, err := c.parse(fs, args)
 	if err != nil {
 		return err
@@ -48,7 +49,7 @@ func runNext(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	w, err := c.gather(s, false)
+	w, err := c.gather(s)
 	if err != nil {
 		return err
 	}
@@ -56,10 +57,10 @@ func runNext(c *ctx, args []string) error {
 	if *asJSON {
 		doc := w.actionDoc(a)
 		doc.Schema = "metron.next/v1"
-		return writeJSON(c.Stdout, doc)
+		return c.emit(doc)
 	}
 	var b strings.Builder
-	writeNext(&b, w, a)
+	writeNext(&b, w, w.actionDoc(a))
 	_, err = io.WriteString(c.Stdout, b.String())
 	return err
 }
@@ -109,11 +110,18 @@ func runPacket(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	wr, w, err := c.lock(s, false)
+	wr, w, err := c.lock(s)
 	if err != nil {
 		return err
 	}
 	defer wr.Close()
+	// Only a packet step, or the open packet itself, takes a packet; anything
+	// else is refused with what next says instead.
+	if a := w.next(); a.Step != core.StepSubmitReport {
+		if _, ok := a.Step.PacketRole(); !ok {
+			return fail(exitNegative, "the next action is %s, which takes no packet: %s\nRun: %s", a.Step, a.Reason, w.command(a))
+		}
+	}
 	if err := w.candidate(); err != nil {
 		return err
 	}
@@ -144,6 +152,11 @@ func runPacket(c *ctx, args []string) error {
 	if err := jsonv2.Unmarshal(data, &p, jsonv2.RejectUnknownMembers(true)); err != nil {
 		return fmt.Errorf("decode the stored packet: %w", err)
 	}
+	// A report names the digest recorded when its packet was issued.
+	rec, ok := w.state.Packet(p.ID)
+	if !ok {
+		return fmt.Errorf("packet %s is not in the ledger", p.ID)
+	}
 	var rendered []byte
 	switch *format {
 	case formatJSON:
@@ -153,13 +166,13 @@ func runPacket(c *ctx, args []string) error {
 		}
 		rendered = append(b.Bytes(), '\n')
 	case formatPrompt:
-		text, err := brief.Prompt(p)
+		text, err := brief.Prompt(p, rec.Digest)
 		if err != nil {
 			return err
 		}
 		rendered = []byte(text)
 	case formatSkeleton:
-		if rendered, err = brief.Skeleton(p); err != nil {
+		if rendered, err = brief.Skeleton(p, rec.Digest); err != nil {
 			return err
 		}
 	}
@@ -176,7 +189,7 @@ func runPacket(c *ctx, args []string) error {
 		return err
 	}
 	fmt.Fprintf(c.Stderr, "metron packet: %s; wrote the %s to %s\n", note, *format, *out)
-	if dirty, err := s.repo.DirtyPaths(); err == nil && len(dirty) > len(w.dirty) {
+	if dirty, err := s.repo.TreeProblems(); err == nil && len(dirty) > len(w.dirty) {
 		fmt.Fprintf(c.Stderr, "metron packet: warning: %s is in the work tree and makes it dirty, which invalidates a packet for a read-only role and blocks the loop; move it outside the repository or under .metron/\n", *out)
 	}
 	return nil
@@ -261,13 +274,16 @@ type ingestDoc struct {
 	Verdict           core.Verdict     `json:"verdict,omitempty"`
 	EscalationsRaised []string         `json:"escalations_raised"`
 	Notes             []string         `json:"notes,omitempty"`
-	Rejection         *rejectionDoc    `json:"rejection,omitempty"`
-	Next              *actionDoc       `json:"next,omitempty"`
+	// Problem says why a report that was already accepted could not restore
+	// its lost or damaged stored file.
+	Problem   string        `json:"problem,omitempty"`
+	Rejection *rejectionDoc `json:"rejection,omitempty"`
+	Next      *actionDoc    `json:"next,omitempty"`
 }
 
 func runIngest(c *ctx, args []string) error {
 	fs := c.flags()
-	dir, asJSON := stateFlag(fs), jsonFlag(fs)
+	dir, asJSON := stateFlag(fs), c.jsonFlag(fs)
 	args, err := c.parse(fs, args)
 	if err != nil {
 		return err
@@ -327,12 +343,15 @@ func runIngest(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	wr, w, err := c.lock(s, true)
+	wr, w, err := c.lock(s)
 	if err != nil {
 		return err
 	}
 	defer wr.Close()
 	if err := w.candidate(); err != nil {
+		return err
+	}
+	if err := w.describe(r); err != nil {
 		return err
 	}
 	drafts, dup, err := core.Ingest(w.state, w.facts, r, d.Digest, d.RawDigest)
@@ -350,15 +369,16 @@ func runIngest(c *ctx, args []string) error {
 		}
 		return c.ingested(d, *asJSON, w)
 	}
+	// The bytes submitted cannot be recreated later, so they are stored
+	// before the ledger commit that accepts them. Until that commit the file
+	// belongs to no accepted report and may be replaced.
+	if err := wr.ReplaceReport(r.Packet, raw); err != nil {
+		return fmt.Errorf("store the report before accepting it, so nothing was changed: %w", err)
+	}
 	events, err := w.commit(wr, drafts)
 	if err != nil {
 		return err
 	}
-	if err := wr.WriteReport(r.Packet, raw); err != nil {
-		return fmt.Errorf("the ledger records the report for packet %s, but its file could not be stored (%w): ingest the same report again to restore it",
-			r.Packet, err)
-	}
-	w.refresh()
 	for _, e := range events {
 		d.Events = append(d.Events, e.Type)
 		switch e.Type {
@@ -374,26 +394,32 @@ func runIngest(c *ctx, args []string) error {
 }
 
 // restore handles a report that was already accepted: it restores the stored
-// file when it is missing and the bytes are the ones accepted.
+// file when it is missing and the bytes are the ones accepted. When the file
+// cannot be restored from these bytes, d.Problem says what to do instead.
 func restore(w *world, wr *store.Writer, packet string, raw []byte, d *ingestDoc) error {
 	rec, _ := w.state.Packet(packet)
 	stored, err := w.store.ReadReport(packet)
+	identical := d.RawDigest == rec.Report.RawDigest
+	name := store.ReportsDir + "/" + packet + ".json"
 	switch {
 	case err == nil && canon.Digest(stored) == rec.Report.RawDigest:
-	case errors.Is(err, fs.ErrNotExist) && d.RawDigest == rec.Report.RawDigest:
+	case errors.Is(err, fs.ErrNotExist) && identical:
 		if err := wr.WriteReport(packet, raw); err != nil {
 			return err
 		}
 		d.Restored = true
-		d.Notes = append(d.Notes, fmt.Sprintf("restored the stored report file of packet %s", packet))
+		d.Notes = append(d.Notes, fmt.Sprintf("restored the stored report file %s", name))
 	case errors.Is(err, fs.ErrNotExist):
-		d.Notes = append(d.Notes, fmt.Sprintf("the stored report file of packet %s is missing, and these bytes differ from the ones accepted (raw digest %s): submit the exact file that was accepted to restore it",
-			packet, rec.Report.RawDigest))
+		d.Problem = fmt.Sprintf("the stored report %s is missing, and this file is the same report in a different byte form (raw digest %s, while %s was accepted), so it cannot restore it: restore the stored report from version control",
+			name, d.RawDigest, rec.Report.RawDigest)
 	case err != nil:
 		return err
+	case identical:
+		d.Problem = fmt.Sprintf("the stored report %s does not match the raw digest accepted, and stored reports are never overwritten: restore it from version control, or delete it and ingest this file again",
+			name)
 	default:
-		d.Notes = append(d.Notes, fmt.Sprintf("the stored report file of packet %s does not match the raw digest accepted: delete it, then ingest the exact file that was accepted",
-			packet))
+		d.Problem = fmt.Sprintf("the stored report %s does not match the raw digest accepted, and this file is the same report in a different byte form: restore the stored report from version control",
+			name)
 	}
 	return nil
 }
@@ -404,10 +430,10 @@ func (c *ctx) ingested(d *ingestDoc, asJSON bool, w *world, events ...core.Event
 		d.Next = w.actionDoc(w.next())
 	}
 	if asJSON {
-		if err := writeJSON(c.Stdout, d); err != nil {
+		if err := c.emit(d); err != nil {
 			return err
 		}
-		if d.Rejection != nil {
+		if d.Rejection != nil || d.Problem != "" {
 			return negative
 		}
 		return nil
@@ -436,11 +462,20 @@ func (c *ctx) ingested(d *ingestDoc, asJSON bool, w *world, events ...core.Event
 	for _, n := range d.Notes {
 		fmt.Fprintf(&b, "Note: %s.\n", n)
 	}
+	if d.Problem != "" {
+		if _, err := io.WriteString(c.Stdout, b.String()); err != nil {
+			return err
+		}
+		return fail(exitNegative, "%s", d.Problem)
+	}
 	b.WriteString("\n")
-	writeNext(&b, w, d.Next.Action)
+	writeNext(&b, w, d.Next)
 	_, err := io.WriteString(c.Stdout, b.String())
 	return err
 }
+
+// escalationID is the form of an escalation identifier.
+var escalationID = regexp.MustCompile(`^E-[0-9]{4,}$`)
 
 var cmdResolve = &command{
 	name:     "resolve",
@@ -468,6 +503,9 @@ func runResolve(c *ctx, args []string) error {
 	if err := positional(args, 1, 1); err != nil {
 		return err
 	}
+	if !escalationID.MatchString(args[0]) {
+		return usageError("%q is not an escalation identifier: write E- followed by at least four digits, such as E-0001", args[0])
+	}
 	if strings.TrimSpace(*decision) == "" {
 		return usageError(`missing -m "<decision>": state what governance decided and why`)
 	}
@@ -475,7 +513,7 @@ func runResolve(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	wr, w, err := c.lock(s, false)
+	wr, w, err := c.lock(s)
 	if err != nil {
 		return err
 	}
@@ -498,7 +536,7 @@ func runResolve(c *ctx, args []string) error {
 		fmt.Fprintf(&b, "  %s\n", describe(e))
 	}
 	b.WriteString("\n")
-	writeNext(&b, w, w.next())
+	writeNext(&b, w, w.actionDoc(w.next()))
 	_, err = io.WriteString(c.Stdout, b.String())
 	return err
 }

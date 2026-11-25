@@ -6,11 +6,14 @@ import "encoding/json"
 // Body holds the role-specific content: a ReviewerBody, ImplementerBody,
 // VerifierBody or AuditorBody, according to Role.
 type Report struct {
-	Schema string          `json:"schema"`
-	Packet string          `json:"packet"`
-	Role   Role            `json:"role"`
-	Author Author          `json:"author"`
-	Body   json.RawMessage `json:"body"`
+	Schema string `json:"schema"`
+	Packet string `json:"packet"`
+	// PacketDigest is the digest of the packet this report answers, as
+	// recorded when the packet was issued.
+	PacketDigest string          `json:"packet_digest"`
+	Role         Role            `json:"role"`
+	Author       Author          `json:"author"`
+	Body         json.RawMessage `json:"body"`
 }
 
 // Author is the identity a report's submitter declares. In local trust mode

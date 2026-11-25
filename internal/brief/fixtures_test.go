@@ -19,6 +19,7 @@ const (
 	digestFixed  = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
 	digestRound5 = "sha256:5555555555555555555555555555555555555555555555555555555555555555"
 
+	packetDigest   = "sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"
 	contractDigest = "sha256:abababababababababababababababababababababababababababababababab"
 	outputDigest   = "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
 )

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/patacca/metron/internal/canon"
 	"github.com/patacca/metron/internal/core"
@@ -16,9 +17,10 @@ var cmdCheck = &command{
 	name:     "check",
 	synopsis: "check [--json]",
 	summary:  "Run the requirements' check commands and record the results",
-	about: `Check runs the command of every applicable requirement that has one, through
-the platform shell (sh -c, or cmd /c on Windows) from the repository root, and
-captures its combined output. A check passes when it exits with status 0.
+	about: `Check runs the command of every applicable requirement that has one,
+through a POSIX shell (sh -c) from the repository root, and captures its
+combined output; on Windows the shell is the sh that ships with Git. A check
+passes when it exits with status 0.
 
 The commands run without the lock. Then check takes the lock and records the
 results against the candidate, provided the candidate, the working tree and
@@ -32,8 +34,12 @@ With --json it prints a metron.check/v1 document.`,
 	run: runCheck,
 }
 
-// tailLines is how much of a failing check's output is shown.
-const tailLines = 20
+// At most this much of a failing check's output is shown: the last lines,
+// and no more than this many bytes of them.
+const (
+	tailLines = 40
+	tailBytes = 4096
+)
 
 type checkResult struct {
 	Requirement  string `json:"requirement"`
@@ -41,8 +47,10 @@ type checkResult struct {
 	ExitCode     int    `json:"exit_code"`
 	Passed       bool   `json:"passed"`
 	OutputDigest string `json:"output_digest"`
-	// OutputTail is the end of a failing check's combined output.
-	OutputTail string `json:"output_tail,omitempty"`
+	// OutputTail is the end of a failing check's combined output: at most
+	// its last 40 lines and 4 KiB. OutputTruncated says that it is not all.
+	OutputTail      string `json:"output_tail,omitempty"`
+	OutputTruncated bool   `json:"output_truncated,omitempty"`
 }
 
 type checkDoc struct {
@@ -60,7 +68,7 @@ type checkDoc struct {
 
 func runCheck(c *ctx, args []string) error {
 	fs := c.flags()
-	dir, asJSON := stateFlag(fs), jsonFlag(fs)
+	dir, asJSON := stateFlag(fs), c.jsonFlag(fs)
 	args, err := c.parse(fs, args)
 	if err != nil {
 		return err
@@ -72,11 +80,11 @@ func runCheck(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	before, err := c.gather(s, false)
+	before, err := c.gather(s)
 	if err != nil {
 		return err
 	}
-	if err := before.writable(); err != nil {
+	if err := before.usable(true); err != nil {
 		return err
 	}
 	if err := before.candidate(); err != nil {
@@ -87,8 +95,8 @@ func runCheck(c *ctx, args []string) error {
 	if a := core.Next(before.state, before.facts); a.Step == core.StepRepairLedger || a.Step == core.StepPinContract {
 		d.Problem = a.Reason
 	} else if !before.facts.Clean {
-		d.Problem = fmt.Sprintf("the working tree has changes outside .metron/ (%s), so the candidate is not a commit: commit or discard them, then run the checks",
-			strings.Join(before.dirty, ", "))
+		d.Problem = "the working tree is not clean, so the candidate is not a commit: " + strings.Join(treeLines(before.dirty, false), "; ") +
+			"; then run the checks"
 	}
 	if d.Problem != "" {
 		d.Next = before.actionDoc(before.next())
@@ -106,7 +114,7 @@ func runCheck(c *ctx, args []string) error {
 		}
 		res := checkResult{Requirement: r.ID, Command: r.Command, ExitCode: code, Passed: code == 0, OutputDigest: canon.Digest(output)}
 		if !res.Passed {
-			res.OutputTail = tail(output, tailLines)
+			res.OutputTail, res.OutputTruncated = tail(output)
 			d.Passed = false
 		}
 		d.Results = append(d.Results, res)
@@ -120,7 +128,7 @@ func runCheck(c *ctx, args []string) error {
 		return c.checked(d, *asJSON, before, nil, true)
 	}
 
-	wr, after, err := c.lock(s, false)
+	wr, after, err := c.lock(s)
 	if err != nil {
 		return err
 	}
@@ -146,6 +154,11 @@ func runCheck(c *ctx, args []string) error {
 		d.Problem += "; nothing was recorded"
 	}
 	d.Next = after.actionDoc(after.next())
+	if !after.facts.Clean && before.facts.Clean {
+		// What the checks left behind is removed, never committed.
+		d.Next.Command, d.Next.leftovers = "", true
+		d.Next.hint = "remove what the checks left behind, then run " + after.metron("check") + " again"
+	}
 	return c.checked(d, *asJSON, after, events, d.Passed && d.Recorded)
 }
 
@@ -159,8 +172,8 @@ func changedDuringChecks(before, after *world) string {
 		return fmt.Sprintf("HEAD moved from commit %s to %s while the checks ran: run them again on the new candidate",
 			short(before.facts.Candidate.Commit), short(after.facts.Candidate.Commit))
 	case !after.facts.Clean:
-		return fmt.Sprintf("the checks left the working tree dirty (%s): a check must not change the candidate, so write its output to an ignored or temporary path, restore the tree, and run the checks again",
-			strings.Join(after.dirty, ", "))
+		return "the checks left the working tree unclean, and a check must not change the candidate it checks: " +
+			strings.Join(treeLines(after.dirty, true), "; ") + "; make the checks write their output to an ignored or temporary path, then run them again"
 	case after.facts.ContractDigest != before.facts.ContractDigest || ap.Digest != bp.Digest:
 		return "the contract or its pin changed while the checks ran: run them again"
 	}
@@ -171,7 +184,7 @@ func changedDuringChecks(before, after *world) string {
 func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok bool) error {
 	var err error
 	if asJSON {
-		err = writeJSON(c.Stdout, d)
+		err = c.emit(d)
 	} else {
 		var b strings.Builder
 		for _, r := range d.Results {
@@ -179,9 +192,12 @@ func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok
 			if !r.Passed {
 				status = "FAILED"
 			}
-			fmt.Fprintf(&b, "%-8s %s  exit %-3d %s\n", r.Requirement, status, r.ExitCode, r.Command)
+			fmt.Fprintf(&b, "%-8s %s  exit %-3d %s\n", r.Requirement, status, r.ExitCode, printable(r.Command))
+			if r.OutputTruncated {
+				fmt.Fprintf(&b, "         | [earlier output omitted: only the last %d lines and %d bytes are shown]\n", tailLines, tailBytes)
+			}
 			if r.OutputTail != "" {
-				for _, line := range strings.Split(r.OutputTail, "\n") {
+				for _, line := range strings.Split(printable(r.OutputTail), "\n") {
 					fmt.Fprintf(&b, "         | %s\n", line)
 				}
 			}
@@ -193,7 +209,7 @@ func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok
 			fmt.Fprintf(&b, "%s.\n", upper(d.Problem))
 		}
 		b.WriteString("\n")
-		writeNext(&b, w, d.Next.Action)
+		writeNext(&b, w, d.Next)
 		_, err = io.WriteString(c.Stdout, b.String())
 	}
 	if err != nil {
@@ -205,15 +221,18 @@ func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok
 	return nil
 }
 
-// runShell runs a check command through the platform shell in dir and
-// returns its exit status and combined output. An error means the shell could
-// not be run at all.
+// runShell runs a check command through sh -c in dir and returns its exit
+// status and combined output. An error means the shell could not be run at
+// all.
 func runShell(dir, command string) (int, []byte, error) {
-	cmd := shell(command)
+	cmd, err := shellCommand(command)
+	if err != nil {
+		return 0, nil, err
+	}
 	cmd.Dir = dir
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
-	err := cmd.Run()
+	err = cmd.Run()
 	var ee *exec.ExitError
 	switch {
 	case err == nil:
@@ -224,16 +243,46 @@ func runShell(dir, command string) (int, []byte, error) {
 	return 0, nil, err
 }
 
-// tail returns the last n lines of output, without trailing blank lines.
-func tail(output []byte, n int) string {
+// tail returns the end of a check's output, at most its last tailLines lines
+// and tailBytes bytes, without trailing blank space and carriage returns,
+// and whether anything was left out.
+func tail(output []byte) (string, bool) {
 	lines := strings.Split(strings.TrimRight(string(output), "\r\n\t "), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
+	truncated := len(lines) > tailLines
+	if truncated {
+		lines = lines[len(lines)-tailLines:]
 	}
 	for i := range lines {
 		lines[i] = strings.TrimRight(lines[i], "\r")
 	}
-	return strings.Join(lines, "\n")
+	s := strings.Join(lines, "\n")
+	if len(s) > tailBytes {
+		s, truncated = s[len(s)-tailBytes:], true
+		// Never start in the middle of a character.
+		for s != "" && !utf8.RuneStart(s[0]) {
+			s = s[1:]
+		}
+	}
+	return s, truncated
+}
+
+// printable escapes the control characters of output other than newline and
+// tab, so that what a check printed cannot drive the terminal.
+func printable(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n' || r == '\t':
+			b.WriteRune(r)
+		case r < 0x20 || r == 0x7f:
+			fmt.Fprintf(&b, "\\x%02x", r)
+		case r >= 0x80 && r < 0xa0:
+			fmt.Fprintf(&b, "\\u%04x", r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func upper(s string) string {

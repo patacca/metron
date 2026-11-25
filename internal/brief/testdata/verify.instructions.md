@@ -128,8 +128,9 @@ answers and who wrote it:
 | --- | --- |
 | `schema` | `metron.report/v1` |
 | `packet` | `P-0012`, the packet you are answering |
+| `packet_digest` | The packet's digest, copied unchanged from the report skeleton. Packet identifiers repeat from one ledger to the next, but the digest does not, so it ties your report to this exact packet; a report that carries any other packet's digest is refused. |
 | `role` | `verifier` |
-| `author` | Who you are. `id` is a stable name for whoever acts in this role; Metron enforces role separation on it. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
+| `author` | Who you are. `id` is a stable name for whoever acts in this role, 1 to 128 printable ASCII characters with no spaces: Metron decides role separation on it, so two identities must not differ only by something invisible. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |
 
 Your author `id` must never have been used by an implementer or an auditor in

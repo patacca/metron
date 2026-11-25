@@ -41,7 +41,9 @@ type view struct {
 	Thresholds  core.Convergence
 	ChurnRounds int
 
+	// Digest is the stored packet's digest, set for a skeleton or a prompt.
 	// Brief and Skeleton are set only when rendering a prompt.
+	Digest   string
 	Brief    string
 	Skeleton string
 }

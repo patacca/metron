@@ -62,17 +62,21 @@ func (in *ingestion) implementerTransition(b ImplementerBody) {
 	if !in.f.Clean {
 		in.tr.add("", "the working tree has changes outside .metron/: commit them, then submit the report")
 	}
-	commits := make(map[string]bool)
+	commits := make(map[string]Commit)
 	for _, c := range in.f.Commits {
-		commits[c.Hash] = c.Substantive
+		commits[c.Hash] = c
 	}
 	for i, fx := range b.Fixes {
 		for j, h := range fx.Commits {
 			p := ptr("body", "fixes", i, "commits", j)
-			switch substantive, ok := commits[h]; {
+			switch c, ok := commits[h]; {
 			case !ok:
-				in.tr.add(p, "commit %s does not lie between the packet's base and HEAD: list only commits made since the round's candidate", h)
-			case !substantive:
+				in.tr.add(p, "commit %s could not be examined in the repository, so it cannot be accepted: list full hashes of commits that exist", h)
+			case !c.Reachable:
+				in.tr.add(p, "commit %s is not part of the current candidate's history: list commits that HEAD contains", h)
+			case c.InBase:
+				in.tr.add(p, "commit %s is already contained in the round's candidate: list only commits made since then", h)
+			case !c.Substantive:
 				in.tr.add(p, "commit %s changes nothing outside .metron/ and so fixes nothing: list the commits that change the candidate", h)
 			}
 		}

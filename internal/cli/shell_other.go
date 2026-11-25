@@ -4,8 +4,8 @@ package cli
 
 import "os/exec"
 
-// shell returns the process that runs a check command through the platform
-// shell.
-func shell(command string) *exec.Cmd {
-	return exec.Command("/bin/sh", "-c", command)
+// shellCommand returns the process that runs a check command through the
+// POSIX shell.
+func shellCommand(command string) (*exec.Cmd, error) {
+	return exec.Command("/bin/sh", "-c", command), nil
 }

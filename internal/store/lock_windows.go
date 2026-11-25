@@ -30,7 +30,7 @@ func lockFile(f *os.File) error {
 		return nil
 	}
 	if err == errorLockViolation {
-		return errLockHeld
+		return errLocked
 	}
 	return err
 }

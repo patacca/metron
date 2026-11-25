@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -222,7 +223,7 @@ func TestReviewerRules(t *testing.T) {
 		{name: "reopen a resolved finding", body: reopen(Reopen{Finding: "F-0001", Reason: ReopenRegression, Justification: "it crashes again"}),
 			check: func(t *testing.T, h *harness, d []Draft) {
 				eqTypes(t, d, EventReportAccepted, EventFindingReopened, EventVerdictRecorded)
-				if x, _ := h.state.Finding("F-0001"); x.Status != StatusOpen || x.Recurrences != 1 {
+				if x, _ := lookup(h.state, "F-0001"); x.Status != StatusOpen || x.Recurrences != 1 {
 					t.Fatalf("finding %+v", x)
 				}
 			}},
@@ -330,7 +331,18 @@ func TestImplementerRules(t *testing.T) {
 		{name: "no component", body: one(func(x *Fix) { x.Components = nil }), layer: LayerSemantic, path: "/body/fixes/0/components"},
 		{name: "blank component", body: one(func(x *Fix) { x.Components = []string{" "} }), layer: LayerSemantic, path: "/body/fixes/0/components/0"},
 		{name: "blank summary", body: one(func(x *Fix) { x.Summary = "" }), layer: LayerSemantic, path: "/body/fixes/0/summary"},
-		{name: "commit outside the range", body: one(func(x *Fix) { x.Commits = []string{commitHash(999)} }), layer: LayerTransition, path: "/body/fixes/0/commits/0"},
+		{name: "commit not in the candidate's history", body: one(func(x *Fix) { x.Commits = []string{commitHash(999)} }), layer: LayerTransition, path: "/body/fixes/0/commits/0"},
+		{name: "commit already in the round's candidate", body: one(func(x *Fix) { x.Commits = append(x.Commits, commitHash(0)) }), layer: LayerTransition, path: "/body/fixes/0/commits/1"},
+		{name: "round's candidate rewritten away", body: one(func(x *Fix) { x.Commits = append(x.Commits, commitHash(0)) }), prep: func(h *harness) {
+			h.amend = func(f *Facts) {
+				for i := range f.Commits {
+					f.Commits[i].InBase = false // the base commit no longer exists
+				}
+			}
+		}},
+		{name: "commit not examined", body: one(func(x *Fix) {}), prep: func(h *harness) {
+			h.amend = func(f *Facts) { f.Commits = nil }
+		}, layer: LayerTransition, path: "/body/fixes/0/commits/0"},
 		{name: "commit touching only .metron", body: func(h *harness) any {
 			h.commit(true)
 			return ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(false))}}
@@ -376,7 +388,7 @@ func TestVerifierRules(t *testing.T) {
 	runRules(t, verifierSetup, "ver-1", []rule{
 		{name: "confirm", body: v(func(b *VerifierBody) {})},
 		{name: "reject", body: v(func(b *VerifierBody) { b.Verifications[0].Result = VerificationRejected }), check: func(t *testing.T, h *harness, d []Draft) {
-			if x, _ := h.state.Finding("F-0001"); x.Status != StatusOpen || x.Recurrences != 1 {
+			if x, _ := lookup(h.state, "F-0001"); x.Status != StatusOpen || x.Recurrences != 1 {
 				t.Fatalf("finding %+v", x)
 			}
 		}},
@@ -425,7 +437,7 @@ func TestAuditorRules(t *testing.T) {
 			eqTypes(t, d, EventReportAccepted, EventFindingWithdrawn, EventEscalationResolved)
 		}},
 		{name: "reclassify", body: a(DecisionReclassify, TierImprovement, nop), check: func(t *testing.T, h *harness, d []Draft) {
-			if x, _ := h.state.Finding("F-0001"); x.Tier != TierImprovement || x.Input.Tier != TierMaterial {
+			if x, _ := lookup(h.state, "F-0001"); x.Tier != TierImprovement || x.Input.Tier != TierMaterial {
 				t.Fatalf("finding %+v", x)
 			}
 		}},
@@ -446,6 +458,7 @@ func TestAuditorRules(t *testing.T) {
 		{name: "escalation resolved twice", body: a(DecisionUphold, "", func(b *AuditorBody) { b.Resolutions = append(b.Resolutions, b.Resolutions[0]) }), layer: LayerSemantic, path: "/body/resolutions/1/escalation"},
 		{name: "blank analysis", body: a(DecisionUphold, "", func(b *AuditorBody) { b.Resolutions[0].Analysis = "" }), layer: LayerSemantic, path: "/body/resolutions/0/analysis"},
 		{name: "conclusion of Unicode spaces", body: a(DecisionUphold, "", func(b *AuditorBody) { b.Resolutions[0].Conclusion = "\u00a0\u2003\u3000" }), layer: LayerSemantic, path: "/body/resolutions/0/conclusion"},
+		{name: "analysis of invisible format characters", body: a(DecisionUphold, "", func(b *AuditorBody) { b.Resolutions[0].Analysis = "\u200b\ufeff\u2060" }), layer: LayerSemantic, path: "/body/resolutions/0/analysis"},
 		{name: "blank directive", body: a(DecisionUphold, "", func(b *AuditorBody) { b.Directives = []string{""} }), layer: LayerSemantic, path: "/body/directives/0"},
 		{name: "blank recommendation", body: a(DecisionUphold, "", func(b *AuditorBody) { b.ContractRecommendations = []string{""} }), layer: LayerSemantic, path: "/body/contract_recommendations/0"},
 	})
@@ -513,4 +526,94 @@ func TestReopenNeedsACurrentCitation(t *testing.T) {
 	}
 	b = review(h.contract, VerdictRed, map[string]string{"REQ-5": RequirementViolated}, blocker("again", "REQ-5"))
 	h.accept(p, "rev-1", b)
+}
+
+// TestReportPacketDigest checks that a report is bound to the packet the
+// ledger issued, not only to its identifier.
+func TestReportPacketDigest(t *testing.T) {
+	h := newHarness(t)
+	h.checks(true)
+	first := h.packet()
+	accepted := h.report(first, "rev-1", red(h.contract, "crash"))
+	drafts, _, err := h.ingest(accepted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.seal(drafts)
+	fp := h.packet()
+	c := h.commit(true)
+	body := ImplementerBody{Fixes: []Fix{fix("F-0001", c)}}
+	for _, tc := range []struct {
+		name   string
+		digest string
+	}{
+		{"the digest of another packet", accepted.PacketDigest},
+		{"no digest", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := h.report(fp, "impl-1", body)
+			r.PacketDigest = tc.digest
+			d, dup, err := h.ingest(r)
+			rejection(t, d, err, LayerTransition, "/packet_digest")
+			if dup {
+				t.Fatal("refused report reported as a duplicate")
+			}
+		})
+	}
+	t.Run("a duplicate whose digest was changed", func(t *testing.T) {
+		r := accepted
+		r.PacketDigest = digestOf("elsewhere")
+		d, dup, err := h.ingest(r)
+		rejection(t, d, err, LayerTransition, "/packet_digest")
+		if dup {
+			t.Fatal("refused report reported as a duplicate")
+		}
+		if _, dup, err := h.ingest(accepted); !dup || err != nil {
+			t.Fatalf("the true duplicate: %t, %v", dup, err)
+		}
+	})
+	t.Run("a report from another ledger", func(t *testing.T) {
+		a, b := newHarness(t), newHarness(t)
+		other := testContract()
+		other.Authorizes = "another repository"
+		b.contract = other
+		b.must(Pin(b.state, b.facts(), "its own contract", "gov"))
+		for _, x := range []*harness{a, b} {
+			x.checks(true)
+		}
+		pa, pb := a.packet(), b.packet()
+		if pa.ID != pb.ID {
+			t.Fatalf("identifiers %s and %s", pa.ID, pb.ID)
+		}
+		foreign := a.report(pa, "rev-1", green(a.contract))
+		d, _, err := b.ingest(foreign)
+		rejection(t, d, err, LayerTransition, "/packet_digest")
+		if !strings.Contains(err.Error(), "another ledger") {
+			t.Fatalf("%v", err)
+		}
+		b.accept(pb, "rev-1", green(b.contract))
+	})
+}
+
+func TestBlank(t *testing.T) {
+	for _, tc := range []struct {
+		text  string
+		blank bool
+	}{
+		{"", true},
+		{" \t\n", true},
+		{"\u00a0", true},
+		{"\u200b", true},
+		{"\ufeff", true},
+		{"\u2060", true},
+		{"\u00a0\u200b \ufeff\u2060\u3000", true},
+		{"a", false},
+		{"\u200bok\u200b", false},
+		{"\u00e9", false},
+		{"\u2014", false},
+	} {
+		if got := blank(tc.text); got != tc.blank {
+			t.Errorf("blank(%+q) = %t, want %t", tc.text, got, tc.blank)
+		}
+	}
 }

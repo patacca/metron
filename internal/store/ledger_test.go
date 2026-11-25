@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -62,10 +63,45 @@ func withHash(prefix string) string {
 	return prefix + `,"hash":"` + hex.EncodeToString(sum[:]) + `"}`
 }
 
+// chain writes hand-made lines of type x, chained and hashed, with the given
+// raw values of the more member and the given times.
+func chain(mores []string, times ...string) string {
+	prev := GenesisPrev
+	var b strings.Builder
+	for i, m := range mores {
+		line := withHash(fmt.Sprintf(`{"seq":%d,"time":"%s","prev":"%s","type":"x","more":%s,"data":{}`, i+1, times[i%len(times)], prev, m))
+		prev = line[len(line)-66 : len(line)-2]
+		b.WriteString(line + "\n")
+	}
+	return b.String()
+}
+
+// sealBatches seals one batch per size, each with its own time.
+func sealBatches(t *testing.T, sizes ...int) []core.Event {
+	t.Helper()
+	var events []core.Event
+	for b, n := range sizes {
+		var prev *core.Event
+		if len(events) > 0 {
+			prev = &events[len(events)-1]
+		}
+		drafts := make([]core.Draft, n)
+		for i := range drafts {
+			drafts[i] = core.Draft{Type: core.EventPacketVoided, Data: core.PacketVoided{Packet: "P-0001", Reason: fmt.Sprintf("batch %d, event %d", b, i)}}
+		}
+		batch, err := Seal(prev, fmt.Sprintf("2026-01-02T03:04:%02dZ", b), drafts)
+		if err != nil {
+			t.Fatalf("Seal: %v", err)
+		}
+		events = append(events, batch...)
+	}
+	return events
+}
+
 func TestSealGolden(t *testing.T) {
 	events := seal(t, nil, core.Draft{Type: core.EventLedgerInitialized, Data: core.LedgerInitialized{Protocol: core.ProtocolVersion}})
 	body := `{"seq":1,"time":"2026-01-02T03:04:05Z","prev":"` + strings.Repeat("0", 64) +
-		`","type":"ledger.initialized","data":{"protocol":"metron.protocol/v1"}}`
+		`","type":"ledger.initialized","more":0,"data":{"protocol":"metron.protocol/v1"}}`
 	want := withHash(strings.TrimSuffix(body, "}"))
 	if got := string(appendLine(nil, events[0])); got != want {
 		t.Fatalf("line:\n got %s\nwant %s", got, want)
@@ -93,6 +129,45 @@ func TestSealChainsBatches(t *testing.T) {
 	}
 }
 
+func TestSealBatchMarker(t *testing.T) {
+	events := sealBatches(t, 1, 3, 2)
+	for i, want := range []int{0, 2, 1, 0, 1, 0} {
+		if events[i].More != want {
+			t.Errorf("event %d: more = %d, want %d", i+1, events[i].More, want)
+		}
+	}
+	if events[1].Time != events[3].Time || events[3].Time == events[4].Time {
+		t.Error("the events of a batch do not share one time")
+	}
+}
+
+// Every prefix of a ledger, by whole lines, verifies exactly when it ends on
+// a batch boundary.
+func TestVerifyPrefixes(t *testing.T) {
+	sizes := []int{1, 3, 1, 2, 4}
+	events := sealBatches(t, sizes...)
+	boundary := map[int]bool{0: true}
+	n := 0
+	for _, size := range sizes {
+		n += size
+		boundary[n] = true
+	}
+	for k := 0; k <= len(events); k++ {
+		_, err := VerifyLedger(encode(events[:k]))
+		if boundary[k] {
+			if err != nil {
+				t.Errorf("prefix of %d lines ends on a batch boundary but fails: %v", k, err)
+			}
+			continue
+		}
+		var le *LedgerError
+		if !errors.As(err, &le) || le.Line != k ||
+			!strings.Contains(le.Msg, "cut off in the middle of a command") || !strings.Contains(le.Msg, "restore the ledger from version control") {
+			t.Errorf("prefix of %d lines ends inside a batch: got %v", k, err)
+		}
+	}
+}
+
 func TestSealRejects(t *testing.T) {
 	ok := core.LedgerInitialized{Protocol: core.ProtocolVersion}
 	tests := []struct {
@@ -115,6 +190,14 @@ func TestSealRejects(t *testing.T) {
 				t.Fatal("Seal succeeded")
 			}
 		})
+	}
+}
+
+func TestVerifyHandMadeBatches(t *testing.T) {
+	for _, mores := range [][]string{{"0"}, {"0", "0"}, {"1", "0"}, {"0", "2", "1", "0", "0"}} {
+		if _, err := VerifyLedger([]byte(chain(mores, t0))); err != nil {
+			t.Errorf("more %v: %v", mores, err)
+		}
 	}
 }
 
@@ -192,7 +275,7 @@ func TestVerifyRejects(t *testing.T) {
 	_, valid := sampleLedger(t)
 	lines := strings.SplitAfter(string(valid), "\n")
 	zeros := strings.Repeat("0", 64)
-	prefix := `{"seq":1,"time":"` + t0 + `","prev":"` + zeros + `","type":"ledger.initialized","data":`
+	prefix := `{"seq":1,"time":"` + t0 + `","prev":"` + zeros + `","type":"ledger.initialized","more":0,"data":`
 	tests := []struct {
 		name string
 		data string
@@ -206,22 +289,33 @@ func TestVerifyRejects(t *testing.T) {
 		{"lines swapped", lines[1] + lines[0], 1, "seq is 2, want 1"},
 		{"truncated line", lines[0] + lines[1][:40] + "\n", 2, "not a valid event"},
 		{"two CRs", strings.TrimSuffix(lines[0], "\n") + "\r\r\n", 1, "envelope form"},
-		{"seq does not start at 1", withHash(`{"seq":2,"time":"`+t0+`","prev":"`+zeros+`","type":"x","data":{}`) + "\n", 1, "seq is 2"},
-		{"genesis prev not zero", withHash(`{"seq":1,"time":"`+t0+`","prev":"`+strings.Repeat("1", 64)+`","type":"x","data":{}`) + "\n", 1, "prev does not match"},
+		{"seq does not start at 1", withHash(`{"seq":2,"time":"`+t0+`","prev":"`+zeros+`","type":"x","more":0,"data":{}`) + "\n", 1, "seq is 2"},
+		{"genesis prev not zero", withHash(`{"seq":1,"time":"`+t0+`","prev":"`+strings.Repeat("1", 64)+`","type":"x","more":0,"data":{}`) + "\n", 1, "prev does not match"},
 		{"wrong hash", lines[0][:len(lines[0])-67] + zeros + "\"}\n", 1, "hash does not match"},
-		{"space after colon", withHash(`{"seq": 1,"time":"`+t0+`","prev":"`+zeros+`","type":"x","data":{}`) + "\n", 1, "envelope form"},
-		{"members reordered", withHash(`{"time":"`+t0+`","seq":1,"prev":"`+zeros+`","type":"x","data":{}`) + "\n", 1, "envelope form"},
+		{"space after colon", withHash(`{"seq": 1,"time":"`+t0+`","prev":"`+zeros+`","type":"x","more":0,"data":{}`) + "\n", 1, "envelope form"},
+		{"members reordered", withHash(`{"time":"`+t0+`","seq":1,"prev":"`+zeros+`","type":"x","more":0,"data":{}`) + "\n", 1, "envelope form"},
 		{"extra member", withHash(prefix+`{},"extra":1`) + "\n", 1, "envelope form"},
 		{"duplicate member", withHash(prefix+`{},"seq":1`) + "\n", 1, "envelope form"},
-		{"upper-case member", withHash(`{"SEQ":1,"time":"`+t0+`","prev":"`+zeros+`","type":"x","data":{}`) + "\n", 1, "envelope form"},
-		{"escaped type", withHash(`{"seq":1,"time":"`+t0+`","prev":"`+zeros+`","type":"\u0078","data":{}`) + "\n", 1, "envelope form"},
+		{"upper-case member", withHash(`{"SEQ":1,"time":"`+t0+`","prev":"`+zeros+`","type":"x","more":0,"data":{}`) + "\n", 1, "envelope form"},
+		{"escaped type", withHash(`{"seq":1,"time":"`+t0+`","prev":"`+zeros+`","type":"\u0078","more":0,"data":{}`) + "\n", 1, "envelope form"},
 		{"whitespace in data", withHash(prefix+`{"a": 1}`) + "\n", 1, "not compact"},
 		{"data not an object", withHash(prefix+`[]`) + "\n", 1, "not a JSON object"},
-		{"data missing", withHash(`{"seq":1,"time":"`+t0+`","prev":"`+zeros+`","type":"x"`) + "\n", 1, "not a JSON object"},
-		{"time with offset", withHash(`{"seq":1,"time":"2026-01-02T03:04:05+00:00","prev":"`+zeros+`","type":"x","data":{}`) + "\n", 1, "RFC 3339"},
-		{"seq not an integer", withHash(`{"seq":1.0,"time":"`+t0+`","prev":"`+zeros+`","type":"x","data":{}`) + "\n", 1, "not a valid event"},
+		{"data missing", withHash(`{"seq":1,"time":"`+t0+`","prev":"`+zeros+`","type":"x","more":0`) + "\n", 1, "not a JSON object"},
+		{"time with offset", withHash(`{"seq":1,"time":"2026-01-02T03:04:05+00:00","prev":"`+zeros+`","type":"x","more":0,"data":{}`) + "\n", 1, "RFC 3339"},
+		{"seq not an integer", withHash(`{"seq":1.0,"time":"`+t0+`","prev":"`+zeros+`","type":"x","more":0,"data":{}`) + "\n", 1, "not a valid event"},
 		{"upper-case hash", prefix + `{},"hash":"` + strings.Repeat("A", 64) + "\"}\n", 1, "hash is not 64 lowercase"},
 		{"invalid UTF-8", withHash(prefix+"{\"a\":\"\xff\"}") + "\n", 1, "invalid UTF-8"},
+		{"more member missing", withHash(`{"seq":1,"time":"`+t0+`","prev":"`+zeros+`","type":"x","data":{}`) + "\n", 1, "envelope form"},
+		{"more after data", withHash(`{"seq":1,"time":"`+t0+`","prev":"`+zeros+`","type":"x","data":{},"more":0`) + "\n", 1, "envelope form"},
+		{"more negative", chain([]string{"-1"}, t0), 1, "more -1 is negative"},
+		{"more not an integer", chain([]string{"1.5"}, t0), 1, "not a valid event"},
+		{"more a string", chain([]string{`"0"`}, t0), 1, "not a valid event"},
+		{"more with an exponent", chain([]string{"1e0"}, t0), 1, "not a valid event"},
+		{"more skips a value", chain([]string{"2", "0"}, t0), 2, "more is 0, but the previous event announced 2 more events of its command, so it must be 1"},
+		{"more does not count down", chain([]string{"1", "1", "0"}, t0), 2, "more is 1"},
+		{"mixed times in a batch", chain([]string{"1", "0"}, t0, "2026-01-02T03:04:06Z"), 2, "differs from " + t0},
+		{"ends inside a batch of two", chain([]string{"1"}, t0), 1, "cut off in the middle of a command: this event announces 1 more events"},
+		{"ends inside a later batch", chain([]string{"0", "2", "1"}, t0), 3, "cut off in the middle of a command"},
 		{
 			// The last marker is inside the payload and the envelope has no
 			// hash member of its own.
@@ -252,8 +346,15 @@ func FuzzVerifyLedger(f *testing.F) {
 	f.Add(data)
 	f.Add(bytes.ReplaceAll(data, []byte("\n"), []byte("\r\n")))
 	f.Add(data[:len(data)/2])
-	f.Add([]byte(withHash(`{"seq":1,"time":"`+t0+`","prev":"`+GenesisPrev+`","type":"x","data":{"hash":"y"}`) + "\n"))
+	f.Add([]byte(withHash(`{"seq":1,"time":"`+t0+`","prev":"`+GenesisPrev+`","type":"x","more":0,"data":{"hash":"y"}`) + "\n"))
 	f.Add([]byte("\n"))
+	multi, err := Seal(&events[len(events)-1], "2026-01-02T03:04:06Z", sampleDrafts()[1:])
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(encode(append(events, multi...)))
+	f.Add(encode(append(events, multi[0])))
+	f.Add([]byte(chain([]string{"1", "0", "-1"}, t0)))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		events, err := VerifyLedger(data)
 		if err != nil {

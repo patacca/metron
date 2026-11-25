@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "b0c82a3ade3497964cb8034be915da179459287823d92b5717e6d642784c50e6",
   "type": "contract.pinned",
+  "more": 0,
   "data": {
     "digest": "sha256:2b774ade959f0c8c4463752c219f43b13352eeebdf3fd4f4031e74e0d961256f",
     "raw_digest": "sha256:c553ff109b829e9c69ef83da1c5b8cef782d89200630e14a58cb1006211c588f",

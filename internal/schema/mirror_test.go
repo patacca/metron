@@ -514,3 +514,62 @@ func TestSchemaConventions(t *testing.T) {
 		})
 	}
 }
+
+// The validator ignores keywords it does not know, so a misplaced or
+// misspelled one would silently weaken a schema. Check every schema object
+// against the list of keywords the schemas use.
+var schemaKeywords = map[string]bool{
+	"$schema": true, "$id": true, "$ref": true, "$defs": true, "title": true, "description": true,
+	"type": true, "properties": true, "required": true, "additionalProperties": true, "items": true,
+	"minItems": true, "enum": true, "const": true, "pattern": true, "minimum": true,
+	"allOf": true, "if": true, "then": true,
+}
+
+func checkKeywords(t reporter, path string, n node) {
+	for _, k := range keysOf(n) {
+		if !schemaKeywords[k] {
+			t.Errorf("%s: %q is not a keyword the Metron schemas use", path, k)
+		}
+	}
+	for _, k := range []string{"properties", "$defs"} {
+		if m, ok := n[k].(node); ok {
+			for _, name := range keysOf(m) {
+				child, ok := m[name].(node)
+				if !ok {
+					t.Errorf("%s/%s/%s: not a schema object", path, k, name)
+					continue
+				}
+				checkKeywords(t, path+"/"+k+"/"+name, child)
+			}
+		}
+	}
+	for _, k := range []string{"items", "if", "then", "additionalProperties"} {
+		if child, ok := n[k].(node); ok {
+			checkKeywords(t, path+"/"+k, child)
+		}
+	}
+	if all, ok := n["allOf"].([]any); ok {
+		for i, a := range all {
+			if child, ok := a.(node); ok {
+				checkKeywords(t, fmt.Sprintf("%s/allOf/%d", path, i), child)
+			}
+		}
+	}
+}
+
+func TestNoUnknownKeywords(t *testing.T) {
+	d := loadDocs(t)
+	files := make([]string, 0, len(d))
+	for file := range d {
+		files = append(files, file)
+	}
+	sort.Strings(files)
+	for _, file := range files {
+		checkKeywords(t, file, d[file])
+	}
+	rec := &recorder{}
+	checkKeywords(rec, "sample", node{"type": "object", "role": node{}})
+	if !strings.Contains(rec.msg, `"role" is not a keyword`) {
+		t.Errorf("a stray keyword went unreported: %q", rec.msg)
+	}
+}

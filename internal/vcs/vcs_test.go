@@ -9,7 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -229,89 +229,6 @@ func TestCandidateDigestRejects(t *testing.T) {
 	}
 }
 
-func TestDirtyPaths(t *testing.T) {
-	tests := []struct {
-		name   string
-		change func(t *testing.T, root string)
-		want   []string
-	}{
-		{"clean", func(t *testing.T, root string) {}, []string{}},
-		{"tracked change under .metron", func(t *testing.T, root string) { write(t, root, ".metron/contract.yaml", "x\n") }, []string{}},
-		{"untracked under .metron", func(t *testing.T, root string) { write(t, root, ".metron/state/ledger.jsonl", "{}\n") }, []string{}},
-		{"staged under .metron", func(t *testing.T, root string) {
-			write(t, root, ".metron/state/new", "x\n")
-			run(t, root, "add", ".metron")
-		}, []string{}},
-		{"untracked file", func(t *testing.T, root string) { write(t, root, "untracked.txt", "x\n") }, []string{"untracked.txt"}},
-		{"untracked file in a new directory", func(t *testing.T, root string) { write(t, root, "new/deep/f.txt", "x\n") }, []string{"new/deep/f.txt"}},
-		{"modified file", func(t *testing.T, root string) { write(t, root, "a.txt", "x\n") }, []string{"a.txt"}},
-		{"deleted file", func(t *testing.T, root string) { os.Remove(filepath.Join(root, "dir", "b.txt")) }, []string{"dir/b.txt"}},
-		{"staged file", func(t *testing.T, root string) {
-			write(t, root, "s.txt", "x\n")
-			run(t, root, "add", "s.txt")
-		}, []string{"s.txt"}},
-		{"staged rename", func(t *testing.T, root string) { run(t, root, "mv", "a.txt", "moved.txt") }, []string{"a.txt", "moved.txt"}},
-		{"sibling named like the excluded directory", func(t *testing.T, root string) { write(t, root, ".metron-other", "x\n") }, []string{".metron-other"}},
-		{"nested .metron directory", func(t *testing.T, root string) { write(t, root, "sub/.metron/x", "x\n") }, []string{"sub/.metron/x"}},
-		{"unusual characters", func(t *testing.T, root string) {
-			write(t, root, "dir with space/naïve é.txt", "x\n")
-			write(t, root, "tab\tand \"quote\".txt", "x\n")
-		}, []string{"dir with space/naïve é.txt", "tab\tand \"quote\".txt"}},
-		{"ignored file", func(t *testing.T, root string) {
-			write(t, root, ".gitignore", "*.log\n")
-			run(t, root, "add", ".gitignore")
-			run(t, root, "commit", "-q", "-m", "ignore")
-			write(t, root, "debug.log", "x\n")
-		}, []string{}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			root, r := baseRepo(t)
-			if tt.name == "unusual characters" && !canCreate(root, "tab\tand \"quote\".txt") {
-				tt.want = tt.want[:1]
-				tt.change = func(t *testing.T, root string) { write(t, root, "dir with space/naïve é.txt", "x\n") }
-			}
-			tt.change(t, root)
-			got, err := r.DirtyPaths()
-			if err != nil {
-				t.Fatalf("DirtyPaths: %v", err)
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("DirtyPaths = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-// canCreate reports whether the file system accepts a file name; Windows
-// rejects tabs and quotes.
-func canCreate(dir, name string) bool {
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, nil, 0o666); err != nil {
-		return false
-	}
-	os.Remove(path)
-	return true
-}
-
-// The status configuration a user may set does not change the result.
-func TestDirtyPathsIgnoresConfiguration(t *testing.T) {
-	root, r := baseRepo(t)
-	run(t, root, "config", "status.showUntrackedFiles", "no")
-	run(t, root, "config", "status.branch", "true")
-	run(t, root, "config", "status.renames", "true")
-	run(t, root, "config", "core.quotePath", "true")
-	write(t, root, "naïve/new.txt", "x\n")
-	run(t, root, "mv", "a.txt", "é.txt")
-	got, err := r.DirtyPaths()
-	if err != nil {
-		t.Fatalf("DirtyPaths: %v", err)
-	}
-	if want := []string{"a.txt", "é.txt", "naïve/new.txt"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("DirtyPaths = %q, want %q", got, want)
-	}
-}
-
 func TestRepositoryPathWithSpacesAndNonASCII(t *testing.T) {
 	root, r := newRepo(t, "my répo ü")
 	write(t, root, "f.txt", "x\n")
@@ -336,8 +253,8 @@ func TestRepositoryPathWithSpacesAndNonASCII(t *testing.T) {
 		t.Fatalf("Head = %s, want %s", got, c)
 	}
 	digest(t, fromSub, c)
-	if paths, err := fromSub.DirtyPaths(); err != nil || len(paths) != 0 {
-		t.Fatalf("DirtyPaths = %q, %v", paths, err)
+	if problems, err := fromSub.TreeProblems(); err != nil || len(problems) != 0 {
+		t.Fatalf("TreeProblems = %v, %v", problems, err)
 	}
 }
 
@@ -354,95 +271,152 @@ func TestHeadWithoutCommits(t *testing.T) {
 	}
 }
 
-// checkCommits compares CommitsSince's result with the expected
-// substantiveness of each commit, and checks that HEAD comes first.
-func checkCommits(t *testing.T, r *Repo, base string, want map[string]bool) {
+// describeRepo builds a history with one commit of each kind Describe must
+// tell apart, and returns their hashes by name. HEAD is the last merge.
+func describeRepo(t *testing.T) (string, *Repo, map[string]string) {
 	t.Helper()
-	got, err := r.CommitsSince(base)
-	if err != nil {
-		t.Fatalf("CommitsSince: %v", err)
-	}
-	if len(got) != len(want) {
-		t.Fatalf("CommitsSince returned %d commits, want %d: %+v", len(got), len(want), got)
-	}
-	if got[0].Hash != head(t, r) {
-		t.Errorf("first commit is %s, want HEAD", got[0].Hash)
-	}
-	seen := map[string]bool{}
-	for _, c := range got {
-		substantive, ok := want[c.Hash]
-		switch {
-		case !ok || seen[c.Hash]:
-			t.Errorf("unexpected or repeated commit %s", c.Hash)
-		case c.Substantive != substantive:
-			t.Errorf("commit %s: Substantive = %v, want %v", run(t, r.Root(), "log", "-1", "--format=%s", c.Hash), c.Substantive, substantive)
-		}
-		seen[c.Hash] = true
-	}
-}
-
-func TestCommitsSince(t *testing.T) {
 	root, r := baseRepo(t)
-	base := head(t, r)
-	if got, err := r.CommitsSince(base); err != nil || len(got) != 0 {
-		t.Fatalf("CommitsSince(HEAD) = %+v, %v", got, err)
-	}
-	want := map[string]bool{}
-	step := func(msg string, substantive bool, change func()) {
+	h := map[string]string{"root": head(t, r)}
+	step := func(name string, change func()) {
 		change()
-		want[commit(t, root, msg)] = substantive
+		h[name] = commit(t, root, name)
 	}
-	step("only .metron", false, func() { write(t, root, ".metron/state/ledger.jsonl", "{}\n") })
-	step("empty", false, func() {})
-	step("both", true, func() {
-		write(t, root, "a.txt", "1\n")
+	step("fix", func() { write(t, root, "a.txt", "fixed\n") })
+	step("only .metron", func() { write(t, root, ".metron/state/ledger.jsonl", "{}\n") })
+	step("empty", func() {})
+	run(t, root, "update-index", "--chmod=+x", "a.txt")
+	run(t, root, "commit", "-q", "-m", "mode")
+	h["mode"] = head(t, r)
+	step("both", func() {
+		write(t, root, "dir/b.txt", "both\n")
 		write(t, root, ".metron/state/ledger.jsonl", "{}\n{}\n")
 	})
-	step("only outside", true, func() { write(t, root, "dir/b.txt", "2\n") })
 
-	// Merges are judged against their first parent: this one brings a
-	// change from the side branch into main.
-	run(t, root, "checkout", "-q", "-b", "side")
-	step("side change", true, func() { write(t, root, "side.txt", "s\n") })
+	run(t, root, "checkout", "-q", "-b", "other")
+	step("other branch", func() { write(t, root, "other.txt", "o\n") })
 	run(t, root, "checkout", "-q", "main")
-	step("main, only .metron", false, func() { write(t, root, ".metron/x", "x\n") })
-	run(t, root, "merge", "-q", "--no-ff", "--no-edit", "side")
-	want[head(t, r)] = true
 
-	// This one brings only a .metron change.
+	run(t, root, "checkout", "-q", "-b", "side")
+	step("side", func() { write(t, root, "side.txt", "s\n") })
+	run(t, root, "checkout", "-q", "main")
+	step("main, only .metron", func() { write(t, root, ".metron/x", "x\n") })
+	run(t, root, "merge", "-q", "--no-ff", "--no-edit", "side")
+	h["merge"] = head(t, r)
+
 	run(t, root, "checkout", "-q", "-b", "side2")
-	step("side2, only .metron", false, func() { write(t, root, ".metron/y", "y\n") })
+	step("side2, only .metron", func() { write(t, root, ".metron/y", "y\n") })
 	run(t, root, "checkout", "-q", "main")
 	run(t, root, "merge", "-q", "--no-ff", "--no-edit", "side2")
-	want[head(t, r)] = false
+	h["merge of .metron"] = head(t, r)
 
-	checkCommits(t, r, base, want)
+	run(t, root, "checkout", "-q", "--orphan", "lone")
+	run(t, root, "rm", "-rfq", ".")
+	step("root with only .metron", func() { write(t, root, ".metron/only", "x\n") })
+	run(t, root, "checkout", "-q", "main")
+	return root, r, h
+}
 
+func TestDescribe(t *testing.T) {
+	root, r, h := describeRepo(t)
+	missing := strings.Repeat("e", 40) // well formed, no such object
+	type flags struct{ reachable, inBase, substantive bool }
+	commits := map[string]flags{ // with base "fix"
+		"root":                   {true, true, true},
+		"fix":                    {true, true, true},
+		"only .metron":           {true, false, false},
+		"empty":                  {true, false, false},
+		"mode":                   {true, false, true},
+		"both":                   {true, false, true},
+		"other branch":           {false, false, true},
+		"side":                   {true, false, true},
+		"main, only .metron":     {true, false, false},
+		"merge":                  {true, false, true},
+		"side2, only .metron":    {true, false, false},
+		"merge of .metron":       {true, false, false},
+		"root with only .metron": {false, false, false},
+	}
+	var names, input []string
+	for name := range h {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		input = append(input, h[name])
+	}
 	tree := run(t, root, "rev-parse", "HEAD^{tree}")
-	for _, bad := range []string{"HEAD", "--all", base[:10], tree, strings.Repeat("0", 40)} {
-		if _, err := r.CommitsSince(bad); err == nil {
-			t.Errorf("CommitsSince(%q) succeeded", bad)
+	invalid := []string{missing, "HEAD", strings.ToUpper(h["fix"]), h["fix"][:12], tree, "", "--all"}
+	input = append(input, invalid...)
+	input = append(input, h["fix"]) // repeated
+
+	for _, tt := range []struct {
+		name     string
+		base     string
+		baseGone bool
+	}{
+		{"base is an ancestor of HEAD", h["fix"], false},
+		{"base no longer exists", strings.Repeat("d", 40), true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := r.Describe(tt.base, input)
+			if err != nil {
+				t.Fatalf("Describe: %v", err)
+			}
+			if len(got) != len(input) {
+				t.Fatalf("got %d entries for %d hashes", len(got), len(input))
+			}
+			for i, c := range got {
+				if c.Hash != input[i] {
+					t.Fatalf("entry %d is %s, want %s", i, c.Hash, input[i])
+				}
+			}
+			for i, name := range names {
+				want := commits[name]
+				if tt.baseGone {
+					want.inBase = false
+				}
+				c := got[i]
+				if (flags{c.Reachable, c.InBase, c.Substantive}) != want {
+					t.Errorf("%s: got %+v, want %+v", name, c, want)
+				}
+			}
+			for i, c := range got[len(names) : len(names)+len(invalid)] {
+				if c.Reachable || c.InBase || c.Substantive {
+					t.Errorf("hash %q: got %+v, want every flag false", invalid[i], c)
+				}
+			}
+			if repeated, first := got[len(got)-1], got[slices.Index(names, "fix")]; repeated != first {
+				t.Errorf("repeated hash: got %+v, want %+v", repeated, first)
+			}
+		})
+	}
+
+	// Substantive agrees with a comparison of candidate digests.
+	for _, name := range names {
+		parents := strings.Fields(run(t, root, "rev-list", "--no-walk", "--parents", h[name]))[1:]
+		if len(parents) == 0 {
+			continue
 		}
+		changed := digest(t, r, h[name]) != digest(t, r, parents[0])
+		if changed != commits[name].substantive {
+			t.Errorf("%s: digests differ = %v, expected substantive = %v", name, changed, commits[name].substantive)
+		}
+	}
+
+	if _, err := r.Describe("HEAD", input); err == nil {
+		t.Error("Describe with a malformed base succeeded")
+	}
+	if got, err := r.Describe(h["fix"], nil); err != nil || len(got) != 0 {
+		t.Errorf("Describe of no commits = %+v, %v", got, err)
 	}
 }
 
-// A root commit is compared with an empty tree.
-func TestCommitsSinceRootCommits(t *testing.T) {
-	root, r := newRepo(t, "repo")
-	write(t, root, ".metron/contract.yaml", "c\n")
-	want := map[string]bool{commit(t, root, "root with only .metron"): false}
-	run(t, root, "checkout", "-q", "--orphan", "side")
-	run(t, root, "rm", "-rfq", ".")
-	write(t, root, "a.txt", "a\n")
-	want[commit(t, root, "root with a file")] = true
-	run(t, root, "checkout", "-q", "--orphan", "unrelated")
-	run(t, root, "rm", "-rfq", ".")
-	write(t, root, "u.txt", "u\n")
-	base := commit(t, root, "unrelated base")
-	run(t, root, "checkout", "-q", "main")
-	run(t, root, "merge", "-q", "--no-edit", "--allow-unrelated-histories", "side")
-	want[head(t, r)] = true
-	checkCommits(t, r, base, want)
+func TestDescribeWithoutCommits(t *testing.T) {
+	_, r := newRepo(t, "empty")
+	hash := strings.Repeat("a", 40)
+	got, err := r.Describe(hash, []string{hash})
+	if err != nil || len(got) != 1 || got[0].Reachable || got[0].InBase || got[0].Substantive {
+		t.Fatalf("Describe = %+v, %v", got, err)
+	}
 }
 
 func TestIdentity(t *testing.T) {

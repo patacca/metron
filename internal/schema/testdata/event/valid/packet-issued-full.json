@@ -3,6 +3,7 @@
   "time": "2026-03-14T09:26:53Z",
   "prev": "5c7835e7f25e560f9a4728627ff279d66cc4231fe7144a79a8d9fa1a74acd879",
   "type": "packet.issued",
+  "more": 0,
   "data": {
     "packet": "P-0001",
     "role": "auditor",

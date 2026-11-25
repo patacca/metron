@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,6 +75,12 @@ func lookup(name string) *command {
 type ctx struct {
 	Env
 	cmd *command
+	// asJSON is the command's --json flag, when it has one. jsonArg is set
+	// when the arguments ask for JSON, even if they fail to parse. printed is
+	// set once a JSON document was printed.
+	asJSON  *bool
+	jsonArg bool
+	printed bool
 }
 
 // Run executes metron with args, the command line without the program name,
@@ -127,26 +134,42 @@ func fail(status int, format string, args ...any) error {
 // finish prints an error and maps it to an exit status: a refusal by the core
 // is a negative outcome, anything unexpected an environment or internal error.
 func (c *ctx) finish(err error) int {
-	if err == nil {
-		return exitOK
+	status, msg := outcome(err)
+	if msg != "" {
+		fmt.Fprintf(c.Stderr, "metron %s: %s\n", c.cmd.name, msg)
 	}
+	if status == exitUsage {
+		fmt.Fprintf(c.Stderr, "Run 'metron help %s' for usage.\n", strings.Fields(c.cmd.name)[0])
+	}
+	// A command asked for JSON prints exactly one document, failure included.
+	if status != exitOK && c.asJSON != nil && (*c.asJSON || c.jsonArg) && !c.printed {
+		if err := c.emit(errorDoc{Schema: "metron.error/v1", Status: status, Message: msg}); err != nil {
+			fmt.Fprintf(c.Stderr, "metron %s: %v\n", c.cmd.name, err)
+		}
+	}
+	return status
+}
+
+// errorDoc is what a command asked for JSON prints when it fails.
+type errorDoc struct {
+	Schema  string `json:"schema"`
+	Status  int    `json:"status"`
+	Message string `json:"message"`
+}
+
+// outcome maps an error to an exit status and the message that explains it.
+func outcome(err error) (int, string) {
 	var ee *exitError
-	if errors.As(err, &ee) {
-		if ee.msg != "" {
-			fmt.Fprintf(c.Stderr, "metron %s: %s\n", c.cmd.name, ee.msg)
-		}
-		if ee.status == exitUsage {
-			fmt.Fprintf(c.Stderr, "Run 'metron help %s' for usage.\n", strings.Fields(c.cmd.name)[0])
-		}
-		return ee.status
-	}
 	var r *core.Rejection
-	if errors.As(err, &r) {
-		fmt.Fprintf(c.Stderr, "metron %s: %s", c.cmd.name, rejectionText(r))
-		return exitNegative
+	switch {
+	case err == nil:
+		return exitOK, ""
+	case errors.As(err, &ee):
+		return ee.status, ee.msg
+	case errors.As(err, &r):
+		return exitNegative, strings.TrimSuffix(rejectionText(r), "\n")
 	}
-	fmt.Fprintf(c.Stderr, "metron %s: %v\n", c.cmd.name, err)
-	return exitEnv
+	return exitEnv, err.Error()
 }
 
 // rejectionText renders a refusal. A single problem about the command as a
@@ -178,13 +201,36 @@ func stateFlag(fs *flag.FlagSet) *string {
 	return fs.String("state-dir", "", "the state `directory` (default $METRON_STATE_DIR, else .metron/state)")
 }
 
-func jsonFlag(fs *flag.FlagSet) *bool {
-	return fs.Bool("json", false, "print one JSON document instead of text")
+// jsonFlag defines --json, which makes the command print one JSON document,
+// an error document if it fails.
+func (c *ctx) jsonFlag(fs *flag.FlagSet) *bool {
+	c.asJSON = fs.Bool("json", false, "print one JSON document instead of text")
+	return c.asJSON
+}
+
+// jsonRequested reports whether arguments that may not parse ask for --json.
+func jsonRequested(args []string) bool {
+	on := false
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		name, value, set := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !strings.HasPrefix(a, "-") || name != "json" {
+			continue
+		}
+		on = true
+		if set {
+			on, _ = strconv.ParseBool(value)
+		}
+	}
+	return on
 }
 
 // parse parses flags that may appear before, between or after the positional
 // arguments, which it returns. "--" ends the flags.
 func (c *ctx) parse(fs *flag.FlagSet, args []string) ([]string, error) {
+	c.jsonArg = c.asJSON != nil && jsonRequested(args)
 	var pos []string
 	for {
 		err := fs.Parse(args)
@@ -283,9 +329,9 @@ var cmdHelp = &command{
 	},
 }
 
-// writeJSON prints one indented JSON document. HTML characters are not
-// escaped, so identities such as "Name <email>" read as written.
-func writeJSON(w io.Writer, v any) error {
+// emit prints one indented JSON document. HTML characters are not escaped,
+// so identities such as "Name <email>" read as written.
+func (c *ctx) emit(v any) error {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
 	enc.SetEscapeHTML(false)
@@ -293,6 +339,7 @@ func writeJSON(w io.Writer, v any) error {
 	if err := enc.Encode(v); err != nil {
 		return err
 	}
-	_, err := w.Write(b.Bytes())
+	c.printed = true
+	_, err := c.Stdout.Write(b.Bytes())
 	return err
 }

@@ -164,6 +164,9 @@ func (s *sim) step(op, param byte) {
 					r.Role = RoleReviewer
 				}
 			}
+			if bit(param, 6) {
+				r.PacketDigest = digestOf("a packet of another ledger")
+			}
 		}
 		if s.ingestRun(r) && unusable {
 			s.t.Fatalf("a report for packet %s was accepted although its file is unusable", p.ID)
@@ -415,12 +418,12 @@ func (s *sim) check(prev State) {
 			s.t.Fatalf("escalation %d is %s", i+1, x.ID)
 		}
 	}
-	for i, r := range s.state.Rounds() {
+	for i, r := range s.state.rounds {
 		if r.Number != i+1 {
 			s.t.Fatalf("round %d is numbered %d", i+1, r.Number)
 		}
 	}
-	latest := len(s.state.Rounds())
+	latest := len(s.state.rounds)
 	for _, x := range s.state.Findings() {
 		for i, e := range x.History {
 			if e.Round > latest || (i > 0 && e.Round < x.History[i-1].Round) {
@@ -432,7 +435,7 @@ func (s *sim) check(prev State) {
 		}
 	}
 	for _, x := range prev.Findings() {
-		y, ok := s.state.Finding(x.ID)
+		y, ok := lookup(s.state, x.ID)
 		if !ok || y.Recurrences < x.Recurrences || (x.RootCauseRequired && !y.RootCauseRequired) ||
 			!reflect.DeepEqual(x.History, y.History[:min(len(x.History), len(y.History))]) || len(y.History) < len(x.History) {
 			s.t.Fatalf("finding %s went from %+v to %+v", x.ID, x, y)
@@ -460,7 +463,7 @@ func (s *sim) check(prev State) {
 				s.t.Fatalf("the gate is open with escalation %s open", e.ID)
 			}
 		}
-		r, ok := s.state.LatestRound()
+		r, ok := s.state.latestRound()
 		pin, _ := s.state.Pin()
 		if !ok || r.Verdict != VerdictGreen || r.Candidate.Digest != f.Candidate.Digest ||
 			r.Contract != pin.Digest || pin.Digest != f.ContractDigest || !f.Clean {

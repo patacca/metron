@@ -26,6 +26,7 @@ type harness struct {
 	packets  map[string]Packet // issued packets, as the store keeps them
 	accepted map[string]Report // accepted reports by packet
 	lost     string            // a packet whose stored file is unusable
+	amend    func(f *Facts)    // changes the facts of the next ingestions
 }
 
 func digestOf(s string) string {
@@ -109,9 +110,6 @@ func (h *harness) facts() Facts {
 		Clean:             h.clean,
 	}
 	if op, ok := h.state.OpenPacket(); ok {
-		if op.Base != nil {
-			f.Commits = h.since(op.Base.Commit)
-		}
 		if op.Packet == h.lost {
 			f.PacketProblem = "packets/" + op.Packet + ".json does not match its recorded digest"
 		}
@@ -119,13 +117,28 @@ func (h *harness) facts() Facts {
 	return f
 }
 
-// since returns the commits after base, like git rev-list base..HEAD.
-func (h *harness) since(base string) []Commit {
-	i := slices.IndexFunc(h.history, func(c Commit) bool { return c.Hash == base })
-	if i < 0 {
-		return slices.Clone(h.history)
+// describe describes the commits a report lists, as the repository would:
+// the history is linear, so every recorded commit is an ancestor of HEAD, and
+// a commit is in the base when it is the base or comes before it.
+func (h *harness) describe(base string, hashes []string) []Commit {
+	b := slices.IndexFunc(h.history, func(c Commit) bool { return c.Hash == base })
+	out := []Commit{}
+	for _, hash := range hashes {
+		c := Commit{Hash: hash}
+		if i := slices.IndexFunc(h.history, func(c Commit) bool { return c.Hash == hash }); i >= 0 {
+			c.Reachable, c.InBase, c.Substantive = true, b >= 0 && i <= b, h.history[i].Substantive
+		}
+		out = append(out, c)
 	}
-	return slices.Clone(h.history[i+1:])
+	return out
+}
+
+// lookup returns the finding with the given identifier.
+func lookup(s State, id string) (Finding, bool) {
+	if i := s.findingIndex(id); i >= 0 {
+		return s.findings[i], true
+	}
+	return Finding{}, false
 }
 
 // commit records a commit. A substantive one changes the candidate digest.
@@ -149,11 +162,12 @@ func noNull(tb testing.TB, what string, b []byte) {
 	}
 }
 
-// seal turns drafts into events and folds them, as the store would.
+// seal turns drafts into events and folds them, as the store would: one
+// batch, with More counting down to 0.
 func (h *harness) seal(drafts []Draft) {
 	h.tb.Helper()
-	for _, d := range drafts {
-		e := Event{Seq: len(h.events) + 1, Type: d.Type, Data: mustJSON(h.tb, d.Data)}
+	for i, d := range drafts {
+		e := Event{Seq: len(h.events) + 1, Type: d.Type, More: len(drafts) - 1 - i, Data: mustJSON(h.tb, d.Data)}
 		noNull(h.tb, string(d.Type), e.Data)
 		s, err := Apply(h.state, e)
 		if err != nil {
@@ -235,14 +249,36 @@ func (h *harness) packet() Packet {
 	return p
 }
 
+// report answers packet p, bound to the digest the ledger recorded for it.
 func (h *harness) report(p Packet, author string, body any) Report {
-	return Report{Schema: SchemaReport, Packet: p.ID, Role: p.Role,
+	rec, _ := h.state.Packet(p.ID)
+	return Report{Schema: SchemaReport, Packet: p.ID, PacketDigest: rec.Digest, Role: p.Role,
 		Author: Author{ID: author, Kind: AuthorAgent}, Body: mustJSON(h.tb, body)}
 }
 
+// ingest submits a report with the facts the CLI gathers for it: for an
+// implementer report, a description of every commit its fixes list.
 func (h *harness) ingest(r Report) ([]Draft, bool, error) {
 	raw := mustJSON(h.tb, r)
-	return Ingest(h.state, h.facts(), r, digestOf(string(raw)), digestOf("raw "+string(raw)))
+	f := h.facts()
+	var b ImplementerBody
+	if p, ok := h.state.Packet(r.Packet); ok && p.Base != nil && r.Role == RoleImplementer && json.Unmarshal(r.Body, &b) == nil {
+		var hashes []string
+		for _, fx := range b.Fixes {
+			for _, c := range fx.Commits {
+				if !slices.Contains(hashes, c) {
+					hashes = append(hashes, c)
+				}
+			}
+		}
+		if len(hashes) > 0 {
+			f.Commits = h.describe(p.Base.Commit, hashes)
+		}
+	}
+	if h.amend != nil {
+		h.amend(&f)
+	}
+	return Ingest(h.state, f, r, digestOf(string(raw)), digestOf("raw "+string(raw)))
 }
 
 // accept ingests a report that must be accepted, and folds its events.

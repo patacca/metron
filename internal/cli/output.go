@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/patacca/metron/internal/core"
+	"github.com/patacca/metron/internal/vcs"
 )
 
 // actionDoc is the next action as printed by metron next --json and embedded
@@ -13,16 +14,22 @@ import (
 type actionDoc struct {
 	Schema string `json:"schema,omitempty"`
 	core.Action
-	// Command is the command that performs or continues the step.
+	// Command is the command that performs or continues the step. It is
+	// empty when no command does, and then hint says what to do.
 	Command string `json:"command"`
+	hint    string
+	// leftovers marks a tree made unclean by the checks: what they left is
+	// removed, never committed.
+	leftovers bool
 }
 
 func (w *world) actionDoc(a core.Action) *actionDoc {
-	return &actionDoc{Action: a, Command: w.command(a)}
+	return &actionDoc{Action: a, Command: w.command(a), hint: thenHint(w, a)}
 }
 
 // writeNext prints the next action for a person.
-func writeNext(b *strings.Builder, w *world, a core.Action) {
+func writeNext(b *strings.Builder, w *world, d *actionDoc) {
+	a := d.Action
 	line := func(label, value string) { fmt.Fprintf(b, "%-14s%s\n", label+":", value) }
 	if a.Step == core.StepNone {
 		line("Next step", "none, the gate is open")
@@ -41,12 +48,22 @@ func writeNext(b *strings.Builder, w *world, a core.Action) {
 			line(l.label, strings.Join(l.ids, ", "))
 		}
 	}
-	if op, ok := w.staleOpenPacket(a); ok {
-		line("Note", fmt.Sprintf("packet %s (%s) is open but no longer valid; %s voids it", op.Packet, op.Action, w.metron("packet")))
+	if op, why, ok := w.staleOpenPacket(a); ok {
+		line("Note", fmt.Sprintf("packet %s (%s) is open but no longer valid (%s); %s voids it", op.Packet, op.Action, why, w.metron("packet")))
 	}
-	line("Run", w.command(a))
-	if then := thenHint(w, a); then != "" {
-		line("Then", then)
+	if a.Step == core.StepCommitChanges {
+		for _, l := range treeLines(w.dirty, d.leftovers) {
+			line("Tree", l)
+		}
+	}
+	switch {
+	case d.Command == "":
+		line("Do", d.hint)
+	default:
+		line("Run", d.Command)
+		if d.hint != "" {
+			line("Then", d.hint)
+		}
 	}
 }
 
@@ -65,11 +82,48 @@ func thenHint(w *world, a core.Action) string {
 			return fmt.Sprintf(`fix every problem it lists, then pin the contract with %s`, w.metron(`contract pin -m "<reason>"`))
 		}
 	case core.StepCommitChanges:
-		return fmt.Sprintf("run %s (discarding the changes also makes the tree clean)", w.metron("next"))
+		switch {
+		case w.facts.Clean && !w.noCommits:
+			return "the candidate itself must change: commit a change to something outside .metron/, then run " + w.metron("next")
+		case w.command(a) == "":
+			return "replace each symbolic link into .metron/ with what it points to, or remove it, commit, then run " + w.metron("next")
+		}
+		return fmt.Sprintf("run %s; discarding the changes also makes the tree clean", w.metron("next"))
 	case core.StepRunChecks:
 		return "if a check fails, change the code, commit it and run the checks again"
 	}
 	return ""
+}
+
+// treeLines says, for each reason the working tree is not clean, what it is
+// and how to fix it. leftovers selects the fixes for what a check left
+// behind, which must be removed, not committed.
+func treeLines(ps []vcs.TreeProblem, leftovers bool) []string {
+	out := make([]string, 0, len(ps))
+	for _, p := range ps {
+		var what, fix string
+		switch p.Kind {
+		case vcs.TreeModified:
+			what, fix = "modified", "commit or discard the change"
+			if leftovers {
+				fix = "restore it with git checkout -- " + quoteArg(p.Path)
+			}
+		case vcs.TreeUntracked:
+			what, fix = "untracked", "commit it, delete it, or ignore it"
+			if leftovers {
+				fix = "delete it"
+			}
+		case vcs.TreeHidden:
+			what = "hidden by an assume-unchanged or skip-worktree flag"
+			fix = fmt.Sprintf("clear the flag with git update-index --no-skip-worktree -- %[1]s and git update-index --no-assume-unchanged -- %[1]s, then commit or discard what it hid", quoteArg(p.Path))
+		case vcs.TreeLink:
+			what, fix = "a symbolic link into .metron/", "replace the link with what it points to, or remove it, and commit"
+		default:
+			what, fix = p.Kind, "make the tree clean"
+		}
+		out = append(out, fmt.Sprintf("%s is %s: %s", p.Path, what, fix))
+	}
+	return out
 }
 
 // the names a role in a sentence: "governance", or "the reviewer".

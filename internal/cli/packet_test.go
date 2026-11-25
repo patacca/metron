@@ -68,14 +68,20 @@ func TestPacketFileDamaged(t *testing.T) {
 			_, sk := r.packet()
 			tc.damage(r, ".metron/state/packets/P-0001.json")
 
-			contains(t, "next", r.must("next").out, "Next step:    review", "Note:         packet P-0001 (review) is open but no longer valid; metron packet voids it")
+			contains(t, "next", r.must("next").out, "Next step:    review",
+				"Note:         packet P-0001 (review) is open but no longer valid ("+tc.want+"); metron packet voids it")
 			var st statusDoc
 			unmarshal(t, r.must("status", "--json").out, &st)
-			if st.OpenPacket == nil || st.OpenPacket.Valid || !strings.Contains(st.OpenPacket.FileProblem, tc.want) {
-				t.Fatalf("status open packet %+v", st.OpenPacket)
+			if st.OpenPacket == nil || st.OpenPacket.Valid || !strings.Contains(st.OpenPacket.Invalid, tc.want) ||
+				len(st.StoredFiles) != 1 || !strings.Contains(st.StoredFiles[0].Problem, tc.want) {
+				t.Fatalf("status open packet %+v, stored files %+v", st.OpenPacket, st.StoredFiles)
 			}
 			contains(t, "fsck", r.expect(exitNegative, "fsck").out, tc.want, "run metron packet to void it")
-			contains(t, "gate", r.expect(exitNegative, "gate").out, tc.want)
+			// The open packet's file is not an integrity failure: the packet is
+			// ignored until metron packet voids it.
+			if out := r.expect(exitNegative, "gate").out; strings.Contains(out, "P-0001") {
+				t.Fatalf("the gate counts the open packet's file:\n%s", out)
+			}
 			res := r.ingest(exitNegative, review(t, sk, "rev-1", nil))
 			contains(t, "ingest error", res.err, "the stored file of packet P-0001 is unusable", "run metron packet again")
 

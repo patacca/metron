@@ -291,6 +291,7 @@ func escape(t string) string { return escaper.Replace(t) }
 // patternHints says in words what each pattern of the schemas requires. A
 // test keeps it complete.
 var patternHints = map[string]string{
+	`^[!-~]{1,128}$`:                "must be 1 to 128 printable ASCII characters without spaces (0x21 to 0x7E)",
 	`\S`:                            "must not be blank",
 	`^[0-9a-f]{64}$`:                "must be 64 lowercase hexadecimal digits",
 	`^sha256:[0-9a-f]{64}$`:         `must be "sha256:" followed by 64 lowercase hexadecimal digits`,

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -18,16 +17,11 @@ import (
 // ContractFile is an acceptance contract read strictly from YAML. It has not
 // been validated against the contract schema or the semantic rules.
 type ContractFile struct {
-	// Value is the document as JSON: map[string]any, []any, string, bool and
-	// int64.
-	Value any
-	// Canonical is the canonical JSON form of Value.
+	// Canonical is the canonical JSON form of the document.
 	Canonical []byte
 	// Digest is the contract digest: the digest of Canonical, the binding
 	// identity of the contract.
 	Digest string
-	// RawDigest is the digest of the file's bytes, kept for audit.
-	RawDigest string
 }
 
 // ContractError reports where a contract breaks the strict YAML rules.
@@ -39,19 +33,6 @@ type ContractError struct {
 
 func (e *ContractError) Error() string {
 	return fmt.Sprintf("line %d, column %d: %s", e.Line, e.Column, e.Msg)
-}
-
-// ReadContract reads and parses the contract file at path. See ParseContract.
-func ReadContract(path string) (*ContractFile, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read contract: %w", err)
-	}
-	c, err := ParseContract(data)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	return c, nil
 }
 
 // ParseContract parses a contract as strict YAML, as docs/architecture.md
@@ -86,12 +67,7 @@ func ParseContract(data []byte) (*ContractFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ContractFile{
-		Value:     value,
-		Canonical: canonical,
-		Digest:    canon.Digest(canonical),
-		RawDigest: canon.Digest(data),
-	}, nil
+	return &ContractFile{Canonical: canonical, Digest: canon.Digest(canonical)}, nil
 }
 
 func errorAt(n *yaml.Node, format string, args ...any) error {

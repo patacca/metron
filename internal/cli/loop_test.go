@@ -216,7 +216,9 @@ func TestStateDirectoryElsewhere(t *testing.T) {
 				r.env[envStateDir] = state
 			}
 			run := func(args ...string) result { return r.must(append(args, extra...)...) }
-			run("init")
+			if out := run("init").out; strings.Contains(out, "Commit .metron/") {
+				t.Fatalf("init tells the user to commit an external state directory:\n%s", out)
+			}
 			r.write(".metron/contract.yaml", testContract)
 			run("contract", "pin", "-m", "first contract")
 			if _, err := os.Stat(r.path(".metron/state")); !os.IsNotExist(err) {

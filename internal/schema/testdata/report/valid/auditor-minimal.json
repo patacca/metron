@@ -1,6 +1,7 @@
 {
   "schema": "metron.report/v1",
   "packet": "P-12345",
+  "packet_digest": "sha256:be8cbf9689335e6582d511d2c29d181cde836d91af4f8f35ca142ed6cf16a6f8",
   "role": "auditor",
   "author": {
     "id": "carol",

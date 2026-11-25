@@ -111,7 +111,7 @@ func TestScenarioRedFixVerifyGreen(t *testing.T) {
 	}
 	h.accept(rp, "rev-1", green(h.contract))
 	h.expect(StepNone)
-	if f, _ := h.state.Finding("F-0001"); f.Status != StatusResolved || f.Fix == nil {
+	if f, _ := lookup(h.state, "F-0001"); f.Status != StatusResolved || f.Fix == nil {
 		t.Fatalf("finding %+v", f)
 	}
 }
@@ -131,7 +131,7 @@ func TestScenarioRootCauseRequired(t *testing.T) {
 			t.Fatalf("attempt %d: root_cause_required %t", attempt, got)
 		}
 	}
-	if f, _ := h.state.Finding("F-0001"); f.Recurrences != 2 || !f.RootCauseRequired || f.Status != StatusOpen {
+	if f, _ := lookup(h.state, "F-0001"); f.Recurrences != 2 || !f.RootCauseRequired || f.Status != StatusOpen {
 		t.Fatalf("finding %+v", f)
 	}
 	fp := h.packet()
@@ -147,7 +147,7 @@ func TestScenarioRootCauseRequired(t *testing.T) {
 	fx.RootCause = "the parser assumed non-empty input everywhere"
 	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fx}})
 	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
-	if f, _ := h.state.Finding("F-0001"); !f.RootCauseRequired || f.Status != StatusResolved {
+	if f, _ := lookup(h.state, "F-0001"); !f.RootCauseRequired || f.Status != StatusResolved {
 		t.Fatalf("the flag did not stay set: %+v", f)
 	}
 }
@@ -161,7 +161,7 @@ func TestScenarioDispute(t *testing.T) {
 		if k := raisedKinds(d); !slices.Equal(k, []EscalationKind{EscalationDispute}) {
 			t.Fatalf("raised %v", k)
 		}
-		if f, _ := h.state.Finding("F-0001"); !f.Disputed || f.Status != StatusOpen {
+		if f, _ := lookup(h.state, "F-0001"); !f.Disputed || f.Status != StatusOpen {
 			t.Fatalf("finding %+v", f)
 		}
 		if a := h.expect(StepAudit); !slices.Equal(a.Escalations, []string{"E-0001"}) {
@@ -194,7 +194,7 @@ func TestScenarioDispute(t *testing.T) {
 		eqTypes(t, h.accept(ap, "aud-1", AuditorBody{Resolutions: resolutions(ap, "withdrawn"),
 			Adjudications: []Adjudication{{Finding: "F-0001", Decision: DecisionWithdraw, Rationale: "not in the envelope"}}}),
 			EventReportAccepted, EventFindingWithdrawn, EventEscalationResolved)
-		if f, _ := h.state.Finding("F-0001"); len(f.History) != 4 || f.History[2] != (FindingEvent{Event: EventFindingWithdrawn, Round: 1, Packet: ap.ID, Note: "not in the envelope"}) {
+		if f, _ := lookup(h.state, "F-0001"); len(f.History) != 4 || f.History[2] != (FindingEvent{Event: EventFindingWithdrawn, Round: 1, Packet: ap.ID, Note: "not in the envelope"}) {
 			t.Fatalf("history %+v", f.History)
 		}
 		// The same candidate may be reviewed again: a resolution was recorded.
@@ -430,137 +430,10 @@ func TestScenarioRegressionSpiral(t *testing.T) {
 				t.Fatalf("raised %v, want %v", got, want)
 			}
 			regID := fmt.Sprintf("F-%04d", tc.findings+1)
-			if f, _ := h.state.Finding(regID); f.Source != RoleVerifier || f.Status != StatusOpen {
+			if f, _ := lookup(h.state, regID); f.Source != RoleVerifier || f.Status != StatusOpen {
 				t.Fatalf("regression %+v", f)
 			}
 		})
-	}
-}
-
-func TestScenarioRepin(t *testing.T) {
-	h := newHarness(t)
-	h.checks(true)
-	h.accept(h.packet(), "rev-1", green(h.contract))
-	h.expect(StepNone)
-
-	amended := testContract()
-	amended.Authorizes = "a pilot with external users"
-	h.contract = amended
-	h.expect(StepPinContract)
-	if h.gate().Open {
-		t.Fatal("the gate is open while the contract differs from the pinned one")
-	}
-	eqTypes(t, h.must(Pin(h.state, h.facts(), "widen the authorization", "gov")), EventContractPinned)
-	g := h.gate()
-	if g.Open || g.Conditions[4].Satisfied {
-		t.Fatalf("a GREEN verdict under the old contract still counts: %+v", g)
-	}
-	// The check command is unchanged, so its evidence still counts.
-	h.expect(StepReview)
-	stale := h.packet()
-
-	again := amended
-	again.Authorizes = "a pilot with external users, read-only"
-	h.contract = again
-	eqTypes(t, h.must(Pin(h.state, h.facts(), "narrow it", "gov")), EventPacketVoided, EventContractPinned)
-	if rs := h.state.StageRounds(); len(rs) != 2 || !rs[1].Voided {
-		t.Fatalf("rounds %+v", rs)
-	}
-	h.refused(stale, "rev-1", green(h.contract), LayerTransition)
-	if _, err := Pin(h.state, h.facts(), "again", "gov"); err == nil {
-		t.Fatal("the same contract digest was pinned twice")
-	}
-	rp := h.packet()
-	if rp.Round != 3 {
-		t.Fatalf("round %d", rp.Round)
-	}
-	h.accept(rp, "rev-1", green(h.contract))
-	h.expect(StepNone)
-	if h.state.FailedStreak() != 0 {
-		t.Fatalf("a voided round counted as a failure")
-	}
-}
-
-func TestScenarioStageChange(t *testing.T) {
-	h := newHarness(t)
-	h.checks(true)
-	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
-	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
-	h.checks(true)
-	reviewed := h.candidate()
-	h.accept(h.packet(), "rev-1", red(h.contract, "crash again"))
-	if h.state.FailedStreak() != 2 || len(h.state.StageRounds()) != 2 {
-		t.Fatalf("streak %d, rounds %d", h.state.FailedStreak(), len(h.state.StageRounds()))
-	}
-
-	h.contract = stageTwoContract()
-	h.must(Pin(h.state, h.facts(), "enter controlled validation", "gov"))
-	if h.state.Stage() != StageControlledValidation || len(h.state.StageRounds()) != 0 || h.state.FailedStreak() != 0 {
-		t.Fatalf("stage %s, rounds %d, streak %d", h.state.Stage(), len(h.state.StageRounds()), h.state.FailedStreak())
-	}
-	// Findings carry over.
-	h.expect(StepFix)
-	fp := h.packet()
-	if fp.Round != 2 || *fp.Base != reviewed || !slices.Equal(fp.Subjects, []string{"F-0002"}) {
-		t.Fatalf("fix packet after the stage change %+v", fp)
-	}
-	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0002", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"))
-	h.checks(true)
-	rp := h.packet()
-	if rp.Round != 3 || !slices.Contains(rp.ApplicableRequirements, "REQ-4") || len(rp.History) != 0 {
-		t.Fatalf("first review of the new stage %+v", rp)
-	}
-	h.accept(rp, "rev-1", green(h.contract))
-	if g := h.gate(); !g.Open || g.Stage != StageControlledValidation {
-		t.Fatalf("gate %+v", g)
-	}
-	if n := len(h.state.Rounds()); n != 3 {
-		t.Fatalf("%d rounds across stages, want 3", n)
-	}
-}
-
-func TestScenarioHistoryRoundsAcrossStages(t *testing.T) {
-	h := newHarness(t)
-	h.checks(true)
-	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
-	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
-	h.checks(true)
-	h.accept(h.packet(), "rev-1", red(h.contract, "crash again"))
-
-	h.contract = stageTwoContract()
-	h.must(Pin(h.state, h.facts(), "enter controlled validation", "gov"))
-	before := map[string]int{}
-	for _, f := range h.state.Findings() {
-		before[f.ID] = len(f.History)
-	}
-	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0002", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"))
-	h.checks(true)
-	b := review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated, "REQ-4": RequirementViolated}, blocker("loss", "REQ-4"))
-	b.Reopen = []Reopen{{Finding: "F-0001", Reason: ReopenRegression, Justification: "it is back"}}
-	rp := h.packet()
-	if rp.Round != 3 {
-		t.Fatalf("the first review of the second stage is round %d, want 3", rp.Round)
-	}
-	h.accept(rp, "rev-1", b)
-
-	// Steps between rounds happen in round 2, the latest; the review steps in
-	// round 3.
-	want := map[string][]int{"F-0001": {3}, "F-0002": {2, 2}, "F-0003": {3}}
-	for _, f := range h.state.Findings() {
-		var got []int
-		for _, e := range f.History[before[f.ID]:] {
-			got = append(got, e.Round)
-			if p, _ := h.state.Packet(e.Packet); p.Action == StepReview && e.Round != p.Round {
-				t.Fatalf("%s %s is recorded in round %d, its review packet in round %d", f.ID, e.Event, e.Round, p.Round)
-			}
-		}
-		if !slices.Equal(got, want[f.ID]) {
-			t.Fatalf("%s rounds in the second stage %v, want %v", f.ID, got, want[f.ID])
-		}
 	}
 }
 
