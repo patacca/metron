@@ -15,8 +15,10 @@ eval/run/bounded.sh      <case> <results-root>/<case>/bounded/<trial>
 ```
 
 Each script needs `git`, `python3`, `omp` and, for the Metron arm, `go`. The
-trial directory must not exist yet; keep it outside this repository, since its
-path reaches the agents' prompts. `EVAL_MODEL`, if set, is passed to every
+trial directory must not exist yet. While the arm runs, the repository lives
+in a fresh temporary directory, so that nothing the agents see points to the
+trial directory and the other roles' transcripts in it; it is moved to
+`<trial>/repo` when the arm ends. `EVAL_MODEL`, if set, is passed to every
 omp run as `--model`.
 
 | Arm | What runs | End states |

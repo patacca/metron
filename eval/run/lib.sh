@@ -22,8 +22,14 @@ now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 record() { python3 "$EVAL_RUN/record.py" "$@"; }
 
-# setup <case> <trial-dir>: a new fixture repository at <trial-dir>/repo with
-# one commit, "seed", made under the identity eval <eval@example.invalid>.
+# setup <case> <trial-dir>: a new fixture repository with one commit, "seed",
+# made under the identity eval <eval@example.invalid>.
+#
+# While the arm runs, the repository, the prompt the agent reads and the
+# metron binary live in a fresh temporary directory, WORK, so that nothing
+# an agent can see (its working directory, the prompt file's name, PATH)
+# leads to the trial directory and the transcripts of the other roles.
+# finish moves the repository to <trial-dir>/repo.
 #
 # CASE_DIR holds the case's contract.yaml and truth.json. A variant names
 # another case in a one-line file, base; BASE_DIR is then that case, whose
@@ -41,8 +47,9 @@ setup() {
   [ ! -e "$2" ] || die "$2 already exists: give every trial a new directory"
   mkdir -p "$2/steps"
   TRIAL=$(CDPATH='' cd -- "$2" && pwd)
-  REPO=$TRIAL/repo
   STEPS=$TRIAL/steps
+  WORK=$(mktemp -d)
+  REPO=$WORK/repo
   N=0
   STARTED=$(now)
   STARTED_S=$(date +%s)
@@ -71,23 +78,29 @@ end_step() {
 }
 
 # run_omp <kind> <role> <prompt-file> <max-time>: one fresh omp process in the
-# repository, its events in steps/NN.jsonl.
+# repository, its events in steps/NN.jsonl. It reads the prompt from a copy
+# in WORK.
 run_omp() {
   begin_step
+  cp "$3" "$WORK/prompt.md"
   rc=0
   omp -p --no-session --mode json --max-time "$4" \
     --no-context-files --no-skills --no-rules --no-extensions \
     ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
-    --cwd "$REPO" "@$3" </dev/null >"$STEPS/$nn.jsonl" 2>"$STEPS/$nn.err" || rc=$?
+    --cwd "$REPO" "@$WORK/prompt.md" </dev/null >"$STEPS/$nn.jsonl" 2>"$STEPS/$nn.err" || rc=$?
   end_step "$1" "$2" "$rc"
 }
 
-# finish <end-state>: record the trial. diff.json and oracle.json describe
-# the last commit, which is what the arm delivers; uncommitted changes are
-# not part of it.
+# finish <end-state>: move the repository to the trial directory and record
+# the trial. diff.json and oracle.json describe the last commit, which is
+# what the arm delivers; uncommitted changes are not part of it.
 finish() {
   ended=$(now)
   seconds=$(($(date +%s) - STARTED_S))
+  cd "$TRIAL"
+  mv "$REPO" "$TRIAL/repo"
+  rm -rf "$WORK"
+  REPO=$TRIAL/repo
   head=$(git -C "$REPO" rev-parse HEAD)
   git -C "$REPO" diff --numstat -z --no-renames "$SEED" "$head" -- . ':(exclude).metron' >"$TRIAL/numstat"
   record diff "$SEED" "$head" <"$TRIAL/numstat" >"$TRIAL/diff.json"

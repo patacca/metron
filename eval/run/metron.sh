@@ -11,9 +11,9 @@ set -eu
 . "$(dirname -- "$0")/lib.sh"
 
 setup "$@"
-mkdir -p "$TRIAL/bin"
-(cd "$METRON_SRC" && CGO_ENABLED=0 go build -trimpath -o "$TRIAL/bin/metron" ./cmd/metron)
-PATH=$TRIAL/bin:$PATH
+mkdir "$WORK/bin"
+(cd "$METRON_SRC" && CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/metron" ./cmd/metron)
+PATH=$WORK/bin:$PATH
 export PATH
 LOG=$TRIAL/metron.log
 
@@ -21,9 +21,9 @@ LOG=$TRIAL/metron.log
 # answers with by default.
 MODEL=${EVAL_MODEL:-}
 if [ -z "$MODEL" ]; then
-  printf 'Reply with the single word OK.\n' >"$STEPS/probe.md"
+  printf 'Reply with the single word OK.\n' >"$WORK/prompt.md"
   omp -p --no-session --mode json --max-time 5m --no-context-files --no-skills --no-rules --no-extensions \
-    --cwd "$STEPS" "@$STEPS/probe.md" </dev/null >"$STEPS/probe.jsonl" 2>"$STEPS/probe.err" || die "omp failed: see $STEPS/probe.err"
+    --cwd "$WORK" "@$WORK/prompt.md" </dev/null >"$STEPS/probe.jsonl" 2>"$STEPS/probe.err" || die "omp failed: see $STEPS/probe.err"
   MODEL=$(record model <"$STEPS/probe.jsonl")
   [ -n "$MODEL" ] || die "omp reported no model: see $STEPS/probe.jsonl"
 fi
@@ -113,8 +113,8 @@ while [ "$i" -lt 60 ]; do
   esac
 done
 
-finish "$end"
 cp .metron/state/ledger.jsonl "$TRIAL/ledger.jsonl"
 for d in reports packets; do
   if [ -d ".metron/state/$d" ]; then cp -R ".metron/state/$d" "$TRIAL/$d"; fi
 done
+finish "$end"
