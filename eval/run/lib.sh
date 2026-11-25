@@ -77,18 +77,101 @@ end_step() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$N" "$1" "$2" $(($(date +%s) - t0)) "$3" >>"$TRIAL/steps.tsv"
 }
 
-# run_omp <kind> <role> <prompt-file> <max-time>: one fresh omp process in the
-# repository, its events in steps/NN.jsonl. It reads the prompt from a copy
-# in WORK.
+# run_omp <kind> <role> <prompt-file> <max-seconds>: one fresh omp process in
+# the repository, its events in steps/NN.jsonl. It reads the prompt from a
+# copy in WORK. With DEADLINE set (seconds since the epoch), the run also
+# stops then.
 run_omp() {
   begin_step
   cp "$3" "$WORK/prompt.md"
+  limit=$4
+  if [ -n "${DEADLINE:-}" ] && [ $((DEADLINE - t0)) -lt "$limit" ]; then
+    limit=$((DEADLINE - t0 > 1 ? DEADLINE - t0 : 1))
+  fi
   rc=0
-  omp -p --no-session --mode json --max-time "$4" \
+  omp -p --no-session --mode json --max-time "$limit" \
     --no-context-files --no-skills --no-rules --no-extensions \
     ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
     --cwd "$REPO" "@$WORK/prompt.md" </dev/null >"$STEPS/$nn.jsonl" 2>"$STEPS/$nn.err" || rc=$?
   end_step "$1" "$2" "$rc"
+}
+
+# use_metron: put metron on PATH, METRON_BIN if set, else built from this
+# source tree; keep its state directory in WORK, outside the repository,
+# where a role's git commands cannot roll it back (docs/architecture.md,
+# section 4); and set MODEL, the model the roles declare in their reports:
+# EVAL_MODEL, or the one omp answers with by default.
+use_metron() {
+  mkdir "$WORK/bin"
+  if [ -n "${METRON_BIN:-}" ]; then
+    cp "$METRON_BIN" "$WORK/bin/metron"
+  else
+    (cd "$METRON_SRC" && CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/metron" ./cmd/metron)
+  fi
+  PATH=$WORK/bin:$PATH
+  METRON_STATE_DIR=$WORK/state
+  export PATH METRON_STATE_DIR
+  LOG=$TRIAL/metron.log
+  MODEL=${EVAL_MODEL:-}
+  if [ -z "$MODEL" ]; then
+    printf 'Reply with the single word OK.\n' >"$WORK/prompt.md"
+    omp -p --no-session --mode json --max-time 5m --no-context-files --no-skills --no-rules --no-extensions \
+      --cwd "$WORK" "@$WORK/prompt.md" </dev/null >"$STEPS/probe.jsonl" 2>"$STEPS/probe.err" || die "omp failed: see $STEPS/probe.err"
+    MODEL=$(record model <"$STEPS/probe.jsonl")
+    [ -n "$MODEL" ] || die "omp reported no model: see $STEPS/probe.jsonl"
+  fi
+}
+
+# adopt_metron: in the repository, initialize metron, commit the case's
+# contract and pin it, as governance does once before the loop.
+adopt_metron() {
+  (
+    cd "$REPO"
+    metron init >>"$LOG"
+    cp "$CASE_DIR/contract.yaml" .metron/contract.yaml
+    git add -A
+    git commit -q -m "chore: adopt metron"
+    metron contract pin -m "evaluation" >>"$LOG"
+  )
+}
+
+# keep_state: copy the ledger, packets and reports to the trial directory.
+keep_state() {
+  cp "$METRON_STATE_DIR/ledger.jsonl" "$TRIAL/ledger.jsonl"
+  for d in reports packets; do
+    if [ -d "$METRON_STATE_DIR/$d" ]; then cp -R "$METRON_STATE_DIR/$d" "$TRIAL/$d"; fi
+  done
+}
+
+ask_next() { metron next --json >"$TRIAL/next.json" || die "metron next failed"; }
+field() { record get "$1" <"$TRIAL/next.json"; }
+
+# run_role <role> <step>: in the repository, give the open packet's brief to
+# a fresh omp process; retry while that packet stays open, at most twice, and
+# not after DEADLINE. Sets FAILED on giving up.
+run_role() {
+  tries=0
+  packet=
+  while :; do
+    metron packet --format prompt -o .metron/work/prompt.md >>"$LOG" 2>&1 || die "metron packet failed: see $LOG"
+    ask_next
+    [ -n "$packet" ] || packet=$(field packet)
+    [ -n "$packet" ] || die "no packet is open after metron packet: see $TRIAL/next.json"
+    p=$(step_prompt)
+    sed -e "s|{{ROLE}}|$1|g" -e "s|{{MODEL}}|$MODEL|g" -e "s|{{HARNESS}}|$HARNESS|g" "$EVAL_RUN/prompts/metron-role.md" >"$p"
+    cat .metron/work/prompt.md >>"$p"
+    run_omp "$2" "$1" "$p" 1800
+    ask_next
+    if [ "$(field step)" != submit-report ] || [ "$(field packet)" != "$packet" ]; then
+      return 0
+    fi
+    tries=$((tries + 1))
+    if [ "$tries" -gt 2 ]; then
+      FAILED=1
+      return 0
+    fi
+    [ "$(date +%s)" -lt "${DEADLINE:-$((t0 + 86400))}" ] || return 0
+  done
 }
 
 # finish <end-state>: move the repository to the trial directory and record

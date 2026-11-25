@@ -6,76 +6,40 @@
 #
 #   eval/run/metron.sh <case> <trial-dir>
 #
-# EVAL_MODEL, if set, is passed to omp as --model.
+# EVAL_MODEL, if set, is passed to omp as --model. METRON_BIN, if set, is the
+# metron binary to use. The trial ends at the driver's cap after 60 steps of
+# the loop or EVAL_WALL_SECONDS (default 5400) of wall clock.
 set -eu
 . "$(dirname -- "$0")/lib.sh"
 
 setup "$@"
-mkdir "$WORK/bin"
-(cd "$METRON_SRC" && CGO_ENABLED=0 go build -trimpath -o "$WORK/bin/metron" ./cmd/metron)
-PATH=$WORK/bin:$PATH
-export PATH
-LOG=$TRIAL/metron.log
-
-# The model the roles declare in their reports: EVAL_MODEL, or the one omp
-# answers with by default.
-MODEL=${EVAL_MODEL:-}
-if [ -z "$MODEL" ]; then
-  printf 'Reply with the single word OK.\n' >"$WORK/prompt.md"
-  omp -p --no-session --mode json --max-time 5m --no-context-files --no-skills --no-rules --no-extensions \
-    --cwd "$WORK" "@$WORK/prompt.md" </dev/null >"$STEPS/probe.jsonl" 2>"$STEPS/probe.err" || die "omp failed: see $STEPS/probe.err"
-  MODEL=$(record model <"$STEPS/probe.jsonl")
-  [ -n "$MODEL" ] || die "omp reported no model: see $STEPS/probe.jsonl"
-fi
-
+use_metron
+DEADLINE=$((STARTED_S + ${EVAL_WALL_SECONDS:-5400}))
+adopt_metron
 cd "$REPO"
-metron init >>"$LOG"
-cp "$CASE_DIR/contract.yaml" .metron/contract.yaml
-git add -A
-git commit -q -m "chore: adopt metron"
-metron contract pin -m "evaluation" >>"$LOG"
-
-ask_next() { metron next --json >"$TRIAL/next.json" || die "metron next failed"; }
-field() { record get "$1" <"$TRIAL/next.json"; }
-
-# run_role <role> <step>: give the open packet's brief to a fresh omp process;
-# retry while that packet stays open, at most twice. Sets FAILED on giving up.
-run_role() {
-  tries=0
-  packet=
-  while :; do
-    metron packet --format prompt -o .metron/work/prompt.md >>"$LOG" 2>&1 || die "metron packet failed: see $LOG"
-    ask_next
-    [ -n "$packet" ] || packet=$(field packet)
-    [ -n "$packet" ] || die "no packet is open after metron packet: see $TRIAL/next.json"
-    p=$(step_prompt)
-    sed -e "s|{{ROLE}}|$1|g" -e "s|{{MODEL}}|$MODEL|g" -e "s|{{HARNESS}}|$HARNESS|g" "$EVAL_RUN/prompts/metron-role.md" >"$p"
-    cat .metron/work/prompt.md >>"$p"
-    run_omp "$2" "$1" "$p" 30m
-    ask_next
-    if [ "$(field step)" != submit-report ] || [ "$(field packet)" != "$packet" ]; then
-      return 0
-    fi
-    tries=$((tries + 1))
-    if [ "$tries" -gt 2 ]; then
-      FAILED=1
-      return 0
-    fi
-  done
-}
 
 # run_commit: the implementer makes the working tree clean as next describes.
 run_commit() {
   p=$(step_prompt)
   cat "$EVAL_RUN/prompts/metron-commit.md" >"$p"
   { echo '```'; metron next; echo '```'; } >>"$p"
-  run_omp commit-changes implementer "$p" 30m
+  run_omp commit-changes implementer "$p" 1800
+}
+
+# run_check_fix <check-output>: a check failed; the implementer, who owns
+# run-checks, corrects the candidate.
+run_check_fix() {
+  p=$(step_prompt)
+  cat "$EVAL_RUN/prompts/metron-checks.md" >"$p"
+  { echo '```'; cat "$1"; echo '```'; echo; echo 'This is what `metron next` printed:'; echo
+    echo '```'; metron next; echo '```'; } >>"$p"
+  run_omp run-checks implementer "$p" 1800
 }
 
 end=driver-cap
 FAILED=0
 i=0
-while [ "$i" -lt 60 ]; do
+while [ "$i" -lt 60 ] && [ "$(date +%s)" -lt "$DEADLINE" ]; do
   i=$((i + 1))
   ask_next
   step=$(field step)
@@ -100,6 +64,7 @@ while [ "$i" -lt 60 ]; do
     metron check >"$STEPS/$nn.check.txt" 2>&1 || rc=$?
     end_step check operator "$rc"
     [ "$rc" -le 1 ] || die "metron check exited $rc: see $STEPS/$nn.check.txt"
+    if [ "$rc" -eq 1 ]; then run_check_fix "$STEPS/$nn.check.txt"; fi
     ;;
   review | fix | verify | audit | submit-report)
     run_role "$owner" "$step"
@@ -113,8 +78,5 @@ while [ "$i" -lt 60 ]; do
   esac
 done
 
-cp .metron/state/ledger.jsonl "$TRIAL/ledger.jsonl"
-for d in reports packets; do
-  if [ -d ".metron/state/$d" ]; then cp -R ".metron/state/$d" "$TRIAL/$d"; fi
-done
+keep_state
 finish "$end"

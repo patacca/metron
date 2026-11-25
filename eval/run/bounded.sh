@@ -22,7 +22,7 @@ while [ "$round" -lt 3 ]; do
   rm -f "$REPO/REVIEW.json"
   p=$(step_prompt)
   cp "$EVAL_RUN/prompts/bounded-reviewer.md" "$p"
-  run_omp review reviewer "$p" 30m
+  run_omp review reviewer "$p" 1800
   if ! verdict=$(record review "$REPO/REVIEW.json" "$TRIAL/rounds/$round.review.json"); then
     end=role-failure
     break
@@ -34,7 +34,7 @@ while [ "$round" -lt 3 ]; do
   before=$(git -C "$REPO" rev-parse HEAD)
   p=$(step_prompt)
   cp "$EVAL_RUN/prompts/bounded-fixer.md" "$p"
-  run_omp fix fixer "$p" 30m
+  run_omp fix fixer "$p" 1800
   if [ "$(git -C "$REPO" rev-parse HEAD)" = "$before" ]; then fixed=false; else fixed=true; fi
   echo "$fixed" >"$TRIAL/rounds/$round.fixed"
 done

@@ -16,7 +16,7 @@ printf 'ACCEPTANCE.yaml\nVERDICT.json\n' >>"$REPO/.git/info/exclude"
 
 p=$(step_prompt)
 cp "$EVAL_RUN/prompts/unrestricted.md" "$p"
-run_omp unrestricted agent "$p" 45m
+run_omp unrestricted agent "$p" 2700
 
 if ready=$(record verdict "$REPO/VERDICT.json" "$TRIAL/rounds/1.review.json"); then
   if [ "$ready" = ready ]; then end=approved; else end=not-ready; fi

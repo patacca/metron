@@ -19,11 +19,18 @@ trial directory must not exist yet. While the arm runs, the repository lives
 in a fresh temporary directory, so that nothing the agents see points to the
 trial directory and the other roles' transcripts in it; it is moved to
 `<trial>/repo` when the arm ends. `EVAL_MODEL`, if set, is passed to every
-omp run as `--model`.
+omp run as `--model`; `METRON_BIN`, if set, is the metron binary to use
+instead of one built from this tree.
+
+Metron's state directory is in that temporary directory too, next to the
+repository rather than inside it, as `docs/architecture.md`, section 4, says
+for a protected environment: `METRON_STATE_DIR` points every `metron` call,
+the roles' included, at it, so that no git command in the repository can roll
+the ledger back. It is copied to the trial directory when the arm ends.
 
 | Arm | What runs | End states |
 | --- | --- | --- |
-| `metron` | The loop of `docs/architecture.md`, section 12: whatever `metron next` names, until the step is `none` or governance owns it. Never `metron resolve` or a pin after setup | `approved`, `governance:<kinds or step>`, `role-failure`, `driver-cap` |
+| `metron` | The loop of `docs/architecture.md`, section 12: whatever `metron next` names, until the step is `none` or governance owns it. Never `metron resolve` or a pin after setup. A failing `metron check` goes to the implementer, who owns `run-checks`. The driver's cap is 60 steps or `EVAL_WALL_SECONDS` (default 5400) of wall clock | `approved`, `governance:<kinds or step>`, `role-failure`, `driver-cap` |
 | `unrestricted` | One agent, one prompt: review, fix, commit, decide | `approved`, `not-ready`, `role-failure` |
 | `bounded` | Reviewer and fixer, fresh agents each step, at most 3 rounds | `approved`, `cap`, `role-failure` |
 
