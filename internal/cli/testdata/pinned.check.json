@@ -1,0 +1,24 @@
+{
+  "schema": "metron.check/v1",
+  "candidate": {
+    "commit": "fd86662859aeb61e92064f6a424faf89d3ab36d9",
+    "digest": "sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898"
+  },
+  "results": [
+    {
+      "requirement": "REQ-1",
+      "command": "git ls-files --error-unmatch greeting.txt",
+      "exit_code": 0,
+      "passed": true,
+      "output_digest": "sha256:7b9743d9ccf1dc03b09abfbfc7f27566506f79c2aae5f4bd129c259db6536d5f"
+    }
+  ],
+  "passed": true,
+  "recorded": true,
+  "next": {
+    "step": "review",
+    "owner": "reviewer",
+    "reason": "candidate sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898 has no GREEN verdict under the pinned contract (no round of stage prototype has a verdict): review it",
+    "command": "metron packet"
+  }
+}

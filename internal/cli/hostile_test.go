@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 
@@ -16,7 +17,7 @@ func TestShellQuote(t *testing.T) {
 		"line\nbreak", "naïve/状态", "'", "", `back\slash`, "$HOME",
 	} {
 		q := shellQuote(s)
-		cmd, err := shellCommand("printf '%s' " + q)
+		cmd, err := shellCommand(context.Background(), "printf '%s' "+q)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -89,7 +90,7 @@ func hostileFileNames(t *testing.T, sparse bool) {
 	}
 	// What next offers to run, run as it stands, executes nothing hostile.
 	if a := r.next(); a.Command != "" {
-		cmd, err := shellCommand(a.Command)
+		cmd, err := shellCommand(context.Background(), a.Command)
 		if err != nil {
 			t.Fatal(err)
 		}

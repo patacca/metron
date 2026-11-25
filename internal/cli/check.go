@@ -2,11 +2,13 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -16,12 +18,17 @@ import (
 
 var cmdCheck = &command{
 	name:     "check",
-	synopsis: "check [--json]",
+	synopsis: "check [--timeout <duration>] [--json]",
 	summary:  "Run the requirements' check commands and record the results",
 	about: `Check runs the command of every applicable requirement that has one,
 through a POSIX shell (sh -c) from the repository root, and captures its
 combined output; on Windows the shell is the sh that ships with Git. A check
 passes when it exits with status 0.
+
+Each command may run for at most --timeout, a duration such as 90s or 10m;
+the default is 30m. A command still running at the limit is stopped and
+recorded as a failed result with exit code 124, as timeout(1) reports it,
+and the other checks still run.
 
 The commands run without the lock. Then check takes the lock and records the
 results against the candidate, provided the candidate, the working tree and
@@ -42,11 +49,21 @@ const (
 	tailBytes = 4096
 )
 
+const (
+	// timeoutExit is the exit code recorded for a command stopped at the
+	// limit, the one timeout(1) reports.
+	timeoutExit = 124
+	// waitDelay is how long the output of a command may stay open once its
+	// shell has exited or was stopped, held by a process it left running.
+	waitDelay = 5 * time.Second
+)
+
 type checkResult struct {
 	Requirement  string `json:"requirement"`
 	Command      string `json:"command"`
 	ExitCode     int    `json:"exit_code"`
 	Passed       bool   `json:"passed"`
+	TimedOut     bool   `json:"timed_out,omitempty"`
 	OutputDigest string `json:"output_digest"`
 	// OutputTail is the end of a failing check's combined output: at most
 	// its last 40 lines and 4 KiB. OutputTruncated says that it is not all.
@@ -65,17 +82,24 @@ type checkDoc struct {
 	// Problem says why nothing was recorded.
 	Problem string     `json:"problem,omitempty"`
 	Next    *actionDoc `json:"next,omitempty"`
+	// limit is how long each command could run.
+	limit time.Duration
 }
 
 func runCheck(c *ctx, args []string) error {
 	fs := c.flags()
 	dir, asJSON := stateFlag(fs), c.jsonFlag(fs)
+	timeout := fs.String("timeout", "30m", "stop any check still running after this `duration`")
 	args, err := c.parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if err := positional(args, 0, 0); err != nil {
 		return err
+	}
+	limit, err := time.ParseDuration(*timeout)
+	if err != nil || limit <= 0 {
+		return usageError("invalid --timeout %q: give a positive duration, such as 90s or 10m", *timeout)
 	}
 	s, err := c.open(*dir)
 	if err != nil {
@@ -91,7 +115,7 @@ func runCheck(c *ctx, args []string) error {
 	if err := before.candidate(); err != nil {
 		return err
 	}
-	d := checkDoc{Schema: "metron.check/v1", Candidate: before.facts.Candidate, Results: []checkResult{}}
+	d := checkDoc{Schema: "metron.check/v1", Candidate: before.facts.Candidate, Results: []checkResult{}, limit: limit}
 	// Refuse before running anything when the results could not be recorded.
 	if a := core.Next(before.state, before.facts); a.Step == core.StepRepairLedger || a.Step == core.StepPinContract {
 		d.Problem = a.Reason
@@ -108,11 +132,12 @@ func runCheck(c *ctx, args []string) error {
 		if r.Command == "" {
 			continue
 		}
-		code, output, err := runShell(s.repo.Root(), r.Command)
+		code, output, timedOut, err := runShell(s.repo.Root(), r.Command, limit)
 		if err != nil {
 			return fail(exitEnv, "cannot run the check of %s: %v", r.ID, err)
 		}
-		res := checkResult{Requirement: r.ID, Command: r.Command, ExitCode: code, Passed: code == 0, OutputDigest: canon.Digest(output)}
+		res := checkResult{Requirement: r.ID, Command: r.Command, ExitCode: code, Passed: code == 0, TimedOut: timedOut,
+			OutputDigest: canon.Digest(output)}
 		if !res.Passed {
 			res.OutputTail, res.OutputTruncated = tail(output)
 			d.Passed = false
@@ -191,7 +216,11 @@ func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok
 			if !r.Passed {
 				status = "FAILED"
 			}
-			fmt.Fprintf(&b, "%-8s %s  exit %-3d %s\n", r.Requirement, status, r.ExitCode, printable(r.Command))
+			stopped := ""
+			if r.TimedOut {
+				stopped = fmt.Sprintf("[timed out: stopped after the %s limit] ", d.limit)
+			}
+			fmt.Fprintf(&b, "%-8s %s  exit %-3d %s%s\n", r.Requirement, status, r.ExitCode, stopped, printable(r.Command))
 			if r.OutputTruncated {
 				fmt.Fprintf(&b, "         | [earlier output omitted: only the last %d lines and %d bytes are shown]\n", tailLines, tailBytes)
 			}
@@ -221,25 +250,34 @@ func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok
 }
 
 // runShell runs a check command through sh -c in dir and returns its exit
-// status and combined output. An error means the shell could not be run at
-// all.
-func runShell(dir, command string) (int, []byte, error) {
-	cmd, err := shellCommand(command)
+// status and combined output. A command not over within limit is stopped and
+// reported as timed out, with the exit status timeoutExit and the output it
+// wrote until then. An error means the shell could not be run at all.
+func runShell(dir, command string, limit time.Duration) (int, []byte, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+	cmd, err := shellCommand(ctx, command)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, false, err
 	}
 	cmd.Dir = dir
+	cmd.WaitDelay = waitDelay
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err = cmd.Run()
 	var ee *exec.ExitError
 	switch {
-	case err == nil:
-		return 0, out.Bytes(), nil
+	case ctx.Err() != nil:
+		// The limit passed before the command was over, whatever it ended with.
+		return timeoutExit, out.Bytes(), true, nil
+	case err == nil, errors.Is(err, exec.ErrWaitDelay):
+		// ErrWaitDelay: the shell exited 0, and a process it left running
+		// held the output open for longer than waitDelay.
+		return 0, out.Bytes(), false, nil
 	case errors.As(err, &ee):
-		return ee.ExitCode(), out.Bytes(), nil
+		return ee.ExitCode(), out.Bytes(), false, nil
 	}
-	return 0, nil, err
+	return 0, nil, false, err
 }
 
 // tail returns the end of a check's output, at most its last tailLines lines

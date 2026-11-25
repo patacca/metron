@@ -1,0 +1,7 @@
+REQ-1    passed  exit 0   git ls-files --error-unmatch greeting.txt
+Recorded 1 result for commit fd86662859ae (candidate sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898).
+
+Next step:    review (owner: reviewer)
+Reason:       candidate sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898 has no GREEN verdict under the pinned contract (no round of stage prototype has a verdict): review it
+Run:          metron packet
+Then:         give the packet to the reviewer (--format prompt renders it for reading; --format skeleton -o .metron/work/report.json writes the report to fill in) and submit the report with metron ingest <report-file>
