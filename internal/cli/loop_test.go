@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -224,7 +225,7 @@ func TestStateDirectoryElsewhere(t *testing.T) {
 			if _, err := os.Stat(r.path(".metron/state")); !os.IsNotExist(err) {
 				t.Fatalf(".metron/state exists although the state directory is %s: %v", state, err)
 			}
-			if _, err := os.Stat(state + "/ledger.jsonl"); err != nil {
+			if _, err := os.Stat(filepath.Join(state, "ledger.jsonl")); err != nil {
 				t.Fatal(err)
 			}
 			var a actionDoc
@@ -238,7 +239,7 @@ func TestStateDirectoryElsewhere(t *testing.T) {
 			}
 			run("check")
 			run("packet")
-			if _, err := os.Stat(state + "/packets/P-0001.json"); err != nil {
+			if _, err := os.Stat(filepath.Join(state, "packets", "P-0001.json")); err != nil {
 				t.Fatal(err)
 			}
 			// Without the flag or the variable, the default state directory

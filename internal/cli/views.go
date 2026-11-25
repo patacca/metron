@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/patacca/metron/internal/core"
 	"github.com/patacca/metron/internal/schema"
+	"github.com/patacca/metron/internal/store"
 )
 
 // The read-only views: gate, status, findings, log and fsck. None takes the
@@ -556,7 +558,7 @@ func runFsck(c *ctx, args []string) error {
 	}
 	var b strings.Builder
 	var problems []string
-	ledger := w.show(w.store.Dir()) + "/ledger.jsonl"
+	ledger := w.show(filepath.Join(w.store.Dir(), store.LedgerName))
 	switch {
 	case w.ledgerEmpty:
 		problems = append(problems, fmt.Sprintf("%s is empty, so metron is not initialized: run %s", ledger, w.metron("init")))

@@ -27,6 +27,9 @@ type site struct {
 	// inRepo is set when the state directory lies under .metron/, where it
 	// is committed together with the work.
 	inRepo bool
+	// root is the repository root with its symbolic links resolved: the one
+	// spelling every path is compared with.
+	root string
 }
 
 // open locates the repository that contains the working directory and the
@@ -38,7 +41,7 @@ func (c *ctx) open(flagDir string) (*site, error) {
 	if err != nil {
 		return nil, fail(exitEnv, "%v\nmetron works inside a git repository: run it there, or create one with git init", err)
 	}
-	s := &site{repo: repo, flagDir: flagDir}
+	s := &site{repo: repo, flagDir: flagDir, root: realPath(repo.Root())}
 	dir, from, status := flagDir, "--state-dir", exitUsage
 	if dir == "" {
 		dir, from, status = c.Getenv(envStateDir), "$"+envStateDir, exitEnv
@@ -51,9 +54,8 @@ func (c *ctx) open(flagDir string) (*site, error) {
 		dir = filepath.Join(c.Dir, dir)
 	}
 	dir = filepath.Clean(dir)
-	if rel, err := filepath.Rel(realPath(repo.Root()), realPath(dir)); err == nil && !filepath.IsAbs(rel) &&
-		rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		if rel = filepath.ToSlash(rel); rel != ".metron" && !strings.HasPrefix(rel, ".metron/") {
+	if rel, inside := s.relative(dir); inside {
+		if rel != ".metron" && !strings.HasPrefix(rel, ".metron/") {
 			return nil, fail(status, "the state directory %s, set by %s, lies inside the working tree but outside .metron/, so every write to it would make the tree unclean: use a directory outside the repository, or leave the default .metron/state",
 				dir, from)
 		}
@@ -64,7 +66,9 @@ func (c *ctx) open(flagDir string) (*site, error) {
 }
 
 // realPath resolves the symbolic links in the longest prefix of path that
-// exists, so that paths can be compared with the repository root git reports.
+// exists, so that two spellings of one path compare equal: macOS reaches its
+// temporary directories through a link (/var is /private/var), and on Windows
+// it also turns short (8.3) names into long ones, which git reports.
 func realPath(path string) string {
 	rest := ""
 	for p := path; ; {
@@ -80,13 +84,26 @@ func realPath(path string) string {
 	}
 }
 
-// show renders a path for output: relative to the repository root, with
-// forward slashes, when it lies inside the repository.
-func (s *site) show(path string) string {
-	if rel, err := filepath.Rel(s.repo.Root(), path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return filepath.ToSlash(rel)
+// relative returns path relative to the repository root, with forward
+// slashes, and whether it lies inside the repository. Both are compared with
+// their symbolic links resolved, so any spelling of a path gives the same
+// answer. Every relation of a path to the repository goes through it.
+func (s *site) relative(path string) (string, bool) {
+	rel, err := filepath.Rel(s.root, realPath(filepath.Clean(path)))
+	if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
 	}
-	return filepath.ToSlash(path)
+	return filepath.ToSlash(rel), true
+}
+
+// show renders a path for output: relative to the repository root, with
+// forward slashes, when it lies inside the repository, and as given
+// otherwise.
+func (s *site) show(path string) string {
+	if rel, ok := s.relative(path); ok {
+		return rel
+	}
+	return filepath.Clean(path)
 }
 
 // metron renders a metron command line that reaches the same state directory.
