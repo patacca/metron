@@ -32,11 +32,11 @@ and may not claim about security.
 
 ## Conventions
 
-- **File length.** Keep a file to about 700 lines. This is a strong guideline,
-  not a hard limit: when a hand-written file grows past it, split it along a
+- **File length.** Keep a code file to about 700 lines. This is a strong
+  guideline, not a hard limit: when a file grows past it, split it along a
   real seam, one responsibility per file, rather than at an arbitrary line. It
-  applies to source, tests and documentation. It does not apply to data:
-  schemas, fixtures and golden files stay whole.
+  applies to code, tests included. It does not apply to Markdown or to data
+  such as schemas, fixtures and golden files.
 - JSON members are `snake_case`. Decode strictly: unknown members are errors.
 - Identifiers a user sees (stages, tiers, domains, event types) are the
   constants in `internal/core`; never retype the strings.
