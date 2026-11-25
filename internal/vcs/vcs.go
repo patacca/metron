@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/patacca/metron/internal/canon"
+	"github.com/patacca/metron/internal/core"
 )
 
 // ExcludedDir is the directory, relative to the repository root, that the
@@ -136,21 +137,54 @@ func (r *Repo) DirtyPaths() ([]string, error) {
 	return paths, nil
 }
 
-// CommitsSince returns the full hashes of the commits reachable from HEAD and
-// not from base, newest first.
-func (r *Repo) CommitsSince(base string) ([]string, error) {
+// CommitsSince returns the commits reachable from HEAD and not from base,
+// newest first. A commit is substantive when its candidate digest differs
+// from its first parent's, merge commits included; a root commit is
+// substantive when its tree has an entry outside .metron/. A commit that
+// touches only .metron/, or nothing, is not.
+func (r *Repo) CommitsSince(base string) ([]core.Commit, error) {
 	if !isHash(base) {
 		return nil, fmt.Errorf("invalid base commit %q: expected a full hexadecimal commit hash", base)
 	}
-	out, err := git(r.root, "rev-list", "HEAD", "^"+base+"^{commit}")
+	// Each line is a commit followed by its parents.
+	out, err := git(r.root, "rev-list", "--parents", "HEAD", "^"+base+"^{commit}")
 	if err != nil {
 		return nil, err
 	}
-	commits := strings.Fields(string(out))
-	for _, c := range commits {
-		if !isHash(c) {
-			return nil, fmt.Errorf("git rev-list returned %q, not a commit hash", c)
+	// Digests are cached: each costs one git process, and a commit's first
+	// parent is usually the next commit listed.
+	digests := map[string]string{}
+	digestOf := func(commit string) (string, error) {
+		if d, ok := digests[commit]; ok {
+			return d, nil
 		}
+		d, err := r.CandidateDigest(commit)
+		digests[commit] = d
+		return d, err
+	}
+	commits := []core.Commit{}
+	for _, line := range strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		hashes := strings.Fields(line)
+		for _, h := range hashes {
+			if !isHash(h) {
+				return nil, fmt.Errorf("git rev-list returned %q, not a commit hash", h)
+			}
+		}
+		digest, err := digestOf(hashes[0])
+		if err != nil {
+			return nil, err
+		}
+		// A root commit is compared with an empty tree.
+		parent := canon.Digest(nil)
+		if len(hashes) > 1 {
+			if parent, err = digestOf(hashes[1]); err != nil {
+				return nil, err
+			}
+		}
+		commits = append(commits, core.Commit{Hash: hashes[0], Substantive: digest != parent})
 	}
 	return commits, nil
 }

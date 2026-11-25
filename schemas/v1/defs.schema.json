@@ -438,6 +438,12 @@
         },
         "finding": {
           "$ref": "#/$defs/findingInput"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/findingEvent"
+          }
         }
       },
       "required": [
@@ -497,6 +503,51 @@
         "round",
         "reason",
         "open"
+      ],
+      "additionalProperties": false
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "ledger.initialized",
+        "contract.pinned",
+        "evidence.recorded",
+        "round.opened",
+        "packet.issued",
+        "packet.voided",
+        "report.accepted",
+        "verdict.recorded",
+        "finding.opened",
+        "finding.fix-claimed",
+        "finding.fix-confirmed",
+        "finding.fix-rejected",
+        "finding.reopened",
+        "finding.withdrawn",
+        "finding.reclassified",
+        "escalation.raised",
+        "escalation.resolved",
+        "directive.issued"
+      ]
+    },
+    "findingEvent": {
+      "type": "object",
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/eventType"
+        },
+        "round": {
+          "$ref": "#/$defs/count"
+        },
+        "packet": {
+          "$ref": "#/$defs/packetId"
+        },
+        "note": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "event",
+        "round"
       ],
       "additionalProperties": false
     }

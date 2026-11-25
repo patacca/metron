@@ -1,9 +1,10 @@
-# Auditor brief for packet P-0012
+# Auditor brief for packet P-0021
 
 ## Your situation
 
-You are the auditor of Courier, in round 5 of the `pilot` stage.
-The current candidate is this commit:
+You are the auditor of Courier.
+You have been called in after round 5, under a contract that targets
+the `pilot` stage. The current candidate is this commit:
 
 - commit `e7f9a1b3c5d70246813579bdf02468ace1357924`
 - candidate digest `sha256:5555555555555555555555555555555555555555555555555555555555555555`
@@ -32,7 +33,8 @@ for reading.
 
 ## The escalations in this packet
 
-Each kind of escalation asks a different question.
+Each kind of escalation asks a different question, and each escalation gets
+its own resolution in your report, even where several share a cause.
 
 ### `dispute`: `E-0006`
 
@@ -102,7 +104,7 @@ them.
 ## Adjudication
 
 You must decide on exactly these findings, and on no other:
-`F-0002` and `F-0009`. For each one, give one decision:
+`F-0008` and `F-0009`. For each one, give one decision:
 
 - `uphold`: the finding stands as recorded. A blocking finding must then be
   fixed.
@@ -143,11 +145,18 @@ nothing by itself.
 
 ## How to investigate
 
-You have the whole ledger: every finding with its status, recurrences and
-latest fix, every earlier round and its verdict, and every decision so far.
-Use the repository's history as well, since the commits between rounds show
-what each fix actually changed. Base your conclusions on evidence you can
-point to, as a reviewer must, and say where the evidence is incomplete.
+You have the whole ledger. Every finding comes with its status, recurrences,
+latest fix and history, and the history records each step with what was said
+at the time: fix summaries, the evidence with which verifiers confirmed or
+rejected them, the justifications for reopenings, earlier disputes and
+contradictions with their resolutions, and the rationale of every withdrawal
+and reclassification. The packet also lists the rounds of this stage with
+their verdicts, and every decision so far with the packet it came from. Read
+the earlier rationales rather than reconstructing them, and check them rather
+than taking them as given. Use the repository's history as well, since the
+commits between rounds show what each fix actually changed. Base your
+conclusions on evidence you can point to, as a reviewer must, and say where
+the evidence is incomplete.
 
 ## Leave the candidate untouched
 
@@ -170,7 +179,7 @@ answers and who wrote it:
 | Member | Content |
 | --- | --- |
 | `schema` | `metron.report/v1` |
-| `packet` | `P-0012`, the packet you are answering |
+| `packet` | `P-0021`, the packet you are answering |
 | `role` | `auditor` |
 | `author` | Who you are. `id` is a stable name for whoever acts in this role; Metron enforces role separation on it. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |
@@ -182,23 +191,22 @@ The body has these members:
 
 | Member | Content |
 | --- | --- |
-| `analysis` | Your investigation of every escalation in this packet, each addressed by its identifier: what you examined, what you found, and the evidence for it. |
-| `conclusion` | For each escalation, by its identifier, what you concluded and what the loop must do next. When Metron accepts the report, it discharges every escalation in this packet and records this conclusion as each one's resolution. |
+| `resolutions` | Exactly one entry per escalation in this packet, and none for any other. Each has `escalation` (its `E-` identifier), `analysis` (what you examined, what you found, and the evidence for it) and `conclusion` (what you concluded and what the loop must do next). When Metron accepts the report, each conclusion is recorded as its escalation's resolution, discharges it, and is carried into every later packet as a binding decision, so write it to be read on its own. |
 | `adjudications` | One entry per adjudicable finding, with `finding` (its `F-` identifier), `decision` (`uphold`, `withdraw` or `reclassify`), `tier` (the new tier; present for, and only for, `reclassify`) and `rationale` (why, with the evidence you checked). Left out when there is nothing to adjudicate. |
 | `directives` | Optional. Binding guidance for every later packet, one statement per entry. |
 | `contract_recommendations` | Optional. Changes to the contract you recommend to governance, one per entry, each with its reason. |
 
 ---
 
-# Packet P-0012
+# Packet P-0021
 
-What follows is the content of packet P-0012, laid out for reading: the
+What follows is the content of packet P-0021, laid out for reading: the
 information the brief above refers to.
 
 ## Identification
 
-- Packet: `P-0012`, issued 2026-11-20T14:03:09Z under protocol `metron.protocol/v1`
-- Action: `audit`, for the `auditor`, in round 5 of the stage
+- Packet: `P-0021`, issued 2026-11-20T14:03:09Z under protocol `metron.protocol/v1`
+- Action: `audit`, for the `auditor`, round 5
 - Candidate: commit `e7f9a1b3c5d70246813579bdf02468ace1357924`, digest `sha256:5555555555555555555555555555555555555555555555555555555555555555`
 - Contract digest: `sha256:abababababababababababababababababababababababababababababababab`
 - Read-only: yes, the candidate must not change
@@ -367,16 +375,17 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 ## Convergence thresholds
 
 - Root-cause analysis: required for a finding's next fix once its rejected fixes and reopenings reach 2.
-- Convergence analysis: once 3 consecutive rounds have ended without GREEN.
+- Convergence analysis: once per streak, when consecutive rounds without GREEN reach 3.
 - Independent process audit: each time the count of consecutive rounds without GREEN reaches a multiple of 5.
+- A streak of rounds without GREEN ends with a GREEN verdict, and its count restarts when a pin changes the stage.
 
 ## Escalations to discharge
 
 ### E-0006: `dispute`, raised in round 5
 
-the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk.
+the implementer disputes F-0008: the envelope says nothing about subscriber latency, so slow subscribers are outside it
 
-- Findings: `F-0002`
+- Findings: `F-0008`
 
 ### E-0007: `contradiction`, raised in round 5
 
@@ -386,49 +395,49 @@ F-0009 declares that it reverses the resolution of F-0001
 
 ### E-0008: `component-churn`, raised in round 5
 
-internal/delivery/retry.go was fixed in rounds 1, 3 and 4.
+component "internal/delivery/retry.go" was named in fixes in 3 distinct rounds of stage pilot
 
+- Findings: `F-0001`
 - Components: `internal/delivery/retry.go`
 
 ### E-0009: `regression-spiral`, raised in round 4
 
-The verification of round 4 confirmed one fix and found two blocking regressions.
+verification P-0018 found 2 blocking regressions and confirmed 1 fixes
 
 ### E-0010: `process-audit`, raised in round 5
 
-Five consecutive rounds have ended without GREEN.
-
-- Requirements: `REQ-7` and `REQ-8`
+5 consecutive rounds of stage pilot ended without GREEN
 
 ## Findings to adjudicate
 
-### F-0002: Each accepted event is written with its own fsync
+### F-0008: All deliveries share an HTTP client limited to two connections
 
 - Tier `T1`, in `performance`
-- Status `open`; opened in round 1 by the reviewer; recurrences: 0
+- Status `open`; opened in round 4 by the reviewer; recurrences: 0
 - Disputed once; cannot be disputed again
-- Components: `internal/store/append.go`
+- Components: `internal/delivery/client.go`
 - Requirement: `REQ-9`
 
-Description: Appends are synced one at a time, which caps throughput at the disk's sync rate.
+Description: The shared client allows two connections, so deliveries to fast subscribers queue behind slow ones.
 
-Evidence: A benchmark on the reference machine reaches 400 appends per second.
+Evidence: With 20 subscribers of which 2 respond in 2 s, TestLatencyBudget measures a 99th percentile of 1.8 s.
 
-Impact: Throughput headroom above the envelope's 50 events per second is smaller than it could be.
+Impact: Latency exceeds the 500 ms budget whenever two subscribers are slow.
 
-Blocking rationale: Latency could exceed the budget under bursts.
+Blocking rationale: Two of the pilot's subscribers are batch systems known to respond slowly.
 
-Verification: TestLatencyBudget passes at 200 events per second.
+Verification: TestLatencyBudget with two 2-second subscribers stays under 500 ms at the 99th percentile.
 
 Proportionality:
 
-- Proposed change: Group appends that arrive within 5 ms into one sync.
-- Regression risk: Group commit changes the durability point of each event.
-- Deferral cost: None identified beyond the pilot.
+- Proposed change: Size the connection pool to the number of subscribers.
+- Regression risk: More open connections, bounded by the envelope's 200 subscribers.
+- Deferral cost: Latency failures during the pilot would be blamed on subscribers and hide the cause.
 
-Expected benefit: Roughly eight times the append throughput.
+History, oldest first:
 
-Deferral rationale: The envelope's load is an eighth of the measured capacity.
+- Round 4, `finding.opened` in packet `P-0017`
+- Round 5, `escalation.raised` in packet `P-0020`: the implementer disputes F-0008: the envelope says nothing about subscriber latency, so slow subscribers are outside it
 
 ### F-0009: Retry state for a dead subscriber grows for an hour
 
@@ -447,6 +456,11 @@ Impact: Memory is not bounded under sustained load with one dead subscriber, whi
 Blocking rationale: A dead subscriber during the pilot would exhaust the instance's memory.
 
 Verification: The REQ-7 soak test passes with one subscriber that never recovers.
+
+History, oldest first:
+
+- Round 5, `finding.opened` in packet `P-0019`
+- Round 5, `escalation.raised` in packet `P-0019`: F-0009 declares that it reverses the resolution of F-0001
 
 ## Other findings in the ledger
 
@@ -474,6 +488,47 @@ Latest fix: Retry until one hour has elapsed since the first attempt.
 
 Tests: Extended TestSubscriberRecovery to a one-hour simulated outage.
 
+History, oldest first:
+
+- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `finding.fix-claimed` in packet `P-0002`: Retry until one hour has elapsed since the first attempt.
+- Round 1, `finding.fix-confirmed` in packet `P-0004`: TestSubscriberRecovery passes with a one-hour simulated outage; the loop now compares elapsed time, not attempts.
+
+### F-0002: Each accepted event is written with its own fsync
+
+- Tier `T2`, reclassified from `T1`, in `performance`
+- Status `open`; opened in round 1 by the reviewer; recurrences: 0
+- Disputed once; cannot be disputed again
+- Components: `internal/store/append.go`
+- Requirement: `REQ-9`
+
+Description: Appends are synced one at a time, which caps throughput at the disk's sync rate.
+
+Evidence: A benchmark on the reference machine reaches 400 appends per second.
+
+Impact: Throughput headroom above the envelope's 50 events per second is smaller than it could be.
+
+Blocking rationale: Latency could exceed the budget under bursts.
+
+Verification: TestLatencyBudget passes at 200 events per second.
+
+Proportionality:
+
+- Proposed change: Group appends that arrive within 5 ms into one sync.
+- Regression risk: Group commit changes the durability point of each event.
+- Deferral cost: None identified beyond the pilot.
+
+Expected benefit: Roughly eight times the append throughput.
+
+Deferral rationale: The envelope's load is an eighth of the measured capacity.
+
+History, oldest first:
+
+- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `escalation.raised` in packet `P-0002`: the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk
+- Round 1, `escalation.resolved` in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- Round 1, `finding.reclassified` in packet `P-0003`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
+
 ### F-0003: The 5-minute backoff cap may delay recovery for long outages
 
 - Tier `T3`, in `reliability`
@@ -491,6 +546,10 @@ Evidence needed: Outage durations of pilot subscribers.
 
 Reassess when: Two weeks of pilot traffic have been delivered.
 
+History, oldest first:
+
+- Round 1, `finding.opened` in packet `P-0001`
+
 ## Rounds of this stage
 
 | Round | Commit | Verdict | Reviewer |
@@ -503,14 +562,20 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 
 ## Binding decisions
 
-- `directive` by `auditor`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
-- `resolution` by `governance`, from `E-0002`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
+Audit directives and escalation resolutions recorded so far, oldest first.
+They bind every role.
+
+- A `resolution` of `E-0001` by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
+- A `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
+- A `resolution` of `E-0002` by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- A `resolution` of `E-0003` by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- A `resolution` of `E-0004` by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
 
 ---
 
 # Report skeleton
 
-This skeleton already has the right shape for packet P-0012. Fill in every
+This skeleton already has the right shape for packet P-0021. Fill in every
 empty value as the brief describes, add the entries the brief allows, and
 remove nothing that is required. Metron rejects a report that still has an
 empty value where one is required.
@@ -518,18 +583,43 @@ empty value where one is required.
 ```json
 {
   "schema": "metron.report/v1",
-  "packet": "P-0012",
+  "packet": "P-0021",
   "role": "auditor",
   "author": {
     "id": "",
     "kind": ""
   },
   "body": {
-    "analysis": "",
-    "conclusion": "",
+    "resolutions": [
+      {
+        "escalation": "E-0006",
+        "analysis": "",
+        "conclusion": ""
+      },
+      {
+        "escalation": "E-0007",
+        "analysis": "",
+        "conclusion": ""
+      },
+      {
+        "escalation": "E-0008",
+        "analysis": "",
+        "conclusion": ""
+      },
+      {
+        "escalation": "E-0009",
+        "analysis": "",
+        "conclusion": ""
+      },
+      {
+        "escalation": "E-0010",
+        "analysis": "",
+        "conclusion": ""
+      }
+    ],
     "adjudications": [
       {
-        "finding": "F-0002",
+        "finding": "F-0008",
         "decision": "",
         "rationale": ""
       },

@@ -140,8 +140,8 @@ const (
 
 // AuditorBody is an auditor's report discharging a packet's escalations.
 type AuditorBody struct {
-	Analysis   string `json:"analysis"`
-	Conclusion string `json:"conclusion"`
+	// Resolutions has exactly one entry per escalation in the packet.
+	Resolutions []EscalationResolution `json:"resolutions"`
 	// Adjudications has exactly one entry per adjudicable finding.
 	Adjudications []Adjudication `json:"adjudications,omitempty"`
 	// Directives are binding guidance carried into every later packet.
@@ -149,6 +149,14 @@ type AuditorBody struct {
 	// ContractRecommendations are suggestions for governance. They change
 	// nothing by themselves.
 	ContractRecommendations []string `json:"contract_recommendations,omitempty"`
+}
+
+// EscalationResolution is an auditor's analysis and conclusion for one
+// escalation of the packet. The conclusion discharges it.
+type EscalationResolution struct {
+	Escalation string `json:"escalation"`
+	Analysis   string `json:"analysis"`
+	Conclusion string `json:"conclusion"`
 }
 
 // Adjudication is an auditor's decision on one finding.

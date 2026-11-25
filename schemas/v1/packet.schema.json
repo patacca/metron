@@ -150,6 +150,9 @@
         "escalation": {
           "$ref": "defs.schema.json#/$defs/escalationId"
         },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
         "by": {
           "$ref": "defs.schema.json#/$defs/role"
         },

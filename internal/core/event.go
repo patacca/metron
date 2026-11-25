@@ -87,8 +87,11 @@ type PacketIssued struct {
 	Action    Step      `json:"action"`
 	Round     int       `json:"round"`
 	Candidate Candidate `json:"candidate"`
-	Contract  string    `json:"contract"`
-	Protocol  string    `json:"protocol"`
+	// Base is the candidate the round reviewed. It is set exactly when the
+	// packet has a base: for fix and verify packets.
+	Base     *Candidate `json:"base,omitempty"`
+	Contract string     `json:"contract"`
+	Protocol string     `json:"protocol"`
 	// Digest is the digest of the packet's canonical JSON form.
 	Digest            string   `json:"digest"`
 	Subjects          []string `json:"subjects,omitempty"`
@@ -197,14 +200,16 @@ type FindingReclassified struct {
 
 // EscalationRaised is the payload of EventEscalationRaised.
 type EscalationRaised struct {
-	ID           string         `json:"id"`
-	Kind         EscalationKind `json:"kind"`
-	Owner        Role           `json:"owner"`
-	Round        int            `json:"round"`
-	Reason       string         `json:"reason"`
-	Findings     []string       `json:"findings,omitempty"`
-	Components   []string       `json:"components,omitempty"`
-	Requirements []string       `json:"requirements,omitempty"`
+	ID    string         `json:"id"`
+	Kind  EscalationKind `json:"kind"`
+	Owner Role           `json:"owner"`
+	Round int            `json:"round"`
+	// Packet is the packet whose report raised it.
+	Packet       string   `json:"packet"`
+	Reason       string   `json:"reason"`
+	Findings     []string `json:"findings,omitempty"`
+	Components   []string `json:"components,omitempty"`
+	Requirements []string `json:"requirements,omitempty"`
 }
 
 // EscalationResolved is the payload of EventEscalationResolved.

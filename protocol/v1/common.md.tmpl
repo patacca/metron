@@ -15,14 +15,6 @@ answers and who wrote it:
 | `body` | Your answer, described below |
 {{- end}}
 
-{{- define "when" -}}
-{{if .Round}}in round {{.Round}} of the `{{.Contract.Stage}}` stage{{else}}at the start of the `{{.Contract.Stage}}` stage{{end}}
-{{- end}}
-
-{{- define "last-review" -}}
-{{if .Round}}This round's review{{else}}The most recent review, held before the contract targeted the `{{.Contract.Stage}}` stage,{{end}}
-{{- end}}
-
 {{- define "read-only" -}}
 ## Leave the candidate untouched
 

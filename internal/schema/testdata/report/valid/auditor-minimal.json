@@ -7,7 +7,12 @@
     "kind": "human"
   },
   "body": {
-    "analysis": "Churn in internal/ledger is real.",
-    "conclusion": "Redesign the locking."
+    "resolutions": [
+      {
+        "escalation": "E-0002",
+        "analysis": "Churn in internal/ledger is real.",
+        "conclusion": "Redesign the locking."
+      }
+    ]
   }
 }

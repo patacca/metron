@@ -381,11 +381,11 @@
     "auditorBody": {
       "type": "object",
       "properties": {
-        "analysis": {
-          "$ref": "defs.schema.json#/$defs/text"
-        },
-        "conclusion": {
-          "$ref": "defs.schema.json#/$defs/text"
+        "resolutions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/escalationResolution"
+          }
         },
         "adjudications": {
           "type": "array",
@@ -401,6 +401,25 @@
         }
       },
       "required": [
+        "resolutions"
+      ],
+      "additionalProperties": false
+    },
+    "escalationResolution": {
+      "type": "object",
+      "properties": {
+        "escalation": {
+          "$ref": "defs.schema.json#/$defs/escalationId"
+        },
+        "analysis": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
+        "conclusion": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "escalation",
         "analysis",
         "conclusion"
       ],

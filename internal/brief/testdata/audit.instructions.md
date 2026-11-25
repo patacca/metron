@@ -1,9 +1,10 @@
-# Auditor brief for packet P-0012
+# Auditor brief for packet P-0021
 
 ## Your situation
 
-You are the auditor of Courier, in round 5 of the `pilot` stage.
-The current candidate is this commit:
+You are the auditor of Courier.
+You have been called in after round 5, under a contract that targets
+the `pilot` stage. The current candidate is this commit:
 
 - commit `e7f9a1b3c5d70246813579bdf02468ace1357924`
 - candidate digest `sha256:5555555555555555555555555555555555555555555555555555555555555555`
@@ -32,7 +33,8 @@ for reading.
 
 ## The escalations in this packet
 
-Each kind of escalation asks a different question.
+Each kind of escalation asks a different question, and each escalation gets
+its own resolution in your report, even where several share a cause.
 
 ### `dispute`: `E-0006`
 
@@ -102,7 +104,7 @@ them.
 ## Adjudication
 
 You must decide on exactly these findings, and on no other:
-`F-0002` and `F-0009`. For each one, give one decision:
+`F-0008` and `F-0009`. For each one, give one decision:
 
 - `uphold`: the finding stands as recorded. A blocking finding must then be
   fixed.
@@ -143,11 +145,18 @@ nothing by itself.
 
 ## How to investigate
 
-You have the whole ledger: every finding with its status, recurrences and
-latest fix, every earlier round and its verdict, and every decision so far.
-Use the repository's history as well, since the commits between rounds show
-what each fix actually changed. Base your conclusions on evidence you can
-point to, as a reviewer must, and say where the evidence is incomplete.
+You have the whole ledger. Every finding comes with its status, recurrences,
+latest fix and history, and the history records each step with what was said
+at the time: fix summaries, the evidence with which verifiers confirmed or
+rejected them, the justifications for reopenings, earlier disputes and
+contradictions with their resolutions, and the rationale of every withdrawal
+and reclassification. The packet also lists the rounds of this stage with
+their verdicts, and every decision so far with the packet it came from. Read
+the earlier rationales rather than reconstructing them, and check them rather
+than taking them as given. Use the repository's history as well, since the
+commits between rounds show what each fix actually changed. Base your
+conclusions on evidence you can point to, as a reviewer must, and say where
+the evidence is incomplete.
 
 ## Leave the candidate untouched
 
@@ -170,7 +179,7 @@ answers and who wrote it:
 | Member | Content |
 | --- | --- |
 | `schema` | `metron.report/v1` |
-| `packet` | `P-0012`, the packet you are answering |
+| `packet` | `P-0021`, the packet you are answering |
 | `role` | `auditor` |
 | `author` | Who you are. `id` is a stable name for whoever acts in this role; Metron enforces role separation on it. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |
@@ -182,8 +191,7 @@ The body has these members:
 
 | Member | Content |
 | --- | --- |
-| `analysis` | Your investigation of every escalation in this packet, each addressed by its identifier: what you examined, what you found, and the evidence for it. |
-| `conclusion` | For each escalation, by its identifier, what you concluded and what the loop must do next. When Metron accepts the report, it discharges every escalation in this packet and records this conclusion as each one's resolution. |
+| `resolutions` | Exactly one entry per escalation in this packet, and none for any other. Each has `escalation` (its `E-` identifier), `analysis` (what you examined, what you found, and the evidence for it) and `conclusion` (what you concluded and what the loop must do next). When Metron accepts the report, each conclusion is recorded as its escalation's resolution, discharges it, and is carried into every later packet as a binding decision, so write it to be read on its own. |
 | `adjudications` | One entry per adjudicable finding, with `finding` (its `F-` identifier), `decision` (`uphold`, `withdraw` or `reclassify`), `tier` (the new tier; present for, and only for, `reclassify`) and `rationale` (why, with the evidence you checked). Left out when there is nothing to adjudicate. |
 | `directives` | Optional. Binding guidance for every later packet, one statement per entry. |
 | `contract_recommendations` | Optional. Changes to the contract you recommend to governance, one per entry, each with its reason. |

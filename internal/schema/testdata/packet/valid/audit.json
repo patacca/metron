@@ -173,7 +173,26 @@
         "risk": "RISK-1",
         "blocking_rationale": "A pilot with partner books must not lose transactions.",
         "verification": "TestConcurrentPost passes 100 consecutive runs under -race."
-      }
+      },
+      "history": [
+        {
+          "event": "finding.opened",
+          "round": 1,
+          "packet": "P-0001",
+          "note": "Reported by the reviewer."
+        },
+        {
+          "event": "finding.fix-claimed",
+          "round": 2,
+          "packet": "P-0003"
+        },
+        {
+          "event": "finding.fix-rejected",
+          "round": 2,
+          "packet": "P-0004",
+          "note": "The race remains."
+        }
+      ]
     }
   ],
   "history": [
@@ -199,7 +218,8 @@
       "source": "directive",
       "escalation": "E-0001",
       "by": "auditor",
-      "text": "Every fix to internal/ledger includes a race test."
+      "text": "Every fix to internal/ledger includes a race test.",
+      "packet": "P-0006"
     },
     {
       "source": "resolution",

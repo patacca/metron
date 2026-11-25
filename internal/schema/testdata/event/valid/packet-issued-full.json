@@ -12,6 +12,10 @@
       "commit": "c4c1d611edf69a251edbb091082bdc3004b83869",
       "digest": "sha256:c4c1d611edf69a251edbb091082bdc3004b8386975599ca840e5b72e86476556"
     },
+    "base": {
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
     "contract": "sha256:2b774ade959f0c8c4463752c219f43b13352eeebdf3fd4f4031e74e0d961256f",
     "protocol": "metron.protocol/v1",
     "digest": "sha256:c48e8d2fd69d694f90962ad5c6da898c6e83f070c32804601d4c8b4b02854127",

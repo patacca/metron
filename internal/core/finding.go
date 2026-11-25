@@ -65,7 +65,8 @@ type Finding struct {
 	// Tier is the current tier. It differs from Input.Tier after an auditor
 	// reclassifies the finding.
 	Tier Tier `json:"tier"`
-	// Round is the round in which the finding was opened.
+	// Round is the round in which the finding was opened. Round numbers run
+	// from 1 across the whole ledger.
 	Round int `json:"round"`
 	// Source is the role that reported it.
 	Source Role `json:"source"`
@@ -81,6 +82,20 @@ type Finding struct {
 	Fix *Fix `json:"fix,omitempty"`
 	// Input is the finding as reported.
 	Input FindingInput `json:"finding"`
+	// History lists the steps the finding went through, in ledger order.
+	History []FindingEvent `json:"history,omitempty"`
+}
+
+// FindingEvent is one step in a finding's history.
+type FindingEvent struct {
+	// Event is the ledger event type that recorded the step.
+	Event EventType `json:"event"`
+	// Round is the latest round at that moment; 0 before the first round.
+	Round int `json:"round"`
+	// Packet is the packet whose report caused the step.
+	Packet string `json:"packet,omitempty"`
+	// Note is the evidence, justification or rationale recorded with it.
+	Note string `json:"note,omitempty"`
 }
 
 // Fix is an implementer's claim that a finding is resolved.
@@ -103,7 +118,8 @@ type Escalation struct {
 	ID    string         `json:"id"`
 	Kind  EscalationKind `json:"kind"`
 	Owner Role           `json:"owner"`
-	// Round is the round during which it was raised.
+	// Round is the round during which it was raised, numbered across the
+	// whole ledger.
 	Round  int    `json:"round"`
 	Reason string `json:"reason"`
 	// Findings, Components and Requirements are the subjects, when the kind

@@ -1,9 +1,9 @@
-# Reviewer brief for packet P-0012
+# Reviewer brief for packet P-0013
 
 ## Your situation
 
-You are the reviewer of Courier, in round 3 of the `pilot` stage.
-The candidate is this commit:
+You are the reviewer of Courier for round 3, under
+a contract that targets the `pilot` stage. The candidate is this commit:
 
 - commit `c3e5a7b9d1f30246813579bdf02468ace1357902`
 - candidate digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`
@@ -20,10 +20,10 @@ fixes; an auditor, who steps in when the loop stops converging; and
 governance, which owns the acceptance contract.
 
 Everything this brief refers to is in the packet: the contract, the latest
-check results (`evidence`), every finding in the ledger (`findings`), the
-earlier rounds of this stage (`history`) and the binding decisions
-(`decisions`). If you received this brief as a prompt, the same information
-follows it, laid out for reading.
+check results (`evidence`), every finding in the ledger with its history
+(`findings`), the earlier rounds of this stage (`history`) and the binding
+decisions (`decisions`). If you received this brief as a prompt, the same
+information follows it, laid out for reading.
 
 ## What you are deciding
 
@@ -195,10 +195,15 @@ yet, not for mandatory conditions nobody managed to check.
 Give every applicable requirement exactly one status:
 
 - `satisfied`: you have evidence that its criterion holds for this candidate.
-- `violated`: you have evidence that it does not. A violated requirement must
-  be cited by at least one blocking finding that this report opens or reopens,
-  so that the implementer has something to act on.
+- `violated`: you have evidence that it does not.
 - `unverified`: you could not establish either.
+
+The requirement statuses and the blocking findings must tell the same story.
+A violated requirement must be cited by at least one blocking finding that
+this report opens or reopens, so that the implementer has something to act
+on. Conversely, a requirement that such a finding cites must be `violated`:
+if a blocking finding shows that a requirement does not hold, the requirement
+cannot be `satisfied` or `unverified` in the same report.
 
 Where a requirement has a check command, its latest result on this candidate
 is in the packet. A passing check is necessary for the gate, but it does not
@@ -222,6 +227,10 @@ otherwise a loop can be kept going indefinitely by re-arguing settled points.
   | `requirement-changed` | A requirement or assumption the resolution relied on has changed |
   | `contract-conflict` | The resolution conflicts with the pinned contract |
 
+  Each finding's `history` records the steps behind its resolution, with what
+  was said at the time: the fix's summary and the evidence with which the
+  verifier confirmed it. Read that evidence before you call a verification
+  invalid, and say in your justification what it missed.
 - A finding that is still unresolved is already recorded; do not report it
   again. If you find something connected to it, name it in `related`.
 - You cannot change the tier of a recorded finding; only an auditor can. If an
@@ -235,8 +244,9 @@ otherwise a loop can be kept going indefinitely by re-arguing settled points.
 - A `withdrawn` finding cannot be reopened: an auditor decided it was wrong.
   If you have evidence that the auditor did not have, open a new finding and
   name the withdrawn one in `contradicts`, so that an auditor decides again.
-- The packet's decisions (audit directives and governance resolutions) bind
-  you. If you have evidence that one rests on something false, report that
+- The packet's decisions bind you: audit directives, and the resolutions of
+  earlier escalations by an auditor or by governance, each with where it came
+  from. If you have evidence that one rests on something false, report that
   evidence through the channels above rather than acting against the
   decision.
 
@@ -267,7 +277,7 @@ answers and who wrote it:
 | Member | Content |
 | --- | --- |
 | `schema` | `metron.report/v1` |
-| `packet` | `P-0012`, the packet you are answering |
+| `packet` | `P-0013`, the packet you are answering |
 | `role` | `reviewer` |
 | `author` | Who you are. `id` is a stable name for whoever acts in this role; Metron enforces role separation on it. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |
@@ -328,15 +338,15 @@ else.
 
 ---
 
-# Packet P-0012
+# Packet P-0013
 
-What follows is the content of packet P-0012, laid out for reading: the
+What follows is the content of packet P-0013, laid out for reading: the
 information the brief above refers to.
 
 ## Identification
 
-- Packet: `P-0012`, issued 2026-11-20T14:03:09Z under protocol `metron.protocol/v1`
-- Action: `review`, for the `reviewer`, in round 3 of the stage
+- Packet: `P-0013`, issued 2026-11-20T14:03:09Z under protocol `metron.protocol/v1`
+- Action: `review`, for the `reviewer`, round 3
 - Candidate: commit `c3e5a7b9d1f30246813579bdf02468ace1357902`, digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`
 - Contract digest: `sha256:abababababababababababababababababababababababababababababababab`
 - Read-only: yes, the candidate must not change
@@ -505,8 +515,9 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 ## Convergence thresholds
 
 - Root-cause analysis: required for a finding's next fix once its rejected fixes and reopenings reach 2.
-- Convergence analysis: once 3 consecutive rounds have ended without GREEN.
+- Convergence analysis: once per streak, when consecutive rounds without GREEN reach 3.
 - Independent process audit: each time the count of consecutive rounds without GREEN reaches a multiple of 5.
+- A streak of rounds without GREEN ends with a GREEN verdict, and its count restarts when a pin changes the stage.
 
 ## Findings in the ledger
 
@@ -533,6 +544,12 @@ Latest fix: Retry until one hour has elapsed since the first attempt.
 - Components: `internal/delivery/retry.go`
 
 Tests: Extended TestSubscriberRecovery to a one-hour simulated outage.
+
+History, oldest first:
+
+- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `finding.fix-claimed` in packet `P-0002`: Retry until one hour has elapsed since the first attempt.
+- Round 1, `finding.fix-confirmed` in packet `P-0004`: TestSubscriberRecovery passes with a one-hour simulated outage; the loop now compares elapsed time, not attempts.
 
 ### F-0002: Each accepted event is written with its own fsync
 
@@ -562,6 +579,13 @@ Expected benefit: Roughly eight times the append throughput.
 
 Deferral rationale: The envelope's load is an eighth of the measured capacity.
 
+History, oldest first:
+
+- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `escalation.raised` in packet `P-0002`: the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk
+- Round 1, `escalation.resolved` in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- Round 1, `finding.reclassified` in packet `P-0003`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
+
 ### F-0003: The 5-minute backoff cap may delay recovery for long outages
 
 - Tier `T3`, in `reliability`
@@ -579,10 +603,14 @@ Evidence needed: Outage durations of pilot subscribers.
 
 Reassess when: Two weeks of pilot traffic have been delivered.
 
+History, oldest first:
+
+- Round 1, `finding.opened` in packet `P-0001`
+
 ### F-0004: An event acknowledged before its append is synced can be lost on a crash
 
 - Tier `T1`, in `data-integrity`
-- Status `resolved`; opened in round 1 by the reviewer; recurrences: 2
+- Status `resolved`; opened in round 1 by the reviewer; recurrences: 3
 - Root-cause analysis required for its next fix
 - Components: `internal/store/append.go` and `internal/delivery/accept.go`
 - Requirement: `REQ-4`
@@ -602,9 +630,22 @@ Latest fix: Acknowledge only after the append is synced.
 - Commits: `c3e5a7b9d1f30246813579bdf02468ace1357902`
 - Components: `internal/delivery/accept.go` and `internal/store/append.go`
 
-Root cause: The handler treated the return of append as durability. Acknowledgement now waits for the sync, and the earlier fixes, which added retries around the write, are removed.
+Root cause: Both endpoints treated the return of append as durability, and every earlier fix patched one acknowledgement path. Acknowledgement now goes through a single function that waits for the sync, and the retries added in P-0002 are removed.
 
-Tests: TestCrashRecovery now kills the process at every write boundary; 100 runs pass.
+Tests: TestCrashRecovery now kills the process at every write boundary on both endpoints; 100 runs pass.
+
+History, oldest first:
+
+- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `finding.fix-claimed` in packet `P-0002`: Retry the append when the sync fails.
+- Round 1, `finding.fix-rejected` in packet `P-0004`: TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent.
+- Round 1, `finding.fix-claimed` in packet `P-0005`: Sync before returning from append on the single-event endpoint.
+- Round 1, `finding.fix-confirmed` in packet `P-0006`: TestCrashRecovery passes 20 runs with a kill between write and sync.
+- Round 2, `finding.reopened` in packet `P-0007`: regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs.
+- Round 2, `finding.fix-claimed` in packet `P-0008`: Wait for the sync in the batch endpoint as well.
+- Round 2, `finding.fix-rejected` in packet `P-0010`: The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10.
+- Round 2, `finding.fix-claimed` in packet `P-0011`: Acknowledge only after the append is synced.
+- Round 2, `finding.fix-confirmed` in packet `P-0012`: TestCrashRecovery passes 100 consecutive runs with a kill at every write boundary, on both endpoints.
 
 ### F-0005: internal/store imports internal/delivery for the event type
 
@@ -635,6 +676,14 @@ Latest fix: Moved Event to internal/event.
 - Commits: `c3e5a7b9d1f30246813579bdf02468ace1357902`
 - Components: `internal/event`, `internal/store` and `internal/delivery`
 
+History, oldest first:
+
+- Round 2, `finding.opened` in packet `P-0007`
+- Round 2, `escalation.raised` in packet `P-0008`: the implementer disputes F-0005: the replay tool is not part of the pilot, so the dependency direction blocks nothing at this stage
+- Round 2, `escalation.resolved` in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- Round 2, `finding.fix-claimed` in packet `P-0011`: Moved Event to internal/event.
+- Round 2, `finding.fix-confirmed` in packet `P-0012`: `go list -deps ./internal/store` no longer lists internal/delivery.
+
 ### F-0006: Constructor takes seven positional parameters
 
 - Tier `T4`, in `simplicity`
@@ -647,13 +696,17 @@ Evidence: dispatcher.go, NewDispatcher.
 
 Impact: Readability only.
 
+History, oldest first:
+
+- Round 2, `finding.opened` in packet `P-0007`
+
 ### F-0007: Signing error message includes the subscriber secret
 
 - Tier `T0`, in `security-privacy`
-- Status `withdrawn`; opened in round 2 by the verifier; recurrences: 0
+- Status `withdrawn`; opened in round 2 by the reviewer; recurrences: 0
+- Disputed once; cannot be disputed again
 - Components: `internal/delivery/sign.go`
 - Risk: `RISK-2`
-- Introduced by the fix for `F-0001`
 
 Description: The error returned when signing fails formats the key into the message.
 
@@ -665,6 +718,13 @@ Blocking rationale: Secrets in logs are an unacceptable risk at every stage.
 
 Verification: No error path in sign.go formats the key.
 
+History, oldest first:
+
+- Round 2, `finding.opened` in packet `P-0007`
+- Round 2, `escalation.raised` in packet `P-0008`: the implementer disputes F-0007: the error path is unreachable, since NewSigner rejects every key that could make signing fail
+- Round 2, `escalation.resolved` in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
+- Round 2, `finding.withdrawn` in packet `P-0009`: The error path cannot be reached with any key NewSigner accepts; the mechanism does not occur.
+
 ## Rounds of this stage
 
 | Round | Commit | Verdict | Reviewer |
@@ -674,14 +734,20 @@ Verification: No error path in sign.go formats the key.
 
 ## Binding decisions
 
-- `directive` by `auditor`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
-- `resolution` by `governance`, from `E-0002`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
+Audit directives and escalation resolutions recorded so far, oldest first.
+They bind every role.
+
+- A `resolution` of `E-0001` by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
+- A `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
+- A `resolution` of `E-0002` by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- A `resolution` of `E-0003` by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- A `resolution` of `E-0004` by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
 
 ---
 
 # Report skeleton
 
-This skeleton already has the right shape for packet P-0012. Fill in every
+This skeleton already has the right shape for packet P-0013. Fill in every
 empty value as the brief describes, add the entries the brief allows, and
 remove nothing that is required. Metron rejects a report that still has an
 empty value where one is required.
@@ -689,7 +755,7 @@ empty value where one is required.
 ```json
 {
   "schema": "metron.report/v1",
-  "packet": "P-0012",
+  "packet": "P-0013",
   "role": "reviewer",
   "author": {
     "id": "",

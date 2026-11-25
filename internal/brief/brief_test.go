@@ -85,20 +85,9 @@ var orderedListLine = regexp.MustCompile(`(?m)^[ \t]*[0-9]+[.)][ \t].*$`)
 
 func TestRenderMinimalAndFull(t *testing.T) {
 	for _, action := range actions {
-		packets := map[string]core.Packet{"minimal": minimal(action), "full": full(action)}
-		if action != core.StepReview {
-			// After a pin changes the stage, a fix, verify or audit packet can
-			// precede the stage's first round and carries round 0.
-			p := full(action)
-			p.Round = 0
-			packets["round-zero"] = p
-		}
-		for name, p := range packets {
+		for name, p := range map[string]core.Packet{"minimal": minimal(action), "full": full(action)} {
 			t.Run(string(action)+"/"+name, func(t *testing.T) {
 				for output, text := range render(t, p) {
-					if strings.Contains(text, "round 0") {
-						t.Errorf("%s mentions round 0", output)
-					}
 					for _, bad := range []string{"<no value>", "<nil>", "{{", "}}", "\n\n\n", "%!"} {
 						if strings.Contains(text, bad) {
 							t.Errorf("%s contains %q", output, bad)
@@ -318,8 +307,18 @@ func checkBody(t *testing.T, p core.Packet, raw json.RawMessage) {
 		if !slices.Equal(ids, p.Adjudicable) {
 			t.Errorf("adjudications = %v, want one per adjudicable finding %v", ids, p.Adjudicable)
 		}
-		if b.Analysis != "" || b.Conclusion != "" {
-			t.Errorf("analysis or conclusion not left empty")
+		var escalations, resolved []string
+		for _, e := range p.Escalations {
+			escalations = append(escalations, e.ID)
+		}
+		for _, r := range b.Resolutions {
+			resolved = append(resolved, r.Escalation)
+			if r.Analysis != "" || r.Conclusion != "" {
+				t.Errorf("resolution of %s is not left empty", r.Escalation)
+			}
+		}
+		if !slices.Equal(resolved, escalations) {
+			t.Errorf("resolutions = %v, want one per escalation %v", resolved, escalations)
 		}
 	}
 }
@@ -334,6 +333,9 @@ func TestRefusesInconsistentPackets(t *testing.T) {
 		{"other report schema", core.StepReview, func(p *core.Packet) { p.ReportSchema = "metron.report/v2" }},
 		{"action without packet", core.StepReview, func(p *core.Packet) { p.Action = core.StepRunChecks }},
 		{"role does not match action", core.StepReview, func(p *core.Packet) { p.Role = core.RoleVerifier }},
+		{"review in round 0", core.StepReview, func(p *core.Packet) { p.Round = 0 }},
+		{"fix in round 0", core.StepFix, func(p *core.Packet) { p.Round = 0 }},
+		{"audit in round 0", core.StepAudit, func(p *core.Packet) { p.Round = 0 }},
 		{"applicable list differs from contract", core.StepReview, func(p *core.Packet) { p.ApplicableRequirements = p.ApplicableRequirements[1:] }},
 		{"evidence for a later requirement", core.StepReview, func(p *core.Packet) {
 			p.Evidence = append(p.Evidence, passed("REQ-11", "true", p.Candidate.Digest))

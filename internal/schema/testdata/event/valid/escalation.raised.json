@@ -8,6 +8,7 @@
     "kind": "component-churn",
     "owner": "auditor",
     "round": 4,
+    "packet": "P-0005",
     "reason": "internal/ledger was fixed in 3 rounds.",
     "findings": [
       "F-0001",

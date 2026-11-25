@@ -67,8 +67,9 @@ func Prompt(p core.Packet) (string, error) {
 // and the body shaped for the action: one coverage entry per domain and one
 // entry per applicable requirement for a review, one fix per subject for a
 // fix, one verification per claimed fix for a verification, and one
-// adjudication per adjudicable finding for an audit. Every judgment is left
-// empty, so the skeleton fails validation until the role completes it.
+// resolution per escalation and one adjudication per adjudicable finding for
+// an audit. Every judgment is left empty, so the skeleton fails validation
+// until the role completes it.
 func Skeleton(p core.Packet) ([]byte, error) {
 	v, err := newView(p)
 	if err != nil {
@@ -138,7 +139,10 @@ func skeleton(v *view) ([]byte, error) {
 		}
 		body = b
 	case v.IsAudit:
-		var b core.AuditorBody
+		b := core.AuditorBody{Resolutions: []core.EscalationResolution{}}
+		for _, e := range v.Escalations {
+			b.Resolutions = append(b.Resolutions, core.EscalationResolution{Escalation: e.ID})
+		}
 		for _, id := range v.Adjudicable {
 			b.Adjudications = append(b.Adjudications, core.Adjudication{Finding: id})
 		}

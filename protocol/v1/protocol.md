@@ -196,7 +196,8 @@ While the file's meaning differs from the pinned one, everything that
 depends on the contract waits for governance. A new pin voids the open
 packet and invalidates any verdict issued under the old contract, because
 that verdict answered a different question. When a pin changes the stage,
-round numbering and the count of failed rounds restart; findings carry over.
+the count of consecutive failed rounds restarts, because the new stage is a
+new question; round numbers and findings carry over.
 
 ## 6. Lifecycle-aware acceptance
 
@@ -380,7 +381,9 @@ time turns into one round per defect.
 
 A `violated` requirement must be cited by at least one blocking finding the
 same report opens or reopens, so that every violation has something the
-implementer can act on. Risks the contract does not cover go into contract
+implementer can act on; conversely, a requirement that such a finding cites
+must be marked `violated`, so that the requirement statuses and the findings
+tell the same story. Risks the contract does not cover go into contract
 gaps. Residual risks and the limits of the inspection (what was not
 examined, what could not be run) are recorded so that a GREEN verdict does
 not claim more than the review established.
@@ -399,10 +402,13 @@ at a time produce several patches and no cure.
 
 Each fix lists the full hashes of the commits that contain it, all lying
 between the round's candidate and the current one, and names the components
-it touched. The working tree must be clean. A report with at least one fix
-must change the candidate digest; commits that touch nothing outside
-`.metron/` fix nothing. A fix for a finding flagged root-cause-required must
-include a root-cause analysis.
+it touched. The working tree must be clean. Every listed commit must change
+something outside `.metron/`, and for every finding fixed, the candidate must
+differ from the one on which that finding was last opened, reopened or had a
+fix rejected. A fix committed before the packet was requested is therefore
+valid, while claiming a rejected fix again without a new change is not: the
+verifier already said that change does not resolve the finding. A fix for a
+finding flagged root-cause-required must include a root-cause analysis.
 
 A finding can be disputed once, with reasons. A dispute raises a `dispute`
 escalation and an auditor adjudicates it; if the auditor upholds the
@@ -421,8 +427,10 @@ towards its recurrence.
 
 ### Auditor
 
-The auditor discharges every escalation named in its packet with an
-analysis and a conclusion. It gives a decision for every finding the packet
+The auditor discharges every escalation named in its packet, and no other,
+with one resolution each: an analysis and a conclusion. Each escalation asks
+its own question, and a single answer for all of them would let one be
+passed over. It gives a decision for every finding the packet
 lists as adjudicable, and for no other: `uphold` (the finding stands as
 recorded), `withdraw` (the finding is wrong and leaves the process), or
 `reclassify` (the finding is real but its tier is wrong, and the decision
@@ -448,6 +456,15 @@ this state machine:
 
 A finding is unresolved while `open` or `claimed`. Only an auditor can
 change a recorded finding's tier, and only through adjudication.
+
+Every packet carries each finding's **history**: every step recorded for it,
+with the round, the packet whose report caused it, and what was said at the
+time, such as the fix's summary, the verifier's evidence, the justification
+for a reopening, a dispute or contradiction and how it was resolved, or the
+rationale for a withdrawal or reclassification. Continuity depends on it. A
+reviewer who suspects that a verification was wrong can read the evidence
+that confirmed the fix, and an auditor can read the reasoning of earlier
+audits instead of guessing at it.
 
 Prior resolutions are evidence, not precedent. A reviewer may question an
 earlier decision, but revisiting one must be traceable and based on
@@ -492,21 +509,26 @@ escalation keeps the gate closed and takes priority over the ordinary loop.
 | `contradiction` | A finding declares that it reverses an earlier resolution | `auditor` | Adjudication |
 | `component-churn` | The same component is fixed in 3 distinct rounds | `auditor` | Component-level audit |
 | `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes it confirms | `auditor` | Redesign assessment |
-| `non-convergence` | The 3rd consecutive round ends without GREEN | `auditor` | Convergence analysis |
+| `non-convergence` | Consecutive rounds without GREEN reach 3; raised once per streak | `auditor` | Convergence analysis |
 | `process-audit` | Every 5th consecutive round ends without GREEN | `auditor` | Independent process audit |
 | `contract-gap` | A reviewer reports a risk the contract does not cover | `governance` | `metron resolve`, after amending the contract or dismissing the gap with a rationale |
 | `evidence-gap` | A verdict is `INDETERMINATE` | `governance` | `metron resolve`, after supplying evidence or amending the contract |
 
 The thresholds for root-cause analysis (2), convergence analysis (3) and the
 process audit (5) are defaults that the contract may change; they are the
-only tunable values. Governance resolutions and audit directives are carried
-into every later packet and bind every role.
+only tunable values. A streak of consecutive rounds without GREEN ends with
+a GREEN verdict or with a pin that changes the stage. Escalation resolutions,
+whether by an auditor or by governance, and audit directives are carried into
+every later packet, each with the packet it came from, and bind every role.
 
 One more safeguard is built into the loop itself: an unchanged candidate
 cannot be resubmitted in the hope of a different verdict. After a verdict
-other than GREEN, the next review needs a changed candidate, new evidence,
-a discharged escalation or a new contract pin. A failed assessment is
-resolved through correction, evidence or adjudication, not by asking again.
+other than GREEN, the same candidate can be reviewed again under the same
+contract only once an escalation has been resolved since; otherwise the
+candidate has to change, or governance has to pin a different contract.
+Re-running the checks does not count, because it changes nothing about the
+candidate. A failed assessment is resolved through correction, evidence or
+adjudication, not by asking again.
 
 ## 13. Verdicts
 
@@ -547,7 +569,9 @@ A **candidate** is a commit, identified by its candidate digest: a SHA-256
 over the commit's tree with everything under `.metron/` left out, so that
 committing review state does not change the candidate while any other change
 does. A **round** is one independent, read-only, full-scope review of one
-candidate; fixing and verifying happen between rounds.
+candidate; fixing and verifying happen between rounds. Rounds are numbered
+from 1 across the whole ledger and never restart, so a round number
+identifies one review unambiguously, whatever stage it belonged to.
 
 ```
 review ──RED──▶ fix ──▶ verify ──all confirmed──▶ review (new candidate)
@@ -559,8 +583,9 @@ review ──RED──▶ fix ──▶ verify ──all confirmed──▶ revi
 
 Each action is carried out through a **packet**: a JSON document holding
 everything the role needs, including the contract, the candidate, the
-relevant findings and evidence, the binding decisions, the role's brief and
-the schema its report must satisfy. At most one packet is open at a time.
+relevant findings with their history, the latest check results, the rounds
+of the current stage, the binding decisions, the role's brief and the schema
+its report must satisfy. At most one packet is open at a time.
 Asking for the packet again while it is open and valid returns the same
 packet, so a crashed agent can simply be retried. A packet becomes void when
 the contract is re-pinned, or when the candidate changes or the tree stops

@@ -10,7 +10,18 @@
     "session": "7d1c9a52"
   },
   "body": {
-    "analysis": "F-0001 reproduces on the base candidate; the implementer's dispute rests on a single-user assumption.",
+    "resolutions": [
+      {
+        "escalation": "E-1",
+        "analysis": "F-0001 reproduces on the base candidate; the implementer's dispute rests on a single-user assumption.",
+        "conclusion": "The dispute is rejected and the finding upheld."
+      },
+      {
+        "escalation": "E-0002",
+        "analysis": "Churn is confined to one file.",
+        "conclusion": "No further action."
+      }
+    ],
     "adjudications": [
       {
         "finding": "F-0001",

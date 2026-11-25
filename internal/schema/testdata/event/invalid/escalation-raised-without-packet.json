@@ -1,0 +1,24 @@
+{
+  "seq": 16,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "c1c6e9564f2ddfaab41b7e82ea8e7e1e564f49e2ea44d5272c511a06ad139052",
+  "type": "escalation.raised",
+  "data": {
+    "id": "E-0001",
+    "kind": "component-churn",
+    "owner": "auditor",
+    "round": 4,
+    "reason": "internal/ledger was fixed in 3 rounds.",
+    "findings": [
+      "F-0001",
+      "F-0002"
+    ],
+    "components": [
+      "internal/ledger"
+    ],
+    "requirements": [
+      "REQ-2"
+    ]
+  },
+  "hash": "ba23e291d10cd9f78a6405b8c52e7f6ddd42470cf6e4ac1b372114fda4c78e9a"
+}

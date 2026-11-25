@@ -15,27 +15,7 @@
       "$ref": "defs.schema.json#/$defs/hex64"
     },
     "type": {
-      "type": "string",
-      "enum": [
-        "ledger.initialized",
-        "contract.pinned",
-        "evidence.recorded",
-        "round.opened",
-        "packet.issued",
-        "packet.voided",
-        "report.accepted",
-        "verdict.recorded",
-        "finding.opened",
-        "finding.fix-claimed",
-        "finding.fix-confirmed",
-        "finding.fix-rejected",
-        "finding.reopened",
-        "finding.withdrawn",
-        "finding.reclassified",
-        "escalation.raised",
-        "escalation.resolved",
-        "directive.issued"
-      ]
+      "$ref": "defs.schema.json#/$defs/eventType"
     },
     "data": {
       "type": "object"
@@ -487,6 +467,9 @@
         "candidate": {
           "$ref": "defs.schema.json#/$defs/candidate"
         },
+        "base": {
+          "$ref": "defs.schema.json#/$defs/candidate"
+        },
         "contract": {
           "$ref": "defs.schema.json#/$defs/sha256"
         },
@@ -797,6 +780,9 @@
         "round": {
           "$ref": "defs.schema.json#/$defs/count"
         },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
         "reason": {
           "$ref": "defs.schema.json#/$defs/text"
         },
@@ -818,6 +804,7 @@
         "kind",
         "owner",
         "round",
+        "packet",
         "reason"
       ],
       "additionalProperties": false

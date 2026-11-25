@@ -15,7 +15,7 @@ information the brief above refers to.
 ## Identification
 
 - Packet: `{{.ID}}`, issued {{.IssuedAt}} under protocol `{{.Protocol}}`
-- Action: `{{.Action}}`, for the `{{.Role}}`{{if .Round}}, in round {{.Round}} of the stage{{end}}
+- Action: `{{.Action}}`, for the `{{.Role}}`, round {{.Round}}
 - Candidate: commit `{{.Candidate.Commit}}`, digest `{{.Candidate.Digest}}`
 {{- with .Base}}
 - Reviewed commit: `{{.Commit}}`, digest `{{.Digest}}`
@@ -139,8 +139,9 @@ Reassess when: {{.ReassessWhen}}
 ## Convergence thresholds
 
 - Root-cause analysis: required for a finding's next fix once its rejected fixes and reopenings reach {{.Thresholds.RootCauseAfter}}.
-- Convergence analysis: once {{.Thresholds.ConvergenceAuditAfter}} consecutive rounds have ended without GREEN.
+- Convergence analysis: once per streak, when consecutive rounds without GREEN reach {{.Thresholds.ConvergenceAuditAfter}}.
 - Independent process audit: each time the count of consecutive rounds without GREEN reaches a multiple of {{.Thresholds.ProcessAuditAfter}}.
+- A streak of rounds without GREEN ends with a GREEN verdict, and its count restarts when a pin changes the stage.
 {{- with .Escalations}}
 
 ## Escalations to discharge
@@ -216,9 +217,12 @@ No round of this stage has been recorded yet.
 {{- end}}
 
 ## Binding decisions
+
+Audit directives and escalation resolutions recorded so far, oldest first.
+They bind every role.
 {{with .Decisions}}
 {{- range .}}
-- `{{.Source}}` by `{{.By}}`{{with .Escalation}}, from `{{.}}`{{end}}: {{.Text}}
+- A `{{.Source}}`{{with .Escalation}} of `{{.}}`{{end}} by `{{.By}}`{{with .Packet}}, in packet `{{.}}`{{end}}: {{.Text}}
 {{- end}}
 {{- else}}
 None recorded.
@@ -329,6 +333,13 @@ Root cause: {{.}}
 {{- with .Tests}}
 
 Tests: {{.}}
+{{- end}}
+{{- end}}
+{{- with .History}}
+
+History, oldest first:
+{{range .}}
+- {{if .Round}}Round {{.Round}}{{else}}Before any round{{end}}, `{{.Event}}`{{with .Packet}} in packet `{{.}}`{{end}}{{with .Note}}: {{.}}{{end}}
 {{- end}}
 {{- end}}
 {{- end}}

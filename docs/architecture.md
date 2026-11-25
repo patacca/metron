@@ -187,8 +187,9 @@ numbers, so its number rule reduces to plain integers.
 digest as authorized. If the file's contract digest differs from the pinned
 one, every command that depends on the contract refuses to proceed until
 governance pins it. A new pin voids the open packet and invalidates any verdict
-issued under the old one. When a pin changes `stage`, round numbering and the
-failed-round count restart; findings carry over.
+issued under the old one. Pinning the digest that is already pinned is
+refused. When a pin changes `stage`, the count of consecutive failed rounds
+restarts; round numbers and findings carry over.
 
 ## 7. Ledger
 
@@ -309,15 +310,16 @@ on a candidate whose own mandatory checks fail; the latest result per
 requirement, candidate and command text is the one that counts.
 
 Row 10 is refused when the same candidate already received a non-GREEN verdict
-under the same contract digest and no evidence, escalation resolution or
-contract pin has been recorded since: an unchanged candidate cannot be
-resubmitted in the hope of a different verdict. The action is then
+under the same contract digest and no escalation has been resolved since: an
+unchanged candidate cannot be resubmitted in the hope of a different verdict,
+and re-running checks does not count as a change. The action is then
 `commit-changes`, with that reason.
 
 A **round** is one independent, read-only, full-scope review of one candidate.
-Issuing a review packet opens a new round. Rounds are numbered from 1 per
-pinned stage. A round whose packet was voided has no verdict and is skipped
-when counting consecutive failures. Fixing and verifying happen between rounds:
+Issuing a review packet opens a new round. Rounds are numbered from 1 across
+the whole ledger, so a round number identifies one review unambiguously. A
+round whose packet was voided has no verdict and is skipped when counting
+consecutive failures. Fixing and verifying happen between rounds:
 
 ```
 review ──RED──▶ fix ──▶ verify ──all confirmed──▶ review (new candidate)
@@ -352,7 +354,9 @@ What a packet carries depends on the action:
 
 Every packet also carries the contract, the latest check result per applicable
 requirement for its candidate, the earlier rounds of the stage, and every
-directive and governance resolution recorded so far.
+directive and escalation resolution recorded so far. Each finding carries its
+history: every event recorded for it, with the evidence or rationale given at
+the time.
 
 A report is a versioned envelope around a role-specific body:
 
@@ -403,7 +407,11 @@ the digest of its canonical JSON form.
 - T2 states expected benefit and deferral rationale. T3 states the evidence
   needed and when to reassess.
 - A `violated` requirement is cited by at least one blocking finding that this
-  report opens or reopens.
+  report opens or reopens, and a requirement cited by such a finding is
+  `violated`.
+- A blocking finding can be reopened only while it still cites an applicable
+  requirement or an unacceptable risk of the pinned contract. Otherwise the
+  reviewer opens a new finding against the current contract.
 - The verdict equals the one implied by the content: `RED` if any blocking
   finding is opened or reopened; otherwise `INDETERMINATE` if any requirement
   is `unverified`; otherwise `GREEN`.
@@ -414,8 +422,11 @@ the digest of its canonical JSON form.
   dispute. It may also fix non-blocking findings from the backlog.
 - Each fix lists full commit hashes that lie between the round's candidate and
   the current one, and names at least one component. The tree is clean.
-- A report with at least one fix changes the candidate digest. Commits that
-  touch nothing outside `.metron/` fix nothing.
+- Every listed commit changes something outside `.metron/`, and for every
+  finding it fixes, the candidate differs from the one on which that finding
+  was last opened, reopened or had a fix rejected. A fix committed before the
+  packet was requested is therefore valid; claiming a rejected fix again
+  without a new change is not.
 - A finding flagged root-cause-required carries a root-cause analysis.
 - A finding can be disputed once. After an auditor upholds it, it must be fixed.
 
@@ -427,8 +438,8 @@ the digest of its canonical JSON form.
 
 **Auditor body**
 
-- Discharges every escalation named in the packet with an analysis and a
-  conclusion.
+- Gives an analysis and a conclusion for every escalation named in the packet,
+  one entry each, and for no other escalation.
 - Gives a decision (`uphold`, `withdraw` or `reclassify`) for every finding the
   packet lists as adjudicable, and for no other finding.
 - May issue directives. May recommend, but not make, contract changes.
@@ -445,7 +456,7 @@ gate closed and takes priority in `metron next`.
 | `contradiction` | A finding declares that it reverses an earlier resolution | auditor | Adjudication |
 | `component-churn` | The same component is fixed in 3 distinct rounds | auditor | Component-level audit |
 | `regression-spiral` | A verification finds at least one blocking regression and no fewer than the fixes it confirms | auditor | Redesign assessment |
-| `non-convergence` | The 3rd consecutive round ends without GREEN | auditor | Convergence analysis |
+| `non-convergence` | Consecutive rounds without GREEN reach 3; raised once per streak | auditor | Convergence analysis |
 | `process-audit` | Every 5th consecutive round ends without GREEN | auditor | Independent process audit |
 | `contract-gap` | A reviewer reports a risk the contract does not cover | governance | `metron resolve`, after amending the contract or dismissing with a rationale |
 | `evidence-gap` | A verdict is `INDETERMINATE` | governance | `metron resolve`, after supplying evidence or amending the contract |
@@ -455,7 +466,7 @@ One safeguard is not an escalation: when a finding's recurrence count reaches
 a root-cause analysis.
 
 The thresholds 2, 3 and 5 are defaults and the only tunable values.
-Governance resolutions and audit directives are carried into every later
+Escalation resolutions and audit directives are carried into every later
 packet.
 
 ## 11. The gate

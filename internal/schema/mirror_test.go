@@ -453,7 +453,10 @@ func TestEnumerations(t *testing.T) {
 	for typ := range eventPayloads {
 		types = append(types, typ)
 	}
-	check("event type", enumOf(prop(d["event.schema.json"], "type")), sorted(types))
+	check("event type", enumOf(defs("eventType")), sorted(types))
+	if ref := prop(d["event.schema.json"], "type")["$ref"]; ref != "defs.schema.json#/$defs/eventType" {
+		t.Errorf("event type must reference defs eventType, got %v", ref)
+	}
 }
 
 // walk calls f for every schema object reachable from n, with a path for

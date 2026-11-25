@@ -36,8 +36,8 @@ type Packet struct {
 	Subjects []string `json:"subjects,omitempty"`
 	// Backlog lists open non-blocking findings an implementer may also fix.
 	Backlog []string `json:"backlog,omitempty"`
-	// RootCauseRequired lists the subjects whose fix must include a
-	// root-cause analysis.
+	// RootCauseRequired lists the subjects and backlog findings whose fix
+	// must include a root-cause analysis.
 	RootCauseRequired []string `json:"root_cause_required,omitempty"`
 	// Escalations are the escalations an audit must discharge.
 	Escalations []Escalation `json:"escalations,omitempty"`
@@ -50,8 +50,8 @@ type Packet struct {
 	Findings []Finding `json:"findings,omitempty"`
 	// History summarizes the earlier rounds of the current stage.
 	History []RoundSummary `json:"history,omitempty"`
-	// Decisions are audit directives and governance resolutions. They bind
-	// every role.
+	// Decisions are audit directives and escalation resolutions, by the
+	// auditor or by governance. They bind every role.
 	Decisions []Decision `json:"decisions,omitempty"`
 
 	ReportSchema string `json:"report_schema"`
@@ -74,8 +74,11 @@ type Decision struct {
 	Source string `json:"source"`
 	// Escalation is the escalation the decision came out of, if any.
 	Escalation string `json:"escalation,omitempty"`
-	By         Role   `json:"by"`
-	Text       string `json:"text"`
+	// Packet is the audit packet whose report recorded the decision. It is
+	// empty for a governance resolution.
+	Packet string `json:"packet,omitempty"`
+	By     Role   `json:"by"`
+	Text   string `json:"text"`
 }
 
 // Decision sources.

@@ -9,11 +9,13 @@ import "github.com/patacca/metron/internal/core"
 const (
 	commitRound1 = "4a1c9e2b7d3f60812e5a9c4b7d1e3f2a6b8c0d94"
 	commitRound2 = "9b2d4f6a8c0e1357924680ace13579bdf0246813"
+	commitBatch  = "b8d0f2a4c6e81357924680ace13579bdf0246802"
 	commitFixed  = "c3e5a7b9d1f30246813579bdf02468ace1357902"
 	commitRound5 = "e7f9a1b3c5d70246813579bdf02468ace1357924"
 
 	digestRound1 = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
 	digestRound2 = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	digestBatch  = "sha256:4444444444444444444444444444444444444444444444444444444444444444"
 	digestFixed  = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
 	digestRound5 = "sha256:5555555555555555555555555555555555555555555555555555555555555555"
 
@@ -115,7 +117,21 @@ func passed(req, command, candidate string) core.Evidence {
 		ExitCode: 0, Passed: true, OutputDigest: outputDigest}
 }
 
-// Findings, in the state they have at the given point of the project.
+// The findings follow one timeline. Round 1 (review P-0001) opens F-0001 to
+// F-0004 and reports a contract gap, E-0001, which governance dismisses. Fix
+// P-0002 fixes F-0001 and F-0004 and disputes F-0002 (E-0002); audit P-0003
+// reclassifies F-0002 and issues a directive. Verify P-0004 confirms F-0001
+// and rejects F-0004, fix P-0005 fixes F-0004 again and verify P-0006
+// confirms it. Round 2 (review P-0007) reopens F-0004 and opens F-0005 to
+// F-0007. Fix P-0008 fixes F-0004 and disputes F-0005 (E-0003) and F-0007
+// (E-0004); audit P-0009 upholds F-0005 and withdraws F-0007; verify P-0010
+// rejects the F-0004 fix. Fix P-0011, verify P-0012 and review P-0013 are the
+// golden packets. The audit packet, P-0021, comes from round 5 of the same
+// project.
+
+func step(event core.EventType, round int, packet, note string) core.FindingEvent {
+	return core.FindingEvent{Event: event, Round: round, Packet: packet, Note: note}
+}
 
 func f1Resolved() core.Finding {
 	return core.Finding{
@@ -132,6 +148,11 @@ func f1Resolved() core.Finding {
 		},
 		Fix: &core.Fix{Finding: "F-0001", Commits: []string{commitRound2}, Summary: "Retry until one hour has elapsed since the first attempt.",
 			Components: []string{"internal/delivery/retry.go"}, Tests: "Extended TestSubscriberRecovery to a one-hour simulated outage."},
+		History: []core.FindingEvent{
+			step(core.EventFindingOpened, 1, "P-0001", ""),
+			step(core.EventFindingFixClaimed, 1, "P-0002", "Retry until one hour has elapsed since the first attempt."),
+			step(core.EventFindingFixConfirmed, 1, "P-0004", "TestSubscriberRecovery passes with a one-hour simulated outage; the loop now compares elapsed time, not attempts."),
+		},
 	}
 }
 
@@ -155,6 +176,12 @@ func f2Reclassified() core.Finding {
 			ExpectedBenefit:   "Roughly eight times the append throughput.",
 			DeferralRationale: "The envelope's load is an eighth of the measured capacity.",
 		},
+		History: []core.FindingEvent{
+			step(core.EventFindingOpened, 1, "P-0001", ""),
+			step(core.EventEscalationRaised, 1, "P-0002", "the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk"),
+			step(core.EventEscalationResolved, 1, "P-0003", "The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency."),
+			step(core.EventFindingReclassified, 1, "P-0003", "T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms."),
+		},
 	}
 }
 
@@ -172,13 +199,29 @@ func f3Calibration() core.Finding {
 			ReassessWhen:   "Two weeks of pilot traffic have been delivered.",
 			Related:        []string{"F-0001"},
 		},
+		History: []core.FindingEvent{step(core.EventFindingOpened, 1, "P-0001", "")},
 	}
 }
 
-func f4(status core.FindingStatus, fix *core.Fix) core.Finding {
+// f4History is the history of F-0004 up to review P-0013; earlier packets see
+// a prefix of it.
+var f4History = []core.FindingEvent{
+	step(core.EventFindingOpened, 1, "P-0001", ""),
+	step(core.EventFindingFixClaimed, 1, "P-0002", "Retry the append when the sync fails."),
+	step(core.EventFindingFixRejected, 1, "P-0004", "TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent."),
+	step(core.EventFindingFixClaimed, 1, "P-0005", "Sync before returning from append on the single-event endpoint."),
+	step(core.EventFindingFixConfirmed, 1, "P-0006", "TestCrashRecovery passes 20 runs with a kill between write and sync."),
+	step(core.EventFindingReopened, 2, "P-0007", "regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs."),
+	step(core.EventFindingFixClaimed, 2, "P-0008", "Wait for the sync in the batch endpoint as well."),
+	step(core.EventFindingFixRejected, 2, "P-0010", "The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10."),
+	step(core.EventFindingFixClaimed, 2, "P-0011", "Acknowledge only after the append is synced."),
+	step(core.EventFindingFixConfirmed, 2, "P-0012", "TestCrashRecovery passes 100 consecutive runs with a kill at every write boundary, on both endpoints."),
+}
+
+func f4(status core.FindingStatus, fix *core.Fix, steps int) core.Finding {
 	return core.Finding{
 		ID: "F-0004", Status: status, Tier: core.TierMaterial, Round: 1, Source: core.RoleReviewer,
-		Recurrences: 2, RootCauseRequired: true, Fix: fix,
+		Recurrences: 3, RootCauseRequired: true, Fix: fix, History: f4History[:steps],
 		Input: core.FindingInput{
 			Key: "lost-on-crash", Tier: core.TierMaterial, Domain: core.DomainDataIntegrity,
 			Title:       "An event acknowledged before its append is synced can be lost on a crash",
@@ -192,9 +235,18 @@ func f4(status core.FindingStatus, fix *core.Fix) core.Finding {
 	}
 }
 
-func f5(status core.FindingStatus, fix *core.Fix) core.Finding {
+var f5History = []core.FindingEvent{
+	step(core.EventFindingOpened, 2, "P-0007", ""),
+	step(core.EventEscalationRaised, 2, "P-0008", "the implementer disputes F-0005: the replay tool is not part of the pilot, so the dependency direction blocks nothing at this stage"),
+	step(core.EventEscalationResolved, 2, "P-0009", "Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships."),
+	step(core.EventFindingFixClaimed, 2, "P-0011", "Moved Event to internal/event."),
+	step(core.EventFindingFixConfirmed, 2, "P-0012", "`go list -deps ./internal/store` no longer lists internal/delivery."),
+}
+
+func f5(status core.FindingStatus, fix *core.Fix, steps int) core.Finding {
 	return core.Finding{
-		ID: "F-0005", Status: status, Tier: core.TierMaterial, Round: 2, Source: core.RoleReviewer, Disputed: true, Fix: fix,
+		ID: "F-0005", Status: status, Tier: core.TierMaterial, Round: 2, Source: core.RoleReviewer, Disputed: true,
+		Fix: fix, History: f5History[:steps],
 		Input: core.FindingInput{
 			Key: "store-imports-delivery", Tier: core.TierMaterial, Domain: core.DomainArchitecture,
 			Title:       "internal/store imports internal/delivery for the event type",
@@ -224,22 +276,28 @@ func f6Preference() core.Finding {
 			Evidence:    "dispatcher.go, NewDispatcher.",
 			Impact:      "Readability only.",
 		},
+		History: []core.FindingEvent{step(core.EventFindingOpened, 2, "P-0007", "")},
 	}
 }
 
 func f7Withdrawn() core.Finding {
 	return core.Finding{
-		ID: "F-0007", Status: core.StatusWithdrawn, Tier: core.TierCritical, Round: 2, Source: core.RoleVerifier,
+		ID: "F-0007", Status: core.StatusWithdrawn, Tier: core.TierCritical, Round: 2, Source: core.RoleReviewer, Disputed: true,
 		Input: core.FindingInput{
 			Key: "secret-in-log", Tier: core.TierCritical, Domain: core.DomainSecurityPrivacy,
-			Title:        "Signing error message includes the subscriber secret",
-			Components:   []string{"internal/delivery/sign.go"},
-			Description:  "The error returned when signing fails formats the key into the message.",
-			Evidence:     "sign.go formats the key with %q in the error path.",
-			Impact:       "A secret could reach the logs.",
-			Risk:         "RISK-2",
-			IntroducedBy: "F-0001", BlockingRationale: "Secrets in logs are an unacceptable risk at every stage.",
+			Title:       "Signing error message includes the subscriber secret",
+			Components:  []string{"internal/delivery/sign.go"},
+			Description: "The error returned when signing fails formats the key into the message.",
+			Evidence:    "sign.go formats the key with %q in the error path.",
+			Impact:      "A secret could reach the logs.",
+			Risk:        "RISK-2", BlockingRationale: "Secrets in logs are an unacceptable risk at every stage.",
 			Verification: "No error path in sign.go formats the key.",
+		},
+		History: []core.FindingEvent{
+			step(core.EventFindingOpened, 2, "P-0007", ""),
+			step(core.EventEscalationRaised, 2, "P-0008", "the implementer disputes F-0007: the error path is unreachable, since NewSigner rejects every key that could make signing fail"),
+			step(core.EventEscalationResolved, 2, "P-0009", "Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key."),
+			step(core.EventFindingWithdrawn, 2, "P-0009", "The error path cannot be reached with any key NewSigner accepts; the mechanism does not occur."),
 		},
 	}
 }
@@ -261,90 +319,116 @@ func history(rounds int) []core.RoundSummary {
 
 func decisions() []core.Decision {
 	return []core.Decision{
-		{Source: core.DecisionDirective, By: core.RoleAuditor,
-			Text: "Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests."},
-		{Source: core.DecisionResolution, Escalation: "E-0002", By: core.RoleGovernance,
+		{Source: core.DecisionResolution, Escalation: "E-0001", By: core.RoleGovernance,
 			Text: "Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives."},
+		{Source: core.DecisionDirective, Packet: "P-0003", By: core.RoleAuditor,
+			Text: "Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests."},
+		{Source: core.DecisionResolution, Escalation: "E-0002", Packet: "P-0003", By: core.RoleAuditor,
+			Text: "The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency."},
+		{Source: core.DecisionResolution, Escalation: "E-0003", Packet: "P-0009", By: core.RoleAuditor,
+			Text: "Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships."},
+		{Source: core.DecisionResolution, Escalation: "E-0004", Packet: "P-0009", By: core.RoleAuditor,
+			Text: "Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key."},
 	}
 }
 
-func base(action core.Step, round int, candidate core.Candidate) core.Packet {
+func base(id string, action core.Step, round int, candidate core.Candidate) core.Packet {
 	role, _ := action.PacketRole()
 	c := fullContract()
 	return core.Packet{
-		Schema: core.SchemaPacket, ID: "P-0012", Protocol: core.ProtocolVersion,
+		Schema: core.SchemaPacket, ID: id, Protocol: core.ProtocolVersion,
 		Role: role, Action: action, Round: round, IssuedAt: "2026-11-20T14:03:09Z",
 		Candidate: candidate, ReadOnly: role.ReadOnly(),
 		ContractDigest: contractDigest, Contract: c, ApplicableRequirements: applicableIDs(c),
-		ReportSchema: core.SchemaReport,
+		ReportSchema: core.SchemaReport, Decisions: decisions(),
 	}
 }
 
+func fixF4() *core.Fix {
+	return &core.Fix{Finding: "F-0004", Commits: []string{commitFixed}, Summary: "Acknowledge only after the append is synced.",
+		Components: []string{"internal/delivery/accept.go", "internal/store/append.go"},
+		RootCause:  "Both endpoints treated the return of append as durability, and every earlier fix patched one acknowledgement path. Acknowledgement now goes through a single function that waits for the sync, and the retries added in P-0002 are removed.",
+		Tests:      "TestCrashRecovery now kills the process at every write boundary on both endpoints; 100 runs pass."}
+}
+
+func fixF5() *core.Fix {
+	return &core.Fix{Finding: "F-0005", Commits: []string{commitFixed}, Summary: "Moved Event to internal/event.",
+		Components: []string{"internal/event", "internal/store", "internal/delivery"}}
+}
+
 func fullReview() core.Packet {
-	p := base(core.StepReview, 3, core.Candidate{Commit: commitFixed, Digest: digestFixed})
+	p := base("P-0013", core.StepReview, 3, core.Candidate{Commit: commitFixed, Digest: digestFixed})
 	p.Evidence = []core.Evidence{
 		passed("REQ-1", "go test ./internal/delivery -run TestAtLeastOnce", digestFixed),
 		passed("REQ-4", "go test ./internal/store -run TestCrashRecovery", digestFixed),
 		passed("REQ-8", "go test ./internal/delivery -run TestSubscriberRecovery", digestFixed),
 		passed("REQ-9", "go test ./internal/delivery -run TestLatencyBudget", digestFixed),
 	}
-	rootCause := "The handler treated the return of append as durability. Acknowledgement now waits for the sync, and the earlier fixes, which added retries around the write, are removed."
 	p.Findings = []core.Finding{
 		f1Resolved(), f2Reclassified(), f3Calibration(),
-		f4(core.StatusResolved, &core.Fix{Finding: "F-0004", Commits: []string{commitFixed}, Summary: "Acknowledge only after the append is synced.",
-			Components: []string{"internal/delivery/accept.go", "internal/store/append.go"}, RootCause: rootCause,
-			Tests: "TestCrashRecovery now kills the process at every write boundary; 100 runs pass."}),
-		f5(core.StatusResolved, &core.Fix{Finding: "F-0005", Commits: []string{commitFixed}, Summary: "Moved Event to internal/event.",
-			Components: []string{"internal/event", "internal/store", "internal/delivery"}}),
+		f4(core.StatusResolved, fixF4(), len(f4History)), f5(core.StatusResolved, fixF5(), len(f5History)),
 		f6Preference(), f7Withdrawn(),
 	}
 	p.History = history(2)
-	p.Decisions = decisions()
 	return p
 }
 
 func fullFix() core.Packet {
-	p := base(core.StepFix, 2, core.Candidate{Commit: commitRound2, Digest: digestRound2})
+	p := base("P-0011", core.StepFix, 2, core.Candidate{Commit: commitBatch, Digest: digestBatch})
 	p.Base = &core.Candidate{Commit: commitRound2, Digest: digestRound2}
-	p.ReadOnly = false
 	p.Evidence = []core.Evidence{
-		passed("REQ-1", "go test ./internal/delivery -run TestAtLeastOnce", digestRound2),
-		passed("REQ-4", "go test ./internal/store -run TestCrashRecovery", digestRound2),
-		passed("REQ-8", "go test ./internal/delivery -run TestSubscriberRecovery", digestRound2),
-		passed("REQ-9", "go test ./internal/delivery -run TestLatencyBudget", digestRound2),
+		passed("REQ-1", "go test ./internal/delivery -run TestAtLeastOnce", digestBatch),
+		passed("REQ-4", "go test ./internal/store -run TestCrashRecovery", digestBatch),
+		passed("REQ-8", "go test ./internal/delivery -run TestSubscriberRecovery", digestBatch),
+		passed("REQ-9", "go test ./internal/delivery -run TestLatencyBudget", digestBatch),
 	}
 	p.Subjects = []string{"F-0004", "F-0005"}
 	p.Backlog = []string{"F-0002", "F-0003", "F-0006"}
 	p.RootCauseRequired = []string{"F-0004"}
-	p.Findings = []core.Finding{f2Reclassified(), f3Calibration(), f4(core.StatusOpen, nil), f5(core.StatusOpen, nil), f6Preference()}
+	rejected := &core.Fix{Finding: "F-0004", Commits: []string{commitBatch}, Summary: "Wait for the sync in the batch endpoint as well.",
+		Components: []string{"internal/delivery/batch.go", "internal/delivery/accept.go"}}
+	p.Findings = []core.Finding{f2Reclassified(), f3Calibration(), f4(core.StatusOpen, rejected, 8), f5(core.StatusOpen, nil, 3), f6Preference()}
 	p.History = history(2)
-	p.Decisions = decisions()[:1]
 	return p
 }
 
 func fullVerify() core.Packet {
-	p := base(core.StepVerify, 2, core.Candidate{Commit: commitFixed, Digest: digestFixed})
+	p := base("P-0012", core.StepVerify, 2, core.Candidate{Commit: commitFixed, Digest: digestFixed})
 	p.Base = &core.Candidate{Commit: commitRound2, Digest: digestRound2}
-	rootCause := "The handler treated the return of append as durability. Acknowledgement now waits for the sync, and the earlier fixes, which added retries around the write, are removed."
 	p.Subjects = []string{"F-0004", "F-0005"}
-	p.Findings = []core.Finding{
-		f4(core.StatusClaimed, &core.Fix{Finding: "F-0004", Commits: []string{commitFixed}, Summary: "Acknowledge only after the append is synced.",
-			Components: []string{"internal/delivery/accept.go", "internal/store/append.go"}, RootCause: rootCause,
-			Tests: "TestCrashRecovery now kills the process at every write boundary; 100 runs pass."}),
-		f5(core.StatusClaimed, &core.Fix{Finding: "F-0005", Commits: []string{commitFixed}, Summary: "Moved Event to internal/event.",
-			Components: []string{"internal/event", "internal/store", "internal/delivery"}}),
-	}
+	p.Findings = []core.Finding{f4(core.StatusClaimed, fixF4(), 9), f5(core.StatusClaimed, fixF5(), 4)}
 	p.History = history(2)
-	p.Decisions = decisions()[:1]
 	return p
 }
 
 func fullAudit() core.Packet {
-	p := base(core.StepAudit, 5, core.Candidate{Commit: commitRound5, Digest: digestRound5})
+	p := base("P-0021", core.StepAudit, 5, core.Candidate{Commit: commitRound5, Digest: digestRound5})
 	p.Evidence = []core.Evidence{
 		passed("REQ-1", "go test ./internal/delivery -run TestAtLeastOnce", digestRound5),
 		passed("REQ-4", "go test ./internal/store -run TestCrashRecovery -count 1", digestRound5),
 		passed("REQ-9", "go test ./internal/delivery -run TestLatencyBudget", digestRound5),
+	}
+	disputed := core.Finding{
+		ID: "F-0008", Status: core.StatusOpen, Tier: core.TierMaterial, Round: 4, Source: core.RoleReviewer, Disputed: true,
+		Input: core.FindingInput{
+			Key: "shared-client", Tier: core.TierMaterial, Domain: core.DomainPerformance,
+			Title:       "All deliveries share an HTTP client limited to two connections",
+			Components:  []string{"internal/delivery/client.go"},
+			Description: "The shared client allows two connections, so deliveries to fast subscribers queue behind slow ones.",
+			Evidence:    "With 20 subscribers of which 2 respond in 2 s, TestLatencyBudget measures a 99th percentile of 1.8 s.",
+			Impact:      "Latency exceeds the 500 ms budget whenever two subscribers are slow.",
+			Requirement: "REQ-9", BlockingRationale: "Two of the pilot's subscribers are batch systems known to respond slowly.",
+			Verification: "TestLatencyBudget with two 2-second subscribers stays under 500 ms at the 99th percentile.",
+			Proportionality: &core.Proportionality{
+				ProposedChange: "Size the connection pool to the number of subscribers.",
+				RegressionRisk: "More open connections, bounded by the envelope's 200 subscribers.",
+				DeferralCost:   "Latency failures during the pilot would be blamed on subscribers and hide the cause.",
+			},
+		},
+		History: []core.FindingEvent{
+			step(core.EventFindingOpened, 4, "P-0017", ""),
+			step(core.EventEscalationRaised, 5, "P-0020", "the implementer disputes F-0008: the envelope says nothing about subscriber latency, so slow subscribers are outside it"),
+		},
 	}
 	contradicting := core.Finding{
 		ID: "F-0009", Status: core.StatusOpen, Tier: core.TierMaterial, Round: 5, Source: core.RoleReviewer,
@@ -359,29 +443,30 @@ func fullAudit() core.Packet {
 			Verification: "The REQ-7 soak test passes with one subscriber that never recovers.",
 			Contradicts:  "F-0001",
 		},
+		History: []core.FindingEvent{
+			step(core.EventFindingOpened, 5, "P-0019", ""),
+			step(core.EventEscalationRaised, 5, "P-0019", "F-0009 declares that it reverses the resolution of F-0001"),
+		},
 	}
-	disputed := f2Reclassified()
-	disputed.Tier = core.TierMaterial
 	p.Escalations = []core.Escalation{
 		{ID: "E-0006", Kind: core.EscalationDispute, Owner: core.RoleAuditor, Round: 5, Open: true,
-			Reason:   "the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk.",
-			Findings: []string{"F-0002"}},
+			Reason:   "the implementer disputes F-0008: the envelope says nothing about subscriber latency, so slow subscribers are outside it",
+			Findings: []string{"F-0008"}},
 		{ID: "E-0007", Kind: core.EscalationContradiction, Owner: core.RoleAuditor, Round: 5, Open: true,
 			Reason:   "F-0009 declares that it reverses the resolution of F-0001",
 			Findings: []string{"F-0009"}},
 		{ID: "E-0008", Kind: core.EscalationComponentChurn, Owner: core.RoleAuditor, Round: 5, Open: true,
-			Reason:     "internal/delivery/retry.go was fixed in rounds 1, 3 and 4.",
+			Reason:     "component \"internal/delivery/retry.go\" was named in fixes in 3 distinct rounds of stage pilot",
+			Findings:   []string{"F-0001"},
 			Components: []string{"internal/delivery/retry.go"}},
 		{ID: "E-0009", Kind: core.EscalationRegressionSpiral, Owner: core.RoleAuditor, Round: 4, Open: true,
-			Reason: "The verification of round 4 confirmed one fix and found two blocking regressions."},
+			Reason: "verification P-0018 found 2 blocking regressions and confirmed 1 fixes"},
 		{ID: "E-0010", Kind: core.EscalationProcessAudit, Owner: core.RoleAuditor, Round: 5, Open: true,
-			Reason:       "Five consecutive rounds have ended without GREEN.",
-			Requirements: []string{"REQ-7", "REQ-8"}},
+			Reason: "5 consecutive rounds of stage pilot ended without GREEN"},
 	}
-	p.Adjudicable = []string{"F-0002", "F-0009"}
-	p.Findings = []core.Finding{f1Resolved(), disputed, f3Calibration(), contradicting}
+	p.Adjudicable = []string{"F-0008", "F-0009"}
+	p.Findings = []core.Finding{f1Resolved(), f2Reclassified(), f3Calibration(), disputed, contradicting}
 	p.History = history(5)
-	p.Decisions = decisions()
 	return p
 }
 

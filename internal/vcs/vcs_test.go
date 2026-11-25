@@ -354,29 +354,95 @@ func TestHeadWithoutCommits(t *testing.T) {
 	}
 }
 
-func TestCommitsSince(t *testing.T) {
-	root, r := baseRepo(t)
-	base := head(t, r)
-	if got, err := r.CommitsSince(base); err != nil || len(got) != 0 {
-		t.Fatalf("CommitsSince(HEAD) = %q, %v", got, err)
-	}
-	write(t, root, "a.txt", "1\n")
-	c1 := commit(t, root, "c1")
-	write(t, root, "a.txt", "2\n")
-	c2 := commit(t, root, "c2")
+// checkCommits compares CommitsSince's result with the expected
+// substantiveness of each commit, and checks that HEAD comes first.
+func checkCommits(t *testing.T, r *Repo, base string, want map[string]bool) {
+	t.Helper()
 	got, err := r.CommitsSince(base)
 	if err != nil {
 		t.Fatalf("CommitsSince: %v", err)
 	}
-	if want := []string{c2, c1}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("CommitsSince = %q, want %q", got, want)
+	if len(got) != len(want) {
+		t.Fatalf("CommitsSince returned %d commits, want %d: %+v", len(got), len(want), got)
 	}
+	if got[0].Hash != head(t, r) {
+		t.Errorf("first commit is %s, want HEAD", got[0].Hash)
+	}
+	seen := map[string]bool{}
+	for _, c := range got {
+		substantive, ok := want[c.Hash]
+		switch {
+		case !ok || seen[c.Hash]:
+			t.Errorf("unexpected or repeated commit %s", c.Hash)
+		case c.Substantive != substantive:
+			t.Errorf("commit %s: Substantive = %v, want %v", run(t, r.Root(), "log", "-1", "--format=%s", c.Hash), c.Substantive, substantive)
+		}
+		seen[c.Hash] = true
+	}
+}
+
+func TestCommitsSince(t *testing.T) {
+	root, r := baseRepo(t)
+	base := head(t, r)
+	if got, err := r.CommitsSince(base); err != nil || len(got) != 0 {
+		t.Fatalf("CommitsSince(HEAD) = %+v, %v", got, err)
+	}
+	want := map[string]bool{}
+	step := func(msg string, substantive bool, change func()) {
+		change()
+		want[commit(t, root, msg)] = substantive
+	}
+	step("only .metron", false, func() { write(t, root, ".metron/state/ledger.jsonl", "{}\n") })
+	step("empty", false, func() {})
+	step("both", true, func() {
+		write(t, root, "a.txt", "1\n")
+		write(t, root, ".metron/state/ledger.jsonl", "{}\n{}\n")
+	})
+	step("only outside", true, func() { write(t, root, "dir/b.txt", "2\n") })
+
+	// Merges are judged against their first parent: this one brings a
+	// change from the side branch into main.
+	run(t, root, "checkout", "-q", "-b", "side")
+	step("side change", true, func() { write(t, root, "side.txt", "s\n") })
+	run(t, root, "checkout", "-q", "main")
+	step("main, only .metron", false, func() { write(t, root, ".metron/x", "x\n") })
+	run(t, root, "merge", "-q", "--no-ff", "--no-edit", "side")
+	want[head(t, r)] = true
+
+	// This one brings only a .metron change.
+	run(t, root, "checkout", "-q", "-b", "side2")
+	step("side2, only .metron", false, func() { write(t, root, ".metron/y", "y\n") })
+	run(t, root, "checkout", "-q", "main")
+	run(t, root, "merge", "-q", "--no-ff", "--no-edit", "side2")
+	want[head(t, r)] = false
+
+	checkCommits(t, r, base, want)
+
 	tree := run(t, root, "rev-parse", "HEAD^{tree}")
 	for _, bad := range []string{"HEAD", "--all", base[:10], tree, strings.Repeat("0", 40)} {
 		if _, err := r.CommitsSince(bad); err == nil {
 			t.Errorf("CommitsSince(%q) succeeded", bad)
 		}
 	}
+}
+
+// A root commit is compared with an empty tree.
+func TestCommitsSinceRootCommits(t *testing.T) {
+	root, r := newRepo(t, "repo")
+	write(t, root, ".metron/contract.yaml", "c\n")
+	want := map[string]bool{commit(t, root, "root with only .metron"): false}
+	run(t, root, "checkout", "-q", "--orphan", "side")
+	run(t, root, "rm", "-rfq", ".")
+	write(t, root, "a.txt", "a\n")
+	want[commit(t, root, "root with a file")] = true
+	run(t, root, "checkout", "-q", "--orphan", "unrelated")
+	run(t, root, "rm", "-rfq", ".")
+	write(t, root, "u.txt", "u\n")
+	base := commit(t, root, "unrelated base")
+	run(t, root, "checkout", "-q", "main")
+	run(t, root, "merge", "-q", "--no-edit", "--allow-unrelated-histories", "side")
+	want[head(t, r)] = true
+	checkCommits(t, r, base, want)
 }
 
 func TestIdentity(t *testing.T) {

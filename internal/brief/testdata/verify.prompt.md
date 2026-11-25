@@ -2,10 +2,11 @@
 
 ## Your situation
 
-You are the verifier of Courier, in round 2 of the `pilot` stage.
-This round's review examined the commit below and found blocking
-problems. An implementer has since claimed fixes for `F-0004` and `F-0005`,
-which produced the candidate you verify:
+You are the verifier of Courier.
+The review of round 2, under a contract that targets the `pilot`
+stage, examined the commit below and found blocking problems. An implementer
+has since claimed fixes for `F-0004` and `F-0005`, which produced the candidate
+you verify:
 
 - reviewed commit `9b2d4f6a8c0e1357924680ace13579bdf0246813`
 - candidate under verification: commit `c3e5a7b9d1f30246813579bdf02468ace1357902`, candidate
@@ -27,10 +28,10 @@ of the implementer, and your identity in this ledger must stay separate from
 theirs.
 
 Everything this brief refers to is in the packet: the contract, the claimed
-fixes with their findings (`findings`), the latest check results
-(`evidence`), the rounds of this stage (`history`) and the binding decisions
-(`decisions`). If you received this brief as a prompt, the same information
-follows it, laid out for reading.
+fixes with their findings and each finding's history (`findings`), the latest
+check results (`evidence`), the rounds of this stage (`history`) and the
+binding decisions (`decisions`). If you received this brief as a prompt, the
+same information follows it, laid out for reading.
 
 ## What you are deciding
 
@@ -54,6 +55,11 @@ Reject a fix that weakens a check, a test or the contract to make the finding
 go away, such as a deleted or skipped test, a loosened assertion, or a
 special case for the conditions the evidence uses. Such a fix makes the
 evidence pass while the defect remains.
+
+A finding's `history` shows its earlier fixes and the evidence with which they
+were rejected, and any reopening with its justification. Read it: a fix that
+returns to an approach already rejected, or that would not have prevented the
+failure behind a reopening, does not resolve the finding.
 
 Root-cause analysis is required for `F-0004`: rejected fixes and
 reopenings have reached the point at which a fix must address the cause, and
@@ -184,7 +190,7 @@ information the brief above refers to.
 ## Identification
 
 - Packet: `P-0012`, issued 2026-11-20T14:03:09Z under protocol `metron.protocol/v1`
-- Action: `verify`, for the `verifier`, in round 2 of the stage
+- Action: `verify`, for the `verifier`, round 2
 - Candidate: commit `c3e5a7b9d1f30246813579bdf02468ace1357902`, digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`
 - Reviewed commit: `9b2d4f6a8c0e1357924680ace13579bdf0246813`, digest `sha256:2222222222222222222222222222222222222222222222222222222222222222`
 - Contract digest: `sha256:abababababababababababababababababababababababababababababababab`
@@ -354,15 +360,16 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 ## Convergence thresholds
 
 - Root-cause analysis: required for a finding's next fix once its rejected fixes and reopenings reach 2.
-- Convergence analysis: once 3 consecutive rounds have ended without GREEN.
+- Convergence analysis: once per streak, when consecutive rounds without GREEN reach 3.
 - Independent process audit: each time the count of consecutive rounds without GREEN reaches a multiple of 5.
+- A streak of rounds without GREEN ends with a GREEN verdict, and its count restarts when a pin changes the stage.
 
 ## Claimed fixes to verify
 
 ### F-0004: An event acknowledged before its append is synced can be lost on a crash
 
 - Tier `T1`, in `data-integrity`
-- Status `claimed`; opened in round 1 by the reviewer; recurrences: 2
+- Status `claimed`; opened in round 1 by the reviewer; recurrences: 3
 - Root-cause analysis required for its next fix
 - Components: `internal/store/append.go` and `internal/delivery/accept.go`
 - Requirement: `REQ-4`
@@ -382,9 +389,21 @@ Latest fix: Acknowledge only after the append is synced.
 - Commits: `c3e5a7b9d1f30246813579bdf02468ace1357902`
 - Components: `internal/delivery/accept.go` and `internal/store/append.go`
 
-Root cause: The handler treated the return of append as durability. Acknowledgement now waits for the sync, and the earlier fixes, which added retries around the write, are removed.
+Root cause: Both endpoints treated the return of append as durability, and every earlier fix patched one acknowledgement path. Acknowledgement now goes through a single function that waits for the sync, and the retries added in P-0002 are removed.
 
-Tests: TestCrashRecovery now kills the process at every write boundary; 100 runs pass.
+Tests: TestCrashRecovery now kills the process at every write boundary on both endpoints; 100 runs pass.
+
+History, oldest first:
+
+- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `finding.fix-claimed` in packet `P-0002`: Retry the append when the sync fails.
+- Round 1, `finding.fix-rejected` in packet `P-0004`: TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent.
+- Round 1, `finding.fix-claimed` in packet `P-0005`: Sync before returning from append on the single-event endpoint.
+- Round 1, `finding.fix-confirmed` in packet `P-0006`: TestCrashRecovery passes 20 runs with a kill between write and sync.
+- Round 2, `finding.reopened` in packet `P-0007`: regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs.
+- Round 2, `finding.fix-claimed` in packet `P-0008`: Wait for the sync in the batch endpoint as well.
+- Round 2, `finding.fix-rejected` in packet `P-0010`: The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10.
+- Round 2, `finding.fix-claimed` in packet `P-0011`: Acknowledge only after the append is synced.
 
 ### F-0005: internal/store imports internal/delivery for the event type
 
@@ -415,6 +434,13 @@ Latest fix: Moved Event to internal/event.
 - Commits: `c3e5a7b9d1f30246813579bdf02468ace1357902`
 - Components: `internal/event`, `internal/store` and `internal/delivery`
 
+History, oldest first:
+
+- Round 2, `finding.opened` in packet `P-0007`
+- Round 2, `escalation.raised` in packet `P-0008`: the implementer disputes F-0005: the replay tool is not part of the pilot, so the dependency direction blocks nothing at this stage
+- Round 2, `escalation.resolved` in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- Round 2, `finding.fix-claimed` in packet `P-0011`: Moved Event to internal/event.
+
 ## Rounds of this stage
 
 | Round | Commit | Verdict | Reviewer |
@@ -424,7 +450,14 @@ Latest fix: Moved Event to internal/event.
 
 ## Binding decisions
 
-- `directive` by `auditor`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
+Audit directives and escalation resolutions recorded so far, oldest first.
+They bind every role.
+
+- A `resolution` of `E-0001` by `governance`: Dismissed: retention of delivered events is out of scope for the pilot; see the non-objectives.
+- A `directive` by `auditor`, in packet `P-0003`: Durability findings are verified with TestCrashRecovery at every write boundary, not with the happy-path store tests.
+- A `resolution` of `E-0002` by `auditor`, in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- A `resolution` of `E-0003` by `auditor`, in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- A `resolution` of `E-0004` by `auditor`, in packet `P-0009`: Withdrawn: the only caller passes keys validated by NewSigner, and HMAC signing cannot fail for a valid key.
 
 ---
 

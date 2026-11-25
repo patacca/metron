@@ -1,15 +1,16 @@
-# Implementer brief for packet P-0012
+# Implementer brief for packet P-0011
 
 ## Your situation
 
-You are the implementer of Courier, in round 2 of the `pilot` stage.
-This round's review examined the commit below and found problems that
-must be resolved before a candidate can be approved for the `pilot`
-stage:
+You are the implementer of Courier.
+The review of round 2, under a contract that targets the `pilot`
+stage, examined the commit below and found problems that must be resolved
+before a candidate can be approved for that stage:
 
 - reviewed commit `9b2d4f6a8c0e1357924680ace13579bdf0246813`
 
-Your work goes on top of that commit.
+The repository has since moved to commit `b8d0f2a4c6e81357924680ace13579bdf0246802`, and your
+work goes on top of it.
 
 The review is governed by Metron, a program that runs the loop around you. It
 issued this packet, will validate your report and records your fixes in its
@@ -18,10 +19,10 @@ complete review of the resulting candidate follows. Governance owns the
 acceptance contract, and an auditor adjudicates disputes.
 
 Everything this brief refers to is in the packet: the contract, the findings
-you work on with their evidence (`findings`), the latest check results
-(`evidence`), the rounds of this stage (`history`) and the binding decisions
-(`decisions`). If you received this brief as a prompt, the same information
-follows it, laid out for reading.
+you work on with their evidence and history (`findings`), the latest check
+results (`evidence`), the rounds of this stage (`history`) and the binding
+decisions (`decisions`). If you received this brief as a prompt, the same
+information follows it, laid out for reading.
 
 ## What you are asked to do
 
@@ -51,6 +52,12 @@ acceptable for it. Find out why the defect occurs and why the earlier fixes
 did not hold, change that, and explain both in the fix's `root_cause`; the
 verifier will check that the fix addresses the cause you identified.
 
+Each finding's `history` lists every step it went through, with what was said
+at the time: the summary of each earlier fix, the evidence with which a
+verifier rejected it, the justification for a reopening, an adjudicated
+dispute. Read it before you change anything. A fix that repeats an approach a
+verifier has already rejected will be rejected again.
+
 Each finding says how a fix can be verified, in its `verification` member.
 That is what the verifier will apply, so run it yourself before you submit.
 A regression test that fails before your change and passes after it is the
@@ -71,8 +78,7 @@ defect remains, so the gate would report something false; the verifier will
 reject it.
 
 Do not touch `.metron/`. The contract belongs to governance and the state
-directory to Metron. A change there is never a fix: commits that change
-nothing outside `.metron/` do not change the candidate, and editing the state
+directory to Metron. A change there is never a fix, and editing the state
 directory corrupts the ledger.
 
 ## Disputing a finding
@@ -98,10 +104,18 @@ Commit everything. When you submit, the working tree must be clean:
 included. Write your report file outside the repository for the same reason.
 
 List each fix's commits by their full hash, as `git rev-parse` prints it.
-Every listed commit must be one you added after the reviewed commit:
-reachable from the commit you submit, and not from the reviewed one. A commit
-that contains changes for several findings is listed under each of them. A
-report with at least one fix must change the candidate.
+Every listed commit must be one added after the reviewed commit: reachable
+from the commit you submit, and not from the reviewed one. A commit that
+contains changes for several findings is listed under each of them.
+
+Every listed commit must also change something outside `.metron/`; a commit
+that changes only `.metron/` changes nothing that is reviewed, so it fixes
+nothing. And for each finding you fix, the candidate you submit must differ
+from the one on which that finding was last opened, reopened or had a fix
+rejected; the finding's `history` shows when that was. A fix committed before
+this packet was requested therefore counts. Claiming a rejected fix again
+without a new change does not: the verifier has already found that change
+insufficient.
 
 ## Writing the report
 
@@ -111,7 +125,7 @@ answers and who wrote it:
 | Member | Content |
 | --- | --- |
 | `schema` | `metron.report/v1` |
-| `packet` | `P-0012`, the packet you are answering |
+| `packet` | `P-0011`, the packet you are answering |
 | `role` | `implementer` |
 | `author` | Who you are. `id` is a stable name for whoever acts in this role; Metron enforces role separation on it. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |

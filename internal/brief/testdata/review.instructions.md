@@ -1,9 +1,9 @@
-# Reviewer brief for packet P-0012
+# Reviewer brief for packet P-0013
 
 ## Your situation
 
-You are the reviewer of Courier, in round 3 of the `pilot` stage.
-The candidate is this commit:
+You are the reviewer of Courier for round 3, under
+a contract that targets the `pilot` stage. The candidate is this commit:
 
 - commit `c3e5a7b9d1f30246813579bdf02468ace1357902`
 - candidate digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`
@@ -20,10 +20,10 @@ fixes; an auditor, who steps in when the loop stops converging; and
 governance, which owns the acceptance contract.
 
 Everything this brief refers to is in the packet: the contract, the latest
-check results (`evidence`), every finding in the ledger (`findings`), the
-earlier rounds of this stage (`history`) and the binding decisions
-(`decisions`). If you received this brief as a prompt, the same information
-follows it, laid out for reading.
+check results (`evidence`), every finding in the ledger with its history
+(`findings`), the earlier rounds of this stage (`history`) and the binding
+decisions (`decisions`). If you received this brief as a prompt, the same
+information follows it, laid out for reading.
 
 ## What you are deciding
 
@@ -195,10 +195,15 @@ yet, not for mandatory conditions nobody managed to check.
 Give every applicable requirement exactly one status:
 
 - `satisfied`: you have evidence that its criterion holds for this candidate.
-- `violated`: you have evidence that it does not. A violated requirement must
-  be cited by at least one blocking finding that this report opens or reopens,
-  so that the implementer has something to act on.
+- `violated`: you have evidence that it does not.
 - `unverified`: you could not establish either.
+
+The requirement statuses and the blocking findings must tell the same story.
+A violated requirement must be cited by at least one blocking finding that
+this report opens or reopens, so that the implementer has something to act
+on. Conversely, a requirement that such a finding cites must be `violated`:
+if a blocking finding shows that a requirement does not hold, the requirement
+cannot be `satisfied` or `unverified` in the same report.
 
 Where a requirement has a check command, its latest result on this candidate
 is in the packet. A passing check is necessary for the gate, but it does not
@@ -222,6 +227,10 @@ otherwise a loop can be kept going indefinitely by re-arguing settled points.
   | `requirement-changed` | A requirement or assumption the resolution relied on has changed |
   | `contract-conflict` | The resolution conflicts with the pinned contract |
 
+  Each finding's `history` records the steps behind its resolution, with what
+  was said at the time: the fix's summary and the evidence with which the
+  verifier confirmed it. Read that evidence before you call a verification
+  invalid, and say in your justification what it missed.
 - A finding that is still unresolved is already recorded; do not report it
   again. If you find something connected to it, name it in `related`.
 - You cannot change the tier of a recorded finding; only an auditor can. If an
@@ -235,8 +244,9 @@ otherwise a loop can be kept going indefinitely by re-arguing settled points.
 - A `withdrawn` finding cannot be reopened: an auditor decided it was wrong.
   If you have evidence that the auditor did not have, open a new finding and
   name the withdrawn one in `contradicts`, so that an auditor decides again.
-- The packet's decisions (audit directives and governance resolutions) bind
-  you. If you have evidence that one rests on something false, report that
+- The packet's decisions bind you: audit directives, and the resolutions of
+  earlier escalations by an auditor or by governance, each with where it came
+  from. If you have evidence that one rests on something false, report that
   evidence through the channels above rather than acting against the
   decision.
 
@@ -267,7 +277,7 @@ answers and who wrote it:
 | Member | Content |
 | --- | --- |
 | `schema` | `metron.report/v1` |
-| `packet` | `P-0012`, the packet you are answering |
+| `packet` | `P-0013`, the packet you are answering |
 | `role` | `reviewer` |
 | `author` | Who you are. `id` is a stable name for whoever acts in this role; Metron enforces role separation on it. `kind` is `agent` or `human`. An agent should also give `model`, the model identifier, and may give `harness`, the tool that ran it, and `session`, an identifier that lets someone find the session's record later. |
 | `body` | Your answer, described below |
