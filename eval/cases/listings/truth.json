@@ -1,0 +1,146 @@
+{
+  "case": "listings",
+  "synthetic": true,
+  "repo": "repo",
+  "contract": "contract.yaml",
+  "test_command": "python3 -m unittest discover -s tests -q",
+  "oracle_command": "LISTINGS_REPO=<tree> python3 -m unittest discover -s oracle -v",
+  "plants": [
+    {
+      "id": "P1",
+      "kind": "blocker",
+      "tier": "T0",
+      "domain": "data-integrity",
+      "requirement": "REQ-2",
+      "risk": "RISK-1",
+      "paths": ["listings/store.py", "listings/schema.py"],
+      "functions": ["listings/store.py:ListingStore.upsert_listing", "listings/schema.py:MIGRATIONS[2] (price_history ON DELETE CASCADE)"],
+      "match": [
+        "(?i)insert\\s+or\\s+replace",
+        "(?i)cascad",
+        "(?i)\\breplace\\b[\\s\\S]{0,200}\\b(delet|remov)",
+        "(?i)\\b(wipe[sd]?|erase[sd]?|destroy(s|ed)?|delete[sd]?|drops)\\b[\\s\\S]{0,80}(price.?history|history)",
+        "(?i)(price.?history|history)[\\s\\S]{0,80}\\b(wiped|erased|destroyed|deleted|cascade[sd]?)\\b"
+      ],
+      "oracle": ["test_P1_rescrape_keeps_price_history"],
+      "summary": "Re-scraping a known listing through upsert_listing uses INSERT OR REPLACE on listings; REPLACE deletes the existing row first, and with foreign keys on, price_history's ON DELETE CASCADE silently deletes the listing's whole price history on every re-scrape."
+    },
+    {
+      "id": "P2",
+      "kind": "blocker",
+      "tier": "T1",
+      "domain": "functional-correctness",
+      "requirement": "REQ-1",
+      "risk": "RISK-2",
+      "paths": ["listings/prices.py", "listings/store.py", "listings/updates.py", "listings/bulk.py"],
+      "root_cause": {
+        "path": "listings/prices.py",
+        "function": "parse_amount",
+        "summary": "Returns the amount as a binary float."
+      },
+      "sites": [
+        {"path": "listings/store.py", "function": "ListingStore.upsert_listing", "oracle": "test_P2_single"},
+        {"path": "listings/updates.py", "function": "apply_update", "oracle": "test_P2_update"},
+        {"path": "listings/bulk.py", "function": "import_records", "oracle": "test_P2_bulk"}
+      ],
+      "match": [
+        "(?i)\\bfloat",
+        "(?i)truncat",
+        "(?i)binary (floating|fraction|representation)|ieee.?754",
+        "(?i)\\b1998\\b|\\b19[.,]98\\b|\\b434\\b|\\b6998\\b|\\b1798\\b",
+        "(?i)\\b(one|1|a) (cent|minor unit|öre|penny)s? (short|too (low|few|little)|less|lost|off)",
+        "(?i)off[- ]by[- ]one[\\s\\S]{0,40}(cent|minor|price)",
+        "\\bDecimal\\(|decimal\\.Decimal|(?i:decimal module)",
+        "(?i)\\bround\\(|rounding (error|bug|issue)|instead of round"
+      ],
+      "oracle": ["test_P2_single", "test_P2_update", "test_P2_bulk"],
+      "summary": "parse_amount returns a binary float and each of the three ingestion paths converts it with int(amount * factor), duplicated at each call site, so prices such as 19.99 or '4,35 €' are stored one minor unit short (1998, 434)."
+    }
+  ],
+  "decoys": [
+    {
+      "id": "D1",
+      "kind": "decoy",
+      "max_tier": "T2",
+      "contract_ref": "REQ-8",
+      "paths": ["listings/schema.py", "listings/store.py"],
+      "functions": ["listings/schema.py:MIGRATIONS[3] (index listings_by_category)", "listings/store.py:ListingStore.cheapest_active"],
+      "match": [
+        "(?i)listings_by_category",
+        "(?i)temp(orary)?\\s*b-?tree",
+        "(?i)covering index",
+        "(?i)\\b(index|idx)\\b[\\s\\S]{0,80}(price_minor|order by|sort|currency|limit)",
+        "(?i)\\b(order by|sort(s|ing|ed)?)\\b[\\s\\S]{0,80}\\b(index|idx)\\b",
+        "(?i)explain query plan"
+      ],
+      "oracle": ["test_D1_cheapest_active_meets_REQ_8_at_envelope_scale"],
+      "summary": "The index for cheapest_active is (category, status); it lacks currency and price_minor, so SQLite sorts every matching row with a temporary B-tree instead of reading the cheapest 20 in index order. REQ-8 (under 250 ms at 50,000 listings in one category) is met with about a 15x margin."
+    },
+    {
+      "id": "D2",
+      "kind": "decoy",
+      "max_tier": "T3",
+      "contract_ref": "CAL-1",
+      "paths": ["listings/dedup.py"],
+      "functions": ["listings/dedup.py:SIMILARITY_THRESHOLD", "listings/dedup.py:PRICE_TOLERANCE_PERCENT", "listings/dedup.py:find_duplicates"],
+      "match": [
+        "(?i)threshold",
+        "0\\.82",
+        "(?i)similarity",
+        "(?i)price_tolerance|tolerance|\\b15 ?%",
+        "(?i)calibrat"
+      ],
+      "oracle": ["test_D2_clear_cases_hold_for_any_plausible_threshold"],
+      "summary": "The dedup thresholds (title similarity 0.82, price tolerance 15%) are provisional and declared as CAL-1: they can only be tuned on real listings, which the bounded launch will collect."
+    },
+    {
+      "id": "D3",
+      "kind": "decoy",
+      "max_tier": "T2",
+      "contract_ref": "operating_envelope[0]",
+      "paths": ["listings/store.py"],
+      "functions": ["listings/store.py:ListingStore.transaction"],
+      "match": [
+        "(?i)concurren",
+        "(?i)begin immediate|\\bdeferred\\b",
+        "(?i)\\b(multiple|several|two|second|parallel|more than one|other)\\b[\\s\\S]{0,20}\\b(writers?|writing|processes|process)\\b",
+        "(?i)database is locked|sqlite_busy|busy.?timeout|lock upgrade",
+        "(?i)\\brace\\b|race condition|multi-?process"
+      ],
+      "oracle": ["test_D3_single_writer_with_a_concurrent_reader"],
+      "summary": "Write transactions start with a deferred BEGIN, so with two writer processes most writes fail with 'database is locked' (SQLITE_BUSY_SNAPSHOT on lock upgrade, which the busy timeout does not retry). The envelope allows exactly one writer process; one writer with concurrent readers works."
+    },
+    {
+      "id": "D4",
+      "kind": "decoy",
+      "max_tier": "T2",
+      "contract_ref": "ACC-1",
+      "paths": ["listings/store.py", "listings/schema.py"],
+      "functions": ["listings/store.py:open_store", "listings/schema.py:MIGRATIONS[3] (seller column)"],
+      "match": [
+        "(?i)encrypt",
+        "(?i)\\bat rest\\b",
+        "(?i)plain ?text|clear ?text|unencrypted",
+        "(?i)\\b(personal data|pii|gdpr|privacy)\\b",
+        "(?i)file permission|chmod|umask"
+      ],
+      "oracle": ["test_D4_database_file_is_not_encrypted"],
+      "summary": "The database is a plain SQLite file holding sellers' display names; it is not encrypted at rest. The contract accepts this as ACC-1."
+    },
+    {
+      "id": "D5",
+      "kind": "decoy",
+      "max_tier": "T4",
+      "contract_ref": null,
+      "paths": ["listings/bulk.py"],
+      "functions": ["listings/bulk.py:import_records"],
+      "match": [
+        "(?i)too long|long function|function length|\\b\\d+.line (function|body)",
+        "(?i)\\bsplit (it|up|import_records|the function|into)\\b|break (it )?up|decompos",
+        "(?i)single.responsibility|readability|hard to read|does too much"
+      ],
+      "oracle": [],
+      "summary": "import_records is one long function (about 95 lines) that validates, converts and writes each record inline. It is clear and correct apart from the shared P2 conversion; splitting it is a preference."
+    }
+  ]
+}

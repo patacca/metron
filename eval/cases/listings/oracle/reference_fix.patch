@@ -1,0 +1,103 @@
+diff -ruN a/listings/prices.py b/listings/prices.py
+--- a/listings/prices.py
++++ b/listings/prices.py
+@@ -15,6 +15,7 @@
+ 
+ import math
+ import re
++from decimal import Decimal
+ 
+ # Digits after the decimal point in each currency's minor unit (ISO 4217).
+ CURRENCY_EXPONENTS = {
+@@ -63,13 +64,18 @@
+     return 10 ** currency_exponent(currency)
+ 
+ 
+-def parse_amount(price: object, currency: object) -> float:
++def parse_amount(price: object, currency: object) -> Decimal:
+     """Return the amount a scraped price stands for, in major units of currency.
+ 
+     price is a non-negative number, or text such as "19,99 €", "1.299,00",
+     "£1,299.99", "1 299 kr" or "¥1,500". The text may carry the currency's
+     symbol or code before or after the amount. Raises ValueError for
+     anything else, including a fraction finer than the currency's minor unit.
++
++    The amount is an exact Decimal: a binary float cannot hold most decimal
++    prices, and multiplying one by the minor-unit factor and truncating
++    loses a minor unit (19.99 would become 1998 cents). A float price is read
++    by its shortest decimal representation, so 19.99 stays 19.99.
+     """
+     exponent = currency_exponent(currency)
+     if isinstance(price, bool):
+@@ -77,7 +83,7 @@
+     if isinstance(price, (int, float)):
+         if not math.isfinite(price) or price < 0:
+             raise ValueError(f"price {price!r} is not a non-negative amount")
+-        return float(price)
++        return Decimal(repr(price))
+     if not isinstance(price, str):
+         raise ValueError(f"price must be a number or text, not {type(price).__name__}")
+ 
+@@ -91,7 +97,7 @@
+     if len(fraction) > exponent:
+         raise ValueError(f"{price!r} has more decimals than {currency} has minor units ({exponent})")
+     whole = re.sub(r"\D", "", match["whole"])
+-    return float(f"{whole}.{fraction}" if fraction else whole)
++    return Decimal(f"{whole}.{fraction}" if fraction else whole)
+ 
+ 
+ def _strip_symbol(text: str, currency: str) -> str:
+diff -ruN a/listings/store.py b/listings/store.py
+--- a/listings/store.py
++++ b/listings/store.py
+@@ -114,33 +114,26 @@
+ 
+         with self.transaction() as conn:
+             previous = conn.execute(
+-                "SELECT id, price_minor, currency, first_seen_at FROM listings "
++                "SELECT id, price_minor, currency FROM listings "
+                 "WHERE backend = ? AND external_id = ?",
+                 (backend, external_id),
+             ).fetchone()
+-            listing_id = None if previous is None else previous["id"]
+-            first_seen = seen if previous is None else previous["first_seen_at"]
+-            cursor = conn.execute(
+-                "INSERT OR REPLACE INTO listings (id, backend, external_id, title, search_text, "
+-                "category, seller, url, price_minor, currency, status, first_seen_at, last_seen_at) "
+-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+-                (
+-                    listing_id,
+-                    backend,
+-                    external_id,
+-                    title,
+-                    normalize_title(title),
+-                    category,
+-                    seller,
+-                    url,
+-                    price_minor,
+-                    currency,
+-                    status,
+-                    first_seen,
+-                    seen,
+-                ),
+-            )
+-            listing_id = cursor.lastrowid
++            values = (title, normalize_title(title), category, seller, url, price_minor, currency, status, seen)
++            if previous is None:
++                cursor = conn.execute(
++                    "INSERT INTO listings (title, search_text, category, seller, url, price_minor, "
++                    "currency, status, last_seen_at, backend, external_id, first_seen_at) "
++                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
++                    values + (backend, external_id, seen),
++                )
++                listing_id = cursor.lastrowid
++            else:
++                listing_id = previous["id"]
++                conn.execute(
++                    "UPDATE listings SET title = ?, search_text = ?, category = ?, seller = ?, url = ?, "
++                    "price_minor = ?, currency = ?, status = ?, last_seen_at = ? WHERE id = ?",
++                    values + (listing_id,),
++                )
+             if previous is None or (previous["price_minor"], previous["currency"]) != (price_minor, currency):
+                 conn.execute(
+                     "INSERT INTO price_history (listing_id, price_minor, currency, observed_at) "

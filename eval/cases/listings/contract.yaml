@@ -1,0 +1,97 @@
+# Metron acceptance contract for the listings store.
+#
+# Governance: the operator of the search agents. This contract authorizes the
+# bounded launch described under `authorizes` and nothing else.
+
+schema: metron.contract/v1
+
+project:
+  name: "listings: the store behind the marketplace search agents"
+  objectives:
+    - "Keep every listing the scrapers report from the 17 second-hand marketplaces in one SQLite file, keyed by backend and the marketplace's own listing id, together with the full history of its price"
+    - "Store every price as the exact integer number of minor units of its currency, whatever format the marketplace shows it in"
+    - "Let the search agents find the cheapest active listings of a category, optionally matching query terms, fast enough to answer a buyer interactively"
+    - "Point the search agents at listings that are probably the same item posted on several marketplaces"
+  non_objectives:
+    - "Scraping: the scrapers and watchers are separate programs that call this package"
+    - "Converting prices between currencies, or comparing listings priced in different currencies"
+    - "Several writer processes, a database server, or replication"
+    - "Encryption of the database file (see ACC-1)"
+    - "A user interface"
+
+stage: controlled-validation
+
+authorizes: "A bounded launch: the search agents run against the 17 backends and write to this store through one ingestion process on the operator's workstation, for at most 14 days or until the store holds 50,000 listings, whichever comes first, and their results are sent to the 20 buyers enrolled in the validation"
+
+scope:
+  - "The Python package listings/: schema and migrations (schema.py), price reading (prices.py), normalization (normalize.py), the store and its query, deletion, purge and statistics (store.py), and deduplication (dedup.py)"
+  - "The three ingestion paths: ListingStore.upsert_listing (store.py) for live scrapes, apply_update (updates.py) for watcher updates, and import_records and import_jsonl (bulk.py) for scraper dumps"
+  - "The test suite under tests/"
+
+operating_envelope:
+  - "Exactly one ingestion process writes to the database, through one connection used from one thread. The search agents only read, from their own processes and connections."
+  - "At most 50,000 stored listings and 500,000 price history rows in total; a single category and currency may hold all of them."
+  - "A scraper dump holds at most 50,000 records."
+  - "Currencies: EUR, GBP, CHF, SEK, NOK, DKK, PLN, CZK and JPY. Prices from 0 to 100,000 in the listing's currency."
+  - "A price arrives either as a non-negative number from a marketplace's JSON, with no more decimals than the currency has minor units, or as text as the marketplace displays it: digits, optionally grouped in thousands by one of '.', ',', a space, a no-break space or an apostrophe, optionally followed by a decimal point ('.' or ',') and one or two decimals (none for JPY), optionally preceded or followed by the currency's symbol or ISO code. A separator followed by exactly three digits groups thousands. Examples: 19.99, 19,99 €, 1.299,00, 1,299.00, £1,299.99, 1 299 kr, CHF 1'299.90, 49,99 zł, ¥1,500."
+  - "Observations of one listing reach the store in the order the scrapers and watchers made them: one ingestion process consumes their queue in order."
+  - "The database file is on a local disk of the operator's workstation, which uses full-disk encryption."
+  - "CPython 3.10 or later with the SQLite library it ships with."
+
+requirements:
+  - id: REQ-1
+    domain: functional-correctness
+    statement: "Every price in a format the operating envelope lists is stored as the exact integer number of minor units it stands for, by each of the three ingestion paths: upsert_listing, apply_update and import_records (and so import_jsonl)."
+    criterion: "For any price within the envelope, the price_minor that get_listing returns after any ingestion path stored it, and the price history entry recorded for it, equal the decimal amount multiplied by ten to the power of the currency's number of minor digits, exactly: '19,99 €' and 19.99 are 1999 EUR, '£17.99' is 1799 GBP, '¥1,500' is 1500 JPY."
+  - id: REQ-2
+    domain: data-integrity
+    statement: "A stored listing is never lost, and an entry of its price history is never lost or altered, except by an explicit delete: delete_listing, or purge_removed for listings marked removed."
+    criterion: "After any sequence of upsert_listing, apply_update and import_records calls concerning one listing, get_listing returns it with the id and first_seen_at it was first stored with, and price_history returns the first price ever stored for it followed by every later change of price or currency, oldest first, each with the time it was observed."
+  - id: REQ-3
+    domain: objective-alignment
+    statement: "cheapest_active returns the cheapest active listings of a category in a given currency, cheapest first, restricted when a query is given to listings whose title contains every query term regardless of case."
+    criterion: "The tests in tests/test_query.py cover ordering by price, the status, category and currency filters, the limit, and query terms with non-ASCII letters in either case, and pass."
+  - id: REQ-4
+    domain: architecture
+    statement: "The package uses only the Python standard library, and the database schema is created and upgraded only by the numbered migrations in listings/schema.py."
+    criterion: "No module of listings/ imports anything outside the standard library; opening a database created at an earlier schema version upgrades it to SCHEMA_VERSION without losing data, as tests/test_schema.py shows; no other code issues DDL."
+  - id: REQ-5
+    domain: testability
+    statement: "The test suite runs offline, writes only to temporary directories, and passes."
+    criterion: "The command exits with status 0 and leaves the working tree clean."
+    command: "python3 -m unittest discover -s tests -q"
+  - id: REQ-6
+    domain: observability
+    statement: "The operator can tell what the store holds and what an import did."
+    criterion: "stats() returns the number of listings per backend and status and the number of price history rows; import_records and import_jsonl return the numbers of listings inserted and updated and of prices recorded; a rejected record or line raises an error naming its position and the reason."
+  - id: REQ-7
+    domain: stability
+    statement: "Invalid input is rejected with an error that names it, and a rejected call leaves the database exactly as it was."
+    criterion: "A batch with one invalid record stores nothing; upsert_listing and apply_update raise ValueError for an unknown backend, currency or status, an unreadable price or a time without a UTC offset, and apply_update raises LookupError for a listing the store does not hold, in each case without changing anything; tests/test_bulk.py, tests/test_store.py and tests/test_updates.py show it."
+  - id: REQ-8
+    domain: performance
+    statement: "cheapest_active answers fast enough for a buyer waiting on a search agent, at the largest size the operating envelope allows."
+    criterion: "With 50,000 active listings, all in the queried category and currency, cheapest_active with a limit of 20 returns in under 250 ms on the operator's workstation, with and without query terms, as test_cheapest_active_at_envelope_scale in tests/test_query.py measures."
+  - id: REQ-9
+    domain: functional-correctness
+    from: pilot
+    statement: "The listings find_duplicates reports as duplicates of a listing are the same item."
+    criterion: "On a sample of at least 500 pairs of real listings that find_duplicates reports as duplicates, labelled by hand, at least 95% are the same item."
+
+risks:
+  unacceptable:
+    - id: RISK-1
+      statement: "Stored listings or their price history are lost or silently altered during normal operation"
+    - id: RISK-2
+      statement: "A buyer is shown a price that differs from the one the marketplace displays"
+    - id: RISK-3
+      statement: "An ingestion error leaves a partly applied batch or update in the store"
+  accepted:
+    - id: ACC-1
+      statement: "The database file is not encrypted at rest. It holds public listing data, including sellers' display names, and anyone who can read the operator's account can read it. The workstation's full-disk encryption is the only protection during controlled validation; encryption of the file is reconsidered before the pilot stage."
+
+calibrations:
+  - id: CAL-1
+    parameter: "The deduplication thresholds in listings/dedup.py: two active listings on different backends, in the same category and currency, are probable duplicates when their normalized titles have a similarity of at least 0.82 (SIMILARITY_THRESHOLD) and their prices differ by at most 15% (PRICE_TOLERANCE_PERCENT). Both values are provisional."
+    evidence_needed: "Precision and recall of find_duplicates on at least 500 pairs of real listings, cross-posted and not, labelled by hand. Such listings exist only once the bounded launch has collected them."
+    reassess_when: "At the end of controlled validation, before the contract targets the pilot stage, where REQ-9 starts to apply"
