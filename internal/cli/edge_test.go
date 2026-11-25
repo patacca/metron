@@ -252,3 +252,31 @@ func TestRepositoryWideFilter(t *testing.T) {
 	c.must("fsck")
 	c.must("gate")
 }
+
+// TestIgnoreCase sets core.ignoreCase. On a file system that distinguishes
+// case, which is what the test probes for, the tree is then not clean; on one
+// that does not, the setting is right and changes nothing.
+func TestIgnoreCase(t *testing.T) {
+	r := pinned(t)
+	r.must("check")
+	r.git("config", "core.ignoreCase", "true")
+	if _, err := os.Stat(r.path("GREETING.TXT")); err == nil || !os.IsNotExist(err) {
+		// Case-insensitive: GREETING.TXT names greeting.txt.
+		r.expectNext(core.StepReview)
+		return
+	}
+	a := r.expectNext(core.StepCommitChanges)
+	if a.Command != "git config core.ignoreCase false" || !strings.Contains(a.Reason, "git is set to ignore case (core.ignoreCase) on a file system that distinguishes it") {
+		t.Fatalf("next %+v", a)
+	}
+	contains(t, "next", r.must("next").out, "Tree:         core.ignoreCase is true on a file system that distinguishes case", "Run:          git config core.ignoreCase false")
+	contains(t, "check", r.expect(exitNegative, "check").out, "The working tree is not clean", "git config core.ignoreCase false")
+	contains(t, "gate", r.expect(exitNegative, "gate").out, "[FAIL] I", "git is set to ignore case")
+	var st statusDoc
+	unmarshal(t, r.must("status", "--json").out, &st)
+	if st.Clean || !st.IgnoreCase {
+		t.Fatalf("status clean %t, ignore case %t", st.Clean, st.IgnoreCase)
+	}
+	r.git("config", "core.ignoreCase", "false")
+	r.expectNext(core.StepReview)
+}

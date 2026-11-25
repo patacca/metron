@@ -20,6 +20,8 @@ type actionDoc struct {
 	PacketDigest string `json:"packet_digest,omitempty"`
 	// Tree lists why the working tree is not clean, for commit-changes.
 	Tree []treeDoc `json:"tree,omitempty"`
+	// StateDir is the state directory a template to set it aside applies to.
+	StateDir string `json:"state_dir,omitempty"`
 	// Command is a complete command, safe to run as it stands in a POSIX
 	// shell. Usage is a template with <placeholders> for a step that needs a
 	// decision, a message or a file, whose subjects are in their own members.
@@ -42,6 +44,9 @@ func (w *world) actionDoc(a core.Action) *actionDoc {
 		for _, p := range w.dirty {
 			d.Tree = append(d.Tree, treeDoc{Path: p.Path, Kind: p.Kind})
 		}
+	}
+	if a.Step == core.StepRepairLedger && len(w.stranded) > 0 {
+		d.StateDir = w.show(w.store.Dir())
 	}
 	return d
 }
@@ -155,6 +160,10 @@ var treeKinds = []struct {
 // writeTree prints why the working tree is not clean: each path with what is
 // wrong with it, escaped, then one fix per kind.
 func writeTree(line func(label, value string), w *world, ps []vcs.TreeProblem, leftovers bool) {
+	if w.ignoreCase {
+		line("Tree", "core.ignoreCase is true on a file system that distinguishes case")
+		line("Fix", "set it to false with git config core.ignoreCase false, then look again: git may have overlooked files")
+	}
 	for _, p := range ps {
 		what := p.Kind
 		for _, k := range treeKinds {

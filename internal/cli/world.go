@@ -136,13 +136,20 @@ type world struct {
 	events []core.Event
 	// ledgerMissing is set when the state directory has no ledger yet, or an
 	// empty one: either way it is not initialized. ledgerEmpty tells which.
+	// stranded lists the packet and report files of a state directory without
+	// a ledger: the ledger they belong to was lost, not never written.
 	ledgerMissing, ledgerEmpty bool
+	stranded                   []string
 	contract                   *contractCheck
 	// dirty lists why the working tree is not clean. sparse and ignoreStat
 	// say whether a sparse checkout or core.ignoreStat sets the flags of
 	// hidden files; they are observed only when there are hidden files.
 	dirty              []vcs.TreeProblem
 	sparse, ignoreStat bool
+	// ignoreCase is set when git ignores case on a file system that
+	// distinguishes it, which also makes the tree unclean: git overlooks a
+	// file whose name differs from a tracked one only by case.
+	ignoreCase bool
 	// noCommits is set when HEAD has no commit; Facts.Candidate is then empty.
 	noCommits bool
 	// files caches storedFiles.
@@ -200,7 +207,10 @@ func (c *ctx) gather(s *site) (*world, error) {
 	if w.dirty, err = s.repo.TreeProblems(); err != nil {
 		return nil, err
 	}
-	w.facts.Clean = len(w.dirty) == 0
+	if w.ignoreCase, err = s.repo.IgnoreCaseMismatch(); err != nil {
+		return nil, err
+	}
+	w.facts.Clean = len(w.dirty) == 0 && !w.ignoreCase
 	if slices.ContainsFunc(w.dirty, func(p vcs.TreeProblem) bool { return p.Kind == vcs.TreeHidden }) {
 		if w.sparse, err = s.repo.SparseCheckout(); err != nil {
 			return nil, err
@@ -213,12 +223,70 @@ func (c *ctx) gather(s *site) (*world, error) {
 	if op, ok := w.state.OpenPacket(); ok {
 		w.facts.PacketProblem = w.packetFile(op)
 	}
-	if w.facts.LedgerVerified && !w.ledgerMissing {
+	switch {
+	case w.ledgerMissing:
+		if w.stranded, err = s.stranded(); err != nil {
+			return nil, err
+		}
+	case w.facts.LedgerVerified:
 		if err := w.unissuedPackets(); err != nil {
 			return nil, err
 		}
 	}
 	return w, nil
+}
+
+// ignoreCaseReason says why core.ignoreCase on a case-sensitive file system
+// makes the tree unclean.
+const ignoreCaseReason = "git is set to ignore case (core.ignoreCase) on a file system that distinguishes it, as after copying the repository from a case-insensitive system, so git overlooks files whose names differ only by case: set it to false"
+
+// lostLedgerWays names the two ways out when a ledger was lost or rolled
+// back while its packet or report files remain.
+const lostLedgerWays = "restore the ledger from version control or a backup, or, as governance's decision, set the state directory aside to start a new history, which discards every verdict recorded so far"
+
+// setAside is the template that sets a state directory aside and starts a
+// new history. It is never a command: it is destructive, and the directory
+// is the user's.
+func (s *site) setAside() string {
+	return "mv <state-directory> <somewhere-else> && " + s.metron("init")
+}
+
+// stranded lists the packet and report files in the state directory.
+func (s *site) stranded() ([]string, error) {
+	var out []string
+	for _, sub := range []string{store.PacketsDir, store.ReportsDir} {
+		entries, err := os.ReadDir(filepath.Join(s.store.Dir(), sub))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			if storedPacket.MatchString(e.Name()) {
+				out = append(out, sub+"/"+e.Name())
+			}
+		}
+	}
+	return out, nil
+}
+
+// lostLedger says why a state directory without a usable ledger may not be
+// initialized, or returns "".
+func (s *site) lostLedger(stranded []string, empty bool) string {
+	if len(stranded) == 0 {
+		return ""
+	}
+	ledger := "has no ledger"
+	if empty {
+		ledger = "has an empty ledger"
+	}
+	files := strings.Join(stranded, ", ")
+	if len(stranded) > 3 {
+		files = strings.Join(stranded[:3], ", ") + fmt.Sprintf(" and %d more", len(stranded)-3)
+	}
+	return fmt.Sprintf("the state directory %s %s but holds packet or report files (%s): the ledger they belong to was lost, not never written; %s",
+		s.show(s.store.Dir()), ledger, files, lostLedgerWays)
 }
 
 // storedPacket is the name of a stored packet file.
@@ -247,8 +315,8 @@ func (w *world) unissuedPackets() error {
 	}
 	if len(unknown) > 0 {
 		w.facts.LedgerVerified = false
-		w.facts.LedgerProblem = fmt.Sprintf("the ledger is older than its stored files: it never issued the packet stored in %s, so it was rolled back or replaced; restore the ledger from version control",
-			strings.Join(unknown, ", "))
+		w.facts.LedgerProblem = fmt.Sprintf("the ledger is older than its stored files: it never issued the packet stored in %s, so it was rolled back or replaced; %s",
+			strings.Join(unknown, ", "), lostLedgerWays)
 	}
 	return nil
 }
@@ -384,11 +452,17 @@ func (w *world) storedFiles() []fileProblem {
 func (w *world) next() core.Action {
 	a := core.Next(w.state, w.facts)
 	switch {
+	case len(w.stranded) > 0:
+		return core.Action{Step: core.StepRepairLedger, Owner: core.RoleGovernance, Reason: w.lostLedger(w.stranded, w.ledgerEmpty)}
 	case a.Step == core.StepRepairLedger:
 		return a
 	case w.noCommits && a.Step != core.StepPinContract:
 		return core.Action{Step: core.StepCommitChanges, Owner: core.RoleImplementer,
 			Reason: "the repository has no commits: commit the work to review"}
+	case a.Step == core.StepCommitChanges && w.ignoreCase && len(w.dirty) == 0:
+		a.Reason = ignoreCaseReason
+	case a.Step == core.StepCommitChanges && w.ignoreCase:
+		a.Reason += "; also, " + ignoreCaseReason
 	case a.Step == core.StepNone:
 		if p, r, lost := w.verdictReport(); lost {
 			return core.Action{Step: core.StepRepairLedger, Owner: core.RoleGovernance,
@@ -411,6 +485,9 @@ func (w *world) gate() core.GateResult {
 			continue
 		}
 		cd.Description += "; the report carrying the verdict is stored intact"
+		if w.ignoreCase {
+			cd.Reasons = append(cd.Reasons, ignoreCaseReason)
+		}
 		if lost {
 			cd.Reasons = append(cd.Reasons, p.String())
 			cd.Satisfied, g.Open = false, false
@@ -442,6 +519,8 @@ func (w *world) verdictReport() (fileProblem, core.Round, bool) {
 // command that starts the recovery, or returns "".
 func (w *world) ledgerUnusable() (string, string) {
 	switch {
+	case len(w.stranded) > 0:
+		return w.lostLedger(w.stranded, w.ledgerEmpty), w.metron("fsck")
 	case w.ledgerEmpty:
 		return fmt.Sprintf("metron is not initialized here: the ledger in %s is empty", w.show(w.store.Dir())), w.metron("init")
 	case w.ledgerMissing:
@@ -463,6 +542,8 @@ func (w *world) instruction(a core.Action) (command, usage string) {
 	switch a.Step {
 	case core.StepRepairLedger:
 		switch {
+		case len(w.stranded) > 0:
+			return "", w.setAside()
 		case w.ledgerMissing:
 			return w.metron("init"), ""
 		case w.facts.LedgerVerified:
@@ -503,6 +584,9 @@ func (w *world) cleanTree() (command, usage string) {
 		return slices.ContainsFunc(w.dirty, func(p vcs.TreeProblem) bool { return p.Kind == kind })
 	}
 	switch {
+	case w.ignoreCase:
+		// First: while git ignores case, it may not see every other problem.
+		return "git config core.ignoreCase false", ""
 	case has(vcs.TreeHidden) && w.sparse && w.ignoreStat:
 		return "git sparse-checkout disable && git config core.ignoreStat false", ""
 	case has(vcs.TreeHidden) && w.sparse:
@@ -553,7 +637,7 @@ func (c *ctx) lock(s *site) (*store.Writer, *world, error) {
 // restoreLedger adds the advice to restore the ledger from version control to
 // a verification problem that does not already give it.
 func restoreLedger(problem string) string {
-	if strings.Contains(problem, "restore the ledger from version control") {
+	if strings.Contains(problem, "restore the ledger from version control") || strings.Contains(problem, lostLedgerWays) {
 		return problem
 	}
 	return problem + ": restore the ledger from version control"

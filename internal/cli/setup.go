@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -116,6 +116,18 @@ func runInit(c *ctx, args []string) error {
 	if err != nil {
 		return err
 	}
+	// A state directory with packets or reports but no usable ledger lost
+	// its ledger: initializing it would start a history its files deny.
+	info, statErr := os.Stat(filepath.Join(s.store.Dir(), store.LedgerName))
+	if empty := statErr == nil && info.Size() == 0; empty || errors.Is(statErr, iofs.ErrNotExist) {
+		stranded, err := s.stranded()
+		if err != nil {
+			return err
+		}
+		if why := s.lostLedger(stranded, empty); why != "" {
+			return fail(exitNegative, "%s\nUsage: %s", why, s.setAside())
+		}
+	}
 	meta := filepath.Join(s.repo.Root(), ".metron")
 	var b strings.Builder
 	contract := filepath.Join(meta, "contract.yaml")
@@ -168,7 +180,7 @@ func initLedger(c *ctx, s *site, ledger string, b *strings.Builder) error {
 	defer wr.Close()
 	events, err := s.store.Load()
 	switch {
-	case errors.Is(err, fs.ErrNotExist), err == nil && len(events) == 0:
+	case errors.Is(err, iofs.ErrNotExist), err == nil && len(events) == 0:
 		verb := "Created"
 		if err == nil {
 			verb = "Initialized the empty"
@@ -203,7 +215,7 @@ func createFile(path string, data []byte) (bool, error) {
 		return false, err
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
-	if errors.Is(err, fs.ErrExist) {
+	if errors.Is(err, iofs.ErrExist) {
 		return false, nil
 	}
 	if err != nil {

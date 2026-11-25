@@ -164,7 +164,7 @@ func TestLedgerBehindItsFiles(t *testing.T) {
 	r.write(".metron/state/ledger.jsonl", string(older))
 
 	contains(t, "fsck", r.expect(exitNegative, "fsck").out, "the ledger is older than its stored files", "packets/P-0001.json",
-		"restore the ledger from version control")
+		"restore the ledger from version control or a backup", "set the state directory aside to start a new history")
 	contains(t, "gate", r.expect(exitEnv, "gate").err, "the gate cannot be evaluated", "older than its stored files")
 	a := r.expectNext(core.StepRepairLedger)
 	contains(t, "next reason", a.Reason, "older than its stored files")

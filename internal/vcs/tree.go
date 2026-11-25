@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 // Kinds of TreeProblem.
@@ -273,6 +274,65 @@ func (r *Repo) SparseCheckout() (bool, error) {
 // files it writes assume-unchanged, so the tree is not clean.
 func (r *Repo) IgnoreStat() (bool, error) {
 	return r.configBool("core.ignoreStat")
+}
+
+// IgnoreCaseMismatch reports whether git is set to ignore case
+// (core.ignoreCase) while the file system distinguishes it, as after copying a
+// repository from a case-insensitive system. Git then overlooks a file whose
+// name differs from a tracked one only by case, so the tree is not clean. The
+// file system is probed, without writing, only when the setting is true.
+func (r *Repo) IgnoreCaseMismatch() (bool, error) {
+	ignore, err := r.configBool("core.ignoreCase")
+	if err != nil || !ignore {
+		return false, err
+	}
+	// The .git entry of the work tree lies on the work tree's file system;
+	// without one, the git directory itself is probed.
+	probe := filepath.Join(r.root, ".git")
+	if _, err := os.Lstat(probe); err != nil {
+		out, err := git(r.root, "rev-parse", "--absolute-git-dir")
+		if err != nil {
+			return false, err
+		}
+		probe = filepath.FromSlash(strings.TrimSuffix(string(out), "\n"))
+	}
+	return distinguishesCase(probe)
+}
+
+// distinguishesCase reports whether the file system distinguishes case at an
+// existing path: whether the last component spelled in the other case fails
+// to name the same file. A component without letters cannot tell, so its
+// nearest ancestor that has some is probed instead.
+func distinguishesCase(p string) (bool, error) {
+	for {
+		base := filepath.Base(p)
+		swapped := strings.Map(func(c rune) rune {
+			if unicode.IsUpper(c) {
+				return unicode.ToLower(c)
+			}
+			return unicode.ToUpper(c)
+		}, base)
+		if swapped == base {
+			parent := filepath.Dir(p)
+			if parent == p {
+				return false, fmt.Errorf("cannot tell whether the file system distinguishes case: no component of %s has letters", p)
+			}
+			p = parent
+			continue
+		}
+		info, err := os.Lstat(p)
+		if err != nil {
+			return false, err
+		}
+		other, err := os.Lstat(filepath.Join(filepath.Dir(p), swapped))
+		if errors.Is(err, fs.ErrNotExist) {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return !os.SameFile(info, other), nil
+	}
 }
 
 // configBool reads a boolean setting, false when unset. A value git cannot

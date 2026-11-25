@@ -144,6 +144,10 @@ The working tree is **clean** when all of the following hold outside
   file it leaves out, so a sparse checkout is never clean.
 - No tracked symbolic link resolves into `.metron/` or `.git/`, whose content
   is not part of the candidate and not covered by the points above.
+- Git is not set to ignore case (`core.ignoreCase`) on a file system that
+  distinguishes it. That combination arises when a repository is copied from
+  a case-insensitive system, and it makes git overlook files whose names
+  differ only by case.
 
 Metron requires a clean tree whenever it binds something to a candidate.
 
@@ -155,8 +159,8 @@ than that:
   ignore mechanism hides them. The same holds for whatever a tracked symbolic
   link points to outside the repository.
 - Local git configuration can make git consider different content identical: a
-  clean filter, `core.fileMode=false` (the executable bit) or
-  `core.ignoreCase`. Metron does not second-guess these.
+  clean filter, or `core.fileMode=false`, which git sets by itself on file
+  systems without an executable bit. Metron does not second-guess these.
 
 A check result is therefore only as reproducible as the environment it ran in,
 as with any locally run test. Running checks from a fresh checkout of the
@@ -313,6 +317,12 @@ after its ledger commit. `metron fsck` reports it, and the gate cannot be
 evaluated until the ledger is restored. This catches a ledger restored from an
 older version by accident; it does not stop someone who also removes the
 files.
+
+For the same reason `metron init` does not create a ledger in a state
+directory that already holds packets or reports: the ledger they belong to was
+lost, not never written. There are two ways out and both are governance's to
+choose: restore the ledger, or set the old state directory aside and start a
+new history, which discards every verdict recorded so far.
 
 `metron fsck` reports every missing or mismatching file of an accepted report
 or of a packet that was not voided. The gate requires less: the report that

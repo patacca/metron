@@ -120,12 +120,15 @@ nothing. With --json it prints a metron.status/v1 document.`,
 }
 
 type statusDoc struct {
-	Schema          string            `json:"schema"`
-	StateDir        string            `json:"state_dir"`
-	Ledger          ledgerDoc         `json:"ledger"`
-	Contract        contractSummary   `json:"contract"`
-	Candidate       *core.Candidate   `json:"candidate"`
-	Clean           bool              `json:"clean"`
+	Schema    string          `json:"schema"`
+	StateDir  string          `json:"state_dir"`
+	Ledger    ledgerDoc       `json:"ledger"`
+	Contract  contractSummary `json:"contract"`
+	Candidate *core.Candidate `json:"candidate"`
+	Clean     bool            `json:"clean"`
+	// IgnoreCase is set when git ignores case on a file system that
+	// distinguishes it, which makes the tree unclean.
+	IgnoreCase      bool              `json:"ignore_case_mismatch"`
 	Dirty           []treeDoc         `json:"dirty"`
 	Stage           core.Stage        `json:"stage,omitempty"`
 	Rounds          []core.Round      `json:"rounds"`
@@ -233,7 +236,7 @@ func (w *world) status() statusDoc {
 		Ledger: ledgerDoc{Initialized: !w.ledgerMissing, Events: st.Events(), Verified: w.facts.LedgerVerified && !w.ledgerMissing,
 			Protocol: st.Protocol(), Problem: w.facts.LedgerProblem},
 		Contract: contractSummary{Valid: w.facts.Contract != nil, Problem: w.facts.ContractProblem, Digest: w.facts.ContractDigest},
-		Clean:    w.facts.Clean, Dirty: []treeDoc{}, Stage: st.Stage(), Rounds: st.StageRounds(), FailedStreak: st.FailedStreak(),
+		Clean:    w.facts.Clean, IgnoreCase: w.ignoreCase, Dirty: []treeDoc{}, Stage: st.Stage(), Rounds: st.StageRounds(), FailedStreak: st.FailedStreak(),
 		OpenEscalations: []core.Escalation{}, Checks: []checkStatus{}, StoredFiles: w.storedFiles(),
 		GateOpen: w.gate().Open, Next: w.actionDoc(a),
 	}
@@ -333,7 +336,10 @@ func writeStatus(b *strings.Builder, w *world, d statusDoc) {
 		if !d.Clean {
 			var why []string
 			for _, p := range d.Dirty {
-				why = append(why, p.Path+" "+p.Kind)
+				why = append(why, printable(p.Path)+" "+p.Kind)
+			}
+			if d.IgnoreCase {
+				why = append(why, "core.ignoreCase on a case-sensitive file system")
 			}
 			tree = fmt.Sprintf("not clean (%s)", strings.Join(why, ", "))
 		}
@@ -564,6 +570,8 @@ func runFsck(c *ctx, args []string) error {
 	var problems, notes []string
 	ledger := w.show(filepath.Join(w.store.Dir(), store.LedgerName))
 	switch {
+	case len(w.stranded) > 0:
+		problems = append(problems, w.lostLedger(w.stranded, w.ledgerEmpty))
 	case w.ledgerEmpty:
 		problems = append(problems, fmt.Sprintf("%s is empty, so metron is not initialized: run %s", ledger, w.metron("init")))
 	case w.ledgerMissing:

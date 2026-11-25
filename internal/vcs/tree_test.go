@@ -1,7 +1,10 @@
 package vcs
 
 import (
+	"errors"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -379,5 +382,99 @@ func TestSparseCheckoutAndIgnoreStat(t *testing.T) {
 	run(t, root, "config", "core.ignoreStat", "sometimes")
 	if _, err := r.IgnoreStat(); err == nil {
 		t.Error("IgnoreStat with an invalid value succeeded")
+	}
+}
+
+// caseSensitive reports whether the file system under dir distinguishes case,
+// by creating two files whose names differ only by case. Unlike
+// distinguishesCase, which it checks, it writes.
+func caseSensitive(t *testing.T, dir string) bool {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "case-probe"), nil, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "CASE-PROBE"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o666)
+	if errors.Is(err, fs.ErrExist) {
+		return false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	return true
+}
+
+func TestIgnoreCaseMismatch(t *testing.T) {
+	root, r := baseRepo(t)
+	sensitive := caseSensitive(t, t.TempDir())
+	// git init records core.ignoreCase only on a case-insensitive system.
+	unset := exec.Command("git", "config", "--unset-all", "core.ignoreCase")
+	unset.Dir = root
+	unset.Run()
+	for _, tt := range []struct {
+		value string // empty: unset
+		want  bool
+	}{
+		{"", false},
+		{"false", false},
+		{"true", sensitive},
+		{"yes", sensitive},
+	} {
+		if tt.value != "" {
+			run(t, root, "config", "core.ignoreCase", tt.value)
+		}
+		if got, err := r.IgnoreCaseMismatch(); err != nil || got != tt.want {
+			t.Errorf("core.ignoreCase %q on a file system that distinguishes case = %v: IgnoreCaseMismatch = %v, %v, want %v",
+				tt.value, sensitive, got, err, tt.want)
+		}
+	}
+	run(t, root, "config", "core.ignoreCase", "perhaps")
+	if _, err := r.IgnoreCaseMismatch(); err == nil {
+		t.Error("IgnoreCaseMismatch with an invalid value succeeded")
+	}
+}
+
+func TestDistinguishesCase(t *testing.T) {
+	dir := t.TempDir()
+	sensitive := caseSensitive(t, t.TempDir())
+	check := func(name, path string, want bool) {
+		t.Helper()
+		if got, err := distinguishesCase(path); err != nil || got != want {
+			t.Errorf("%s: distinguishesCase = %v, %v, want %v", name, got, err, want)
+		}
+	}
+	probe := filepath.Join(dir, "Probe")
+	if err := os.Mkdir(probe, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	check("this file system", probe, sensitive)
+	digits := filepath.Join(probe, "2026")
+	if err := os.Mkdir(digits, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	check("a component without letters, probed through its parent", digits, sensitive)
+
+	// On a file system that distinguishes case, both outcomes can be built:
+	// the other spelling is a hard link to the same file, or another file.
+	// Elsewhere the other spelling always names the same file, the outcome
+	// already checked above.
+	if sensitive {
+		same := filepath.Join(dir, "Same")
+		write(t, dir, "Same", "x")
+		if err := os.Link(same, filepath.Join(dir, "sAME")); err != nil {
+			t.Fatal(err)
+		}
+		check("the other spelling names the same file", same, false)
+		write(t, dir, "Diff", "x")
+		write(t, dir, "dIFF", "x")
+		check("the other spelling names another file", filepath.Join(dir, "Diff"), true)
+	}
+
+	if _, err := distinguishesCase(filepath.Join(dir, "missing")); err == nil {
+		t.Error("distinguishesCase of a missing path succeeded")
+	}
+	root := filepath.VolumeName(dir) + string(filepath.Separator)
+	if _, err := distinguishesCase(filepath.Join(root, "0")); err == nil {
+		t.Error("distinguishesCase of a path without letters succeeded")
 	}
 }

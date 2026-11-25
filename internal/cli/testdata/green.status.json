@@ -18,6 +18,7 @@
     "digest": "sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104"
   },
   "clean": true,
+  "ignore_case_mismatch": false,
   "dirty": [],
   "stage": "prototype",
   "rounds": [
