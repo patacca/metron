@@ -279,7 +279,6 @@ func (s *State) onVerdict(data []byte) error {
 	r.Verdict = p.Verdict
 	r.Reviewer = p.Reviewer
 	r.Requirements = p.Requirements
-	r.verdictAt = s.applied
 	if p.Verdict == VerdictGreen {
 		s.streak = 0
 		s.convergenceRaised = false
@@ -338,7 +337,7 @@ func (s *State) onEscalationRaised(data []byte) error {
 	}
 	if adjudicable(p.Kind) {
 		for _, id := range p.Findings {
-			s.record(&s.findings[s.findingIndex(id)], EventEscalationRaised, p.Packet, p.Reason)
+			s.record(&s.findings[s.findingIndex(id)], EventEscalationRaised, p.Packet, s.examined(p.Packet), p.Reason)
 		}
 	}
 	s.escalations = append(s.escalations, Escalation{
@@ -401,11 +400,10 @@ func (s *State) onEscalationResolved(data []byte) error {
 	e.Resolution = p.Resolution
 	if adjudicable(e.Kind) {
 		for _, id := range e.Findings {
-			s.record(&s.findings[s.findingIndex(id)], EventEscalationResolved, p.Packet, p.Resolution)
+			s.record(&s.findings[s.findingIndex(id)], EventEscalationResolved, p.Packet, s.examined(p.Packet), p.Resolution)
 		}
 	}
 	s.decisions = append(s.decisions, Decision{Source: DecisionResolution, Escalation: p.ID, Packet: p.Packet, By: p.By, Text: p.Resolution})
-	s.resolvedAt = s.applied
 	return nil
 }
 

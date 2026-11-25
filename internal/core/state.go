@@ -15,8 +15,7 @@ import (
 type State struct {
 	initialized bool
 	protocol    string
-	// applied counts the events folded so far; it orders events for the
-	// rules that ask what happened "since".
+	// applied counts the events folded so far.
 	applied int
 	pins    []ContractPinned
 	// epochStart is the index in rounds of the first round of the current
@@ -38,9 +37,6 @@ type State struct {
 	// churn tracks, for the current stage, the rounds in which each
 	// component was named in a fix.
 	churn []churn
-	// resolvedAt is the index of the last escalation resolution, which allows
-	// an unchanged candidate to be reviewed again.
-	resolvedAt int
 }
 
 // Round is one review round.
@@ -61,8 +57,6 @@ type Round struct {
 	// Voided is set when the round's packet was voided; the round then never
 	// has a verdict.
 	Voided bool `json:"voided"`
-
-	verdictAt int
 }
 
 // PacketRecord is an issued packet as tracked by the ledger.

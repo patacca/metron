@@ -541,6 +541,9 @@
         "packet": {
           "$ref": "#/$defs/packetId"
         },
+        "candidate": {
+          "$ref": "#/$defs/sha256"
+        },
         "note": {
           "$ref": "#/$defs/text"
         }

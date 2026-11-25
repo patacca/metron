@@ -1,5 +1,7 @@
 package core
 
+import "slices"
+
 // FindingInput is a finding as written by a reviewer or a verifier.
 //
 // Which members are required depends on the tier; see docs/architecture.md,
@@ -94,8 +96,50 @@ type FindingEvent struct {
 	Round int `json:"round"`
 	// Packet is the packet whose report caused the step.
 	Packet string `json:"packet,omitempty"`
+	// Candidate is the digest of the candidate the step was made on: the one
+	// a reviewer, verifier or auditor examined, or the one a fix was claimed
+	// on. It is empty for a step that is bound to no candidate.
+	Candidate string `json:"candidate,omitempty"`
 	// Note is the evidence, justification or rationale recorded with it.
 	Note string `json:"note,omitempty"`
+}
+
+// RecordedOn returns the digests of the candidates on which the finding was
+// recorded as present, oldest first and each once: those it was opened or
+// reopened on and those on which a fix for it was rejected. A fix confirmed on
+// another candidate says nothing about these.
+func (f Finding) RecordedOn() []string {
+	var out []string
+	for _, h := range f.History {
+		switch h.Event {
+		case EventFindingOpened, EventFindingReopened, EventFindingFixRejected:
+			if h.Candidate != "" && !slices.Contains(out, h.Candidate) {
+				out = append(out, h.Candidate)
+			}
+		}
+	}
+	return out
+}
+
+// recordedBy returns the latest step that recorded the finding as present on
+// candidate.
+func (f Finding) recordedBy(candidate string) (FindingEvent, bool) {
+	for i := len(f.History) - 1; i >= 0; i-- {
+		switch h := f.History[i]; h.Event {
+		case EventFindingOpened, EventFindingReopened, EventFindingFixRejected:
+			if h.Candidate == candidate {
+				return h, true
+			}
+		}
+	}
+	return FindingEvent{}, false
+}
+
+// carriedBy reports whether a candidate carries the finding although it is
+// resolved: the finding blocks, and the candidate is one it was recorded on,
+// so the fix that resolved it was confirmed on another candidate.
+func (f Finding) carriedBy(candidate string) bool {
+	return f.Status == StatusResolved && f.Tier.Blocking() && slices.Contains(f.RecordedOn(), candidate)
 }
 
 // Fix is an implementer's claim that a finding is resolved.

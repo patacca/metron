@@ -124,12 +124,14 @@ contains changes for several findings is listed under each of them.
 
 Every listed commit must also change something outside `.metron/`; a commit
 that changes only `.metron/` changes nothing that is reviewed, so it fixes
-nothing. And for each finding you fix, the candidate you submit must differ
-from the one on which that finding was last opened, reopened or had a fix
-rejected; the finding's `history` shows when that was. A fix committed before
+nothing. And for each finding you fix, the candidate you submit must be one
+the finding was never recorded on: not the candidate it was opened or reopened
+on, and not any candidate on which a fix for it was rejected. The finding's
+`history` names the candidate of each of those steps. A fix committed before
 this packet was requested therefore counts. Claiming a rejected fix again
-without a new change does not: the verifier has already found that change
-insufficient.
+without a new change does not, and neither does going back to an earlier
+tree, because a candidate is identified by its content: the ledger already
+holds that the finding is present there.
 
 ## Writing the report
 

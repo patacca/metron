@@ -95,14 +95,17 @@ func TestReplayGenesis(t *testing.T) {
 func TestFindingHistory(t *testing.T) {
 	h := newHarness(t)
 	h.checks(true)
+	x := h.candidate().Digest
 	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Disputes: []Dispute{{Finding: "F-0001", Rationale: "never empty"}}})
 	ap := h.packet()
 	h.accept(ap, "aud-1", AuditorBody{Resolutions: resolutions(ap, "it is critical"), Directives: []string{"test empty input"},
 		Adjudications: []Adjudication{{Finding: "F-0001", Decision: DecisionReclassify, Tier: TierCritical, Rationale: "data loss"}}})
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
+	y := h.candidate().Digest
 	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
+	z := h.candidate().Digest
 	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checks(true)
 	b := review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated})
@@ -113,16 +116,18 @@ func TestFindingHistory(t *testing.T) {
 	}
 	h.accept(rp, "rev-1", b)
 
+	// A dispute comes with an implementer report, which is bound to no
+	// candidate; every other step names the one it was made on.
 	want := []FindingEvent{
-		{Event: EventFindingOpened, Round: 1, Packet: "P-0001"},
+		{Event: EventFindingOpened, Round: 1, Packet: "P-0001", Candidate: x},
 		{Event: EventEscalationRaised, Round: 1, Packet: "P-0002", Note: "the implementer disputes F-0001: never empty"},
-		{Event: EventFindingReclassified, Round: 1, Packet: "P-0003", Note: "T1 to T0: data loss"},
-		{Event: EventEscalationResolved, Round: 1, Packet: "P-0003", Note: "it is critical"},
-		{Event: EventFindingFixClaimed, Round: 1, Packet: "P-0004", Note: "guard the nil case"},
-		{Event: EventFindingFixRejected, Round: 1, Packet: "P-0005", Note: "ran the repro"},
-		{Event: EventFindingFixClaimed, Round: 1, Packet: "P-0006", Note: "guard the nil case"},
-		{Event: EventFindingFixConfirmed, Round: 1, Packet: "P-0007", Note: "ran the repro"},
-		{Event: EventFindingReopened, Round: 2, Packet: "P-0008", Note: "invalid-verification: the repro still fails"},
+		{Event: EventFindingReclassified, Round: 1, Packet: "P-0003", Candidate: x, Note: "T1 to T0: data loss"},
+		{Event: EventEscalationResolved, Round: 1, Packet: "P-0003", Candidate: x, Note: "it is critical"},
+		{Event: EventFindingFixClaimed, Round: 1, Packet: "P-0004", Candidate: y, Note: "guard the nil case"},
+		{Event: EventFindingFixRejected, Round: 1, Packet: "P-0005", Candidate: y, Note: "ran the repro"},
+		{Event: EventFindingFixClaimed, Round: 1, Packet: "P-0006", Candidate: z, Note: "guard the nil case"},
+		{Event: EventFindingFixConfirmed, Round: 1, Packet: "P-0007", Candidate: z, Note: "ran the repro"},
+		{Event: EventFindingReopened, Round: 2, Packet: "P-0008", Candidate: z, Note: "invalid-verification: the repro still fails"},
 	}
 	if f, _ := lookup(h.state, "F-0001"); !reflect.DeepEqual(f.History, want) {
 		t.Fatalf("history\n got %+v\nwant %+v", f.History, want)

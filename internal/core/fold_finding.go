@@ -39,7 +39,7 @@ func (s *State) onFindingOpened(data []byte) error {
 	s.findings = append(s.findings, Finding{
 		ID: p.ID, Status: StatusOpen, Tier: p.Input.Tier, Round: p.Round, Source: p.Source, Input: p.Input,
 	})
-	s.record(&s.findings[len(s.findings)-1], EventFindingOpened, p.Packet, "")
+	s.record(&s.findings[len(s.findings)-1], EventFindingOpened, p.Packet, s.examined(p.Packet), "")
 	return nil
 }
 
@@ -58,10 +58,13 @@ func (s *State) onFixClaimed(data []byte) error {
 	if p.Fix.Finding != p.ID {
 		return fmt.Errorf("the fix names finding %q, not %s", p.Fix.Finding, p.ID)
 	}
+	if !ValidDigest(p.Candidate) {
+		return fmt.Errorf("candidate digest %q is malformed", p.Candidate)
+	}
 	fix := p.Fix
 	f.Status = StatusClaimed
 	f.Fix = &fix
-	s.record(f, EventFindingFixClaimed, p.Packet, fix.Summary)
+	s.record(f, EventFindingFixClaimed, p.Packet, p.Candidate, fix.Summary)
 	for _, c := range fix.Components {
 		s.noteChurn(c, p.Round)
 	}
@@ -81,7 +84,7 @@ func (s *State) onFixConfirmed(data []byte) error {
 		return err
 	}
 	f.Status = StatusResolved
-	s.record(f, EventFindingFixConfirmed, p.Packet, p.Evidence)
+	s.record(f, EventFindingFixConfirmed, p.Packet, s.examined(p.Packet), p.Evidence)
 	return nil
 }
 
@@ -100,7 +103,7 @@ func (s *State) onFixRejected(data []byte) error {
 	f.Status = StatusOpen
 	f.Recurrences++
 	f.RootCauseRequired = f.RootCauseRequired || p.RootCauseRequired
-	s.record(f, EventFindingFixRejected, p.Packet, p.Evidence)
+	s.record(f, EventFindingFixRejected, p.Packet, s.examined(p.Packet), p.Evidence)
 	return nil
 }
 
@@ -122,7 +125,7 @@ func (s *State) onReopened(data []byte) error {
 	f.Status = StatusOpen
 	f.Recurrences++
 	f.RootCauseRequired = f.RootCauseRequired || p.RootCauseRequired
-	s.record(f, EventFindingReopened, p.Packet, fmt.Sprintf("%s: %s", p.Reason, p.Justification))
+	s.record(f, EventFindingReopened, p.Packet, s.examined(p.Packet), fmt.Sprintf("%s: %s", p.Reason, p.Justification))
 	return nil
 }
 
@@ -142,7 +145,7 @@ func (s *State) onWithdrawn(data []byte) error {
 		return fmt.Errorf("finding %s is %s; only an unresolved finding can be withdrawn", p.ID, s.findings[i].Status)
 	}
 	s.findings[i].Status = StatusWithdrawn
-	s.record(&s.findings[i], EventFindingWithdrawn, p.Packet, p.Rationale)
+	s.record(&s.findings[i], EventFindingWithdrawn, p.Packet, s.examined(p.Packet), p.Rationale)
 	return nil
 }
 
@@ -168,34 +171,29 @@ func (s *State) onReclassified(data []byte) error {
 		return fmt.Errorf("finding %s cannot be reclassified from %s to %q", p.ID, p.From, p.To)
 	}
 	f.Tier = p.To
-	s.record(f, EventFindingReclassified, p.Packet, fmt.Sprintf("%s to %s: %s", p.From, p.To, p.Rationale))
+	s.record(f, EventFindingReclassified, p.Packet, s.examined(p.Packet), fmt.Sprintf("%s to %s: %s", p.From, p.To, p.Rationale))
 	return nil
 }
 
 // record appends a step to a finding's history, at the number of the latest
 // round in the ledger (rounds are numbered 1..n, so that is n, or 0 before
-// any round). It clips the history first so that a state sharing its backing
-// array is never touched.
-func (s *State) record(f *Finding, event EventType, packet, note string) {
+// any round) and with the candidate the step was made on. It clips the
+// history first so that a state sharing its backing array is never touched.
+func (s *State) record(f *Finding, event EventType, packet, candidate, note string) {
 	f.History = append(slices.Clip(f.History), FindingEvent{
-		Event: event, Round: len(s.rounds), Packet: packet, Note: note,
+		Event: event, Round: len(s.rounds), Packet: packet, Candidate: candidate, Note: note,
 	})
 }
 
-// lastBound returns the candidate digest on which a finding was last opened,
-// reopened or had a fix rejected (the candidate of the packet whose report
-// caused that event) and the type of that event. A fix must change it.
-func (s State) lastBound(f Finding) (string, EventType) {
-	for i := len(f.History) - 1; i >= 0; i-- {
-		switch h := f.History[i]; h.Event {
-		case EventFindingOpened, EventFindingReopened, EventFindingFixRejected:
-			if j := s.packetIndex(h.Packet); j >= 0 {
-				return s.packets[j].Candidate.Digest, h.Event
-			}
-			return "", ""
-		}
+// examined returns the digest of the candidate a read-only role examined
+// under a packet: the candidate the packet is bound to, which its report
+// could not be accepted on any other. It returns "" for a packet that does
+// not bind its report to a candidate.
+func (s State) examined(packet string) string {
+	if i := s.packetIndex(packet); i >= 0 && s.packets[i].Role.ReadOnly() {
+		return s.packets[i].Candidate.Digest
 	}
-	return "", ""
+	return ""
 }
 
 // findingIn returns the finding id, which must be in status want.

@@ -4,7 +4,7 @@ Candidate: commit fd86662859aeb61e92064f6a424faf89d3ab36d9, sha256:ee02583d9b269
 
 [FAIL] C  Every applicable requirement is satisfied in the reviewer report of the latest round
           - REQ-2 is violated in round 1
-[FAIL] B  No unresolved T0 or T1 finding and no open escalation
+[FAIL] B  No unresolved T0 or T1 finding, none that was recorded on this candidate and resolved on another, and no open escalation
           - F-0001 (T1) is open
 [ok]   E  Every applicable requirement with a command has a passing result for this candidate and this command text
 [ok]   I  The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version; the report carrying the verdict is stored intact

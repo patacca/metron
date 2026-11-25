@@ -30,10 +30,14 @@ func (h *harness) drain() {
 	}
 }
 
-// checkout makes the working tree match an earlier tree version and commits.
-func (h *harness) checkout(tree int) {
+// checkout commits the content of an earlier tree version again, as git
+// revert does: the candidate is one the ledger has already seen.
+func (h *harness) checkout(tree int) string {
 	h.tree = tree
-	h.history = append(h.history, Commit{Hash: commitHash(len(h.history)), Substantive: true})
+	c := Commit{Hash: commitHash(len(h.history)), Substantive: true}
+	h.history = append(h.history, c)
+	h.clean = true
+	return c.Hash
 }
 
 func TestScenarioGreenInOneRound(t *testing.T) {
@@ -194,10 +198,11 @@ func TestScenarioDispute(t *testing.T) {
 		eqTypes(t, h.accept(ap, "aud-1", AuditorBody{Resolutions: resolutions(ap, "withdrawn"),
 			Adjudications: []Adjudication{{Finding: "F-0001", Decision: DecisionWithdraw, Rationale: "not in the envelope"}}}),
 			EventReportAccepted, EventFindingWithdrawn, EventEscalationResolved)
-		if f, _ := lookup(h.state, "F-0001"); len(f.History) != 4 || f.History[2] != (FindingEvent{Event: EventFindingWithdrawn, Round: 1, Packet: ap.ID, Note: "not in the envelope"}) {
+		if f, _ := lookup(h.state, "F-0001"); len(f.History) != 4 || f.History[2] != (FindingEvent{Event: EventFindingWithdrawn, Round: 1, Packet: ap.ID, Candidate: ap.Candidate.Digest, Note: "not in the envelope"}) {
 			t.Fatalf("history %+v", f.History)
 		}
-		// The same candidate may be reviewed again: a resolution was recorded.
+		// The same candidate may be reviewed again: the finding its RED
+		// verdict rested on no longer stands.
 		h.expect(StepReview)
 		rp := h.packet()
 		if rp.Round != 2 {
@@ -247,8 +252,8 @@ func TestScenarioUnchangedCandidateResubmission(t *testing.T) {
 	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checkout(reviewed)
 	a := h.expect(StepCommitChanges)
-	if !strings.Contains(a.Reason, "already received RED") {
-		t.Fatalf("reason %q", a.Reason)
+	if !slices.Equal(a.Findings, []string{"F-0001"}) || !strings.Contains(a.Reason, "neither approved nor reviewed again") {
+		t.Fatalf("action %+v", a)
 	}
 	if _, err := PlanPacket(h.state, h.facts()); err == nil {
 		t.Fatal("a review packet was planned for an unchanged candidate")

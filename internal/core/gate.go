@@ -65,8 +65,11 @@ func Gate(s State, f Facts) GateResult {
 	}
 
 	for _, x := range s.findings {
-		if x.Status.Unresolved() && x.Tier.Blocking() {
+		switch {
+		case x.Status.Unresolved() && x.Tier.Blocking():
 			b = append(b, fmt.Sprintf("%s (%s) is %s", x.ID, x.Tier, x.Status))
+		case x.carriedBy(f.Candidate.Digest):
+			b = append(b, fmt.Sprintf("%s (%s) was recorded on this candidate, and the fix that resolved it was confirmed on another", x.ID, x.Tier))
 		}
 	}
 	for _, x := range s.escalations {
@@ -131,7 +134,7 @@ func Gate(s State, f Facts) GateResult {
 
 	g := GateResult{Candidate: f.Candidate, Conditions: []Condition{
 		condition(ConditionCriteria, "Every applicable requirement is satisfied in the reviewer report of the latest round", c),
-		condition(ConditionBlockers, "No unresolved T0 or T1 finding and no open escalation", b),
+		condition(ConditionBlockers, "No unresolved T0 or T1 finding, none that was recorded on this candidate and resolved on another, and no open escalation", b),
 		condition(ConditionEvidence, "Every applicable requirement with a command has a passing result for this candidate and this command text", e),
 		condition(ConditionIntegrity, "The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version", i),
 		condition(ConditionIndependent, "The latest round's verdict is GREEN, for this candidate, under this contract, by an author who never acted as implementer", v),

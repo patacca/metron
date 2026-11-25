@@ -3,7 +3,7 @@ Authorizes: An internal demonstration
 Candidate: commit a54727435f3166a2dd159b7e24577a98ee05cffe, sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104
 
 [ok]   C  Every applicable requirement is satisfied in the reviewer report of the latest round
-[ok]   B  No unresolved T0 or T1 finding and no open escalation
+[ok]   B  No unresolved T0 or T1 finding, none that was recorded on this candidate and resolved on another, and no open escalation
 [ok]   E  Every applicable requirement with a command has a passing result for this candidate and this command text
 [ok]   I  The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version; the report carrying the verdict is stored intact
 [ok]   V  The latest round's verdict is GREEN, for this candidate, under this contract, by an author who never acted as implementer

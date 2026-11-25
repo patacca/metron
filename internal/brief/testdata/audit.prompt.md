@@ -444,7 +444,7 @@ Proportionality:
 
 History, oldest first:
 
-- Round 4, `finding.opened` in packet `P-0017`
+- Round 4, `finding.opened` in packet `P-0017`, on candidate `sha256:3333333333333333333333333333333333333333333333333333333333333333`
 - Round 5, `escalation.raised` in packet `P-0020`: the implementer disputes F-0008: the envelope says nothing about subscriber latency, so slow subscribers are outside it
 
 ### F-0009: Retry state for a dead subscriber grows for an hour
@@ -467,8 +467,8 @@ Verification: The REQ-7 soak test passes with one subscriber that never recovers
 
 History, oldest first:
 
-- Round 5, `finding.opened` in packet `P-0019`
-- Round 5, `escalation.raised` in packet `P-0019`: F-0009 declares that it reverses the resolution of F-0001
+- Round 5, `finding.opened` in packet `P-0019`, on this candidate
+- Round 5, `escalation.raised` in packet `P-0019`, on this candidate: F-0009 declares that it reverses the resolution of F-0001
 
 ## Other findings in the ledger
 
@@ -498,9 +498,9 @@ Tests: Extended TestSubscriberRecovery to a one-hour simulated outage.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`
-- Round 1, `finding.fix-claimed` in packet `P-0002`: Retry until one hour has elapsed since the first attempt.
-- Round 1, `finding.fix-confirmed` in packet `P-0004`: TestSubscriberRecovery passes with a one-hour simulated outage; the loop now compares elapsed time, not attempts.
+- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+- Round 1, `finding.fix-claimed` in packet `P-0002`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: Retry until one hour has elapsed since the first attempt.
+- Round 1, `finding.fix-confirmed` in packet `P-0004`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: TestSubscriberRecovery passes with a one-hour simulated outage; the loop now compares elapsed time, not attempts.
 
 ### F-0002: Each accepted event is written with its own fsync
 
@@ -532,10 +532,10 @@ Deferral rationale: The envelope's load is an eighth of the measured capacity.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
 - Round 1, `escalation.raised` in packet `P-0002`: the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk
-- Round 1, `escalation.resolved` in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
-- Round 1, `finding.reclassified` in packet `P-0003`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
+- Round 1, `escalation.resolved` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- Round 1, `finding.reclassified` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
 
 ### F-0003: The 5-minute backoff cap may delay recovery for long outages
 
@@ -556,7 +556,7 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
 
 ## Rounds of this stage
 

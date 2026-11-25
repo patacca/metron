@@ -344,7 +344,7 @@ Tests: {{.}}
 
 History, oldest first:
 {{range .}}
-- {{if .Round}}Round {{.Round}}{{else}}Before any round{{end}}, `{{.Event}}`{{with .Packet}} in packet `{{.}}`{{end}}{{with .Note}}: {{.}}{{end}}
+- {{if .Round}}Round {{.Round}}{{else}}Before any round{{end}}, `{{.Event}}`{{with .Packet}} in packet `{{.}}`{{end}}{{with .Candidate}}, on {{candidate .}}{{end}}{{with .Note}}: {{.}}{{end}}
 {{- end}}
 {{- end}}
 {{- end}}

@@ -40,18 +40,21 @@
         {
           "event": "finding.opened",
           "round": 1,
-          "packet": "P-0001"
+          "packet": "P-0001",
+          "candidate": "sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898"
         },
         {
           "event": "finding.fix-claimed",
           "round": 1,
           "packet": "P-0002",
+          "candidate": "sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104",
           "note": "spell the greeting correctly"
         },
         {
           "event": "finding.fix-confirmed",
           "round": 1,
           "packet": "P-0003",
+          "candidate": "sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104",
           "note": "cat greeting.txt prints hello"
         }
       ]

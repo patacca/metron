@@ -637,6 +637,9 @@
         "packet": {
           "$ref": "defs.schema.json#/$defs/packetId"
         },
+        "candidate": {
+          "$ref": "defs.schema.json#/$defs/sha256"
+        },
         "fix": {
           "$ref": "defs.schema.json#/$defs/fix"
         }
@@ -645,6 +648,7 @@
         "id",
         "round",
         "packet",
+        "candidate",
         "fix"
       ],
       "additionalProperties": false

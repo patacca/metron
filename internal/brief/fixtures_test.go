@@ -14,6 +14,7 @@ const (
 	commitRound5 = "e7f9a1b3c5d70246813579bdf02468ace1357924"
 
 	digestRound1 = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	digestFirst  = "sha256:6666666666666666666666666666666666666666666666666666666666666666"
 	digestRound2 = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
 	digestBatch  = "sha256:4444444444444444444444444444444444444444444444444444444444444444"
 	digestFixed  = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
@@ -130,8 +131,31 @@ func passed(req, command, candidate string) core.Evidence {
 // golden packets. The audit packet, P-0021, comes from round 5 of the same
 // project.
 
+// stepCandidates names the candidate each packet's report was made on: the
+// one a read-only role examined, or the one an implementer claimed its fixes
+// on.
+var stepCandidates = map[string]string{
+	"P-0001": digestRound1,
+	"P-0002": digestFirst, "P-0003": digestFirst, "P-0004": digestFirst,
+	"P-0005": digestRound2, "P-0006": digestRound2, "P-0007": digestRound2,
+	"P-0008": digestBatch, "P-0009": digestBatch, "P-0010": digestBatch,
+	"P-0011": digestFixed, "P-0012": digestFixed, "P-0017": digestFixed,
+	"P-0019": digestRound5,
+}
+
 func step(event core.EventType, round int, packet, note string) core.FindingEvent {
-	return core.FindingEvent{Event: event, Round: round, Packet: packet, Note: note}
+	e := core.FindingEvent{Event: event, Round: round, Packet: packet, Note: note}
+	// A dispute comes with an implementer report and is bound to no candidate.
+	if role, _ := core.StepFix.PacketRole(); event != core.EventEscalationRaised || packetRoles[packet] != role {
+		e.Candidate = stepCandidates[packet]
+	}
+	return e
+}
+
+// packetRoles names the role of the packets whose reports raised escalations.
+var packetRoles = map[string]core.Role{
+	"P-0002": core.RoleImplementer, "P-0008": core.RoleImplementer, "P-0020": core.RoleImplementer,
+	"P-0019": core.RoleReviewer,
 }
 
 func f1Resolved() core.Finding {

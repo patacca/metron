@@ -403,15 +403,15 @@ Tests: TestCrashRecovery now kills the process at every write boundary on both e
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`
-- Round 1, `finding.fix-claimed` in packet `P-0002`: Retry the append when the sync fails.
-- Round 1, `finding.fix-rejected` in packet `P-0004`: TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent.
-- Round 1, `finding.fix-claimed` in packet `P-0005`: Sync before returning from append on the single-event endpoint.
-- Round 1, `finding.fix-confirmed` in packet `P-0006`: TestCrashRecovery passes 20 runs with a kill between write and sync.
-- Round 2, `finding.reopened` in packet `P-0007`: regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs.
-- Round 2, `finding.fix-claimed` in packet `P-0008`: Wait for the sync in the batch endpoint as well.
-- Round 2, `finding.fix-rejected` in packet `P-0010`: The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10.
-- Round 2, `finding.fix-claimed` in packet `P-0011`: Acknowledge only after the append is synced.
+- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+- Round 1, `finding.fix-claimed` in packet `P-0002`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: Retry the append when the sync fails.
+- Round 1, `finding.fix-rejected` in packet `P-0004`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent.
+- Round 1, `finding.fix-claimed` in packet `P-0005`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: Sync before returning from append on the single-event endpoint.
+- Round 1, `finding.fix-confirmed` in packet `P-0006`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: TestCrashRecovery passes 20 runs with a kill between write and sync.
+- Round 2, `finding.reopened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs.
+- Round 2, `finding.fix-claimed` in packet `P-0008`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Wait for the sync in the batch endpoint as well.
+- Round 2, `finding.fix-rejected` in packet `P-0010`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10.
+- Round 2, `finding.fix-claimed` in packet `P-0011`, on this candidate: Acknowledge only after the append is synced.
 
 ### F-0005: internal/store imports internal/delivery for the event type
 
@@ -444,10 +444,10 @@ Latest fix: Moved Event to internal/event.
 
 History, oldest first:
 
-- Round 2, `finding.opened` in packet `P-0007`
+- Round 2, `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
 - Round 2, `escalation.raised` in packet `P-0008`: the implementer disputes F-0005: the replay tool is not part of the pilot, so the dependency direction blocks nothing at this stage
-- Round 2, `escalation.resolved` in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
-- Round 2, `finding.fix-claimed` in packet `P-0011`: Moved Event to internal/event.
+- Round 2, `escalation.resolved` in packet `P-0009`, on candidate `sha256:4444444444444444444444444444444444444444444444444444444444444444`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- Round 2, `finding.fix-claimed` in packet `P-0011`, on this candidate: Moved Event to internal/event.
 
 ## Rounds of this stage
 

@@ -113,12 +113,14 @@ contains changes for several findings is listed under each of them.
 
 Every listed commit must also change something outside `.metron/`; a commit
 that changes only `.metron/` changes nothing that is reviewed, so it fixes
-nothing. And for each finding you fix, the candidate you submit must differ
-from the one on which that finding was last opened, reopened or had a fix
-rejected; the finding's `history` shows when that was. A fix committed before
+nothing. And for each finding you fix, the candidate you submit must be one
+the finding was never recorded on: not the candidate it was opened or reopened
+on, and not any candidate on which a fix for it was rejected. The finding's
+`history` names the candidate of each of those steps. A fix committed before
 this packet was requested therefore counts. Claiming a rejected fix again
-without a new change does not: the verifier has already found that change
-insufficient.
+without a new change does not, and neither does going back to an earlier
+tree, because a candidate is identified by its content: the ledger already
+holds that the finding is present there.
 
 ## Writing the report
 
@@ -369,14 +371,14 @@ Latest fix: Wait for the sync in the batch endpoint as well.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`
-- Round 1, `finding.fix-claimed` in packet `P-0002`: Retry the append when the sync fails.
-- Round 1, `finding.fix-rejected` in packet `P-0004`: TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent.
-- Round 1, `finding.fix-claimed` in packet `P-0005`: Sync before returning from append on the single-event endpoint.
-- Round 1, `finding.fix-confirmed` in packet `P-0006`: TestCrashRecovery passes 20 runs with a kill between write and sync.
-- Round 2, `finding.reopened` in packet `P-0007`: regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs.
-- Round 2, `finding.fix-claimed` in packet `P-0008`: Wait for the sync in the batch endpoint as well.
-- Round 2, `finding.fix-rejected` in packet `P-0010`: The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10.
+- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
+- Round 1, `finding.fix-claimed` in packet `P-0002`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: Retry the append when the sync fails.
+- Round 1, `finding.fix-rejected` in packet `P-0004`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: TestCrashRecovery still loses the acknowledged event in 2 of 10 runs with a kill between write and sync: the retry does not change when the acknowledgement is sent.
+- Round 1, `finding.fix-claimed` in packet `P-0005`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: Sync before returning from append on the single-event endpoint.
+- Round 1, `finding.fix-confirmed` in packet `P-0006`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: TestCrashRecovery passes 20 runs with a kill between write and sync.
+- Round 2, `finding.reopened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`: regression: the new batch endpoint acknowledges before the sync; TestCrashRecovery against /batch loses events in 4 of 10 runs.
+- Round 2, `finding.fix-claimed` in packet `P-0008`, on this candidate: Wait for the sync in the batch endpoint as well.
+- Round 2, `finding.fix-rejected` in packet `P-0010`, on this candidate: The refactoring in the same commit moved the single-event acknowledgement before the sync again; TestCrashRecovery loses 1 of 10.
 
 ### F-0005: internal/store imports internal/delivery for the event type
 
@@ -404,9 +406,9 @@ Proportionality:
 
 History, oldest first:
 
-- Round 2, `finding.opened` in packet `P-0007`
+- Round 2, `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
 - Round 2, `escalation.raised` in packet `P-0008`: the implementer disputes F-0005: the replay tool is not part of the pilot, so the dependency direction blocks nothing at this stage
-- Round 2, `escalation.resolved` in packet `P-0009`: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
+- Round 2, `escalation.resolved` in packet `P-0009`, on this candidate: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
 
 ## Optional backlog
 
@@ -442,10 +444,10 @@ Deferral rationale: The envelope's load is an eighth of the measured capacity.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
 - Round 1, `escalation.raised` in packet `P-0002`: the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk
-- Round 1, `escalation.resolved` in packet `P-0003`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
-- Round 1, `finding.reclassified` in packet `P-0003`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
+- Round 1, `escalation.resolved` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
+- Round 1, `finding.reclassified` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
 
 ### F-0003: The 5-minute backoff cap may delay recovery for long outages
 
@@ -466,7 +468,7 @@ Reassess when: Two weeks of pilot traffic have been delivered.
 
 History, oldest first:
 
-- Round 1, `finding.opened` in packet `P-0001`
+- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
 
 ### F-0006: Constructor takes seven positional parameters
 
@@ -482,7 +484,7 @@ Impact: Readability only.
 
 History, oldest first:
 
-- Round 2, `finding.opened` in packet `P-0007`
+- Round 2, `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
 
 ## Rounds of this stage
 

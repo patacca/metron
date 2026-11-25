@@ -20,6 +20,7 @@ type harness struct {
 	events   []Event
 	contract Contract
 	tree     int // content version of the files outside .metron/
+	top      int // the highest content version used so far
 	history  []Commit
 	clean    bool
 	clock    int
@@ -141,10 +142,12 @@ func lookup(s State, id string) (Finding, bool) {
 	return Finding{}, false
 }
 
-// commit records a commit. A substantive one changes the candidate digest.
+// commit records a commit. A substantive one gives the files outside
+// .metron/ content they never had, so it changes the candidate digest.
 func (h *harness) commit(substantive bool) string {
 	if substantive {
-		h.tree++
+		h.top++
+		h.tree = h.top
 	}
 	c := Commit{Hash: commitHash(len(h.history)), Substantive: substantive}
 	h.history = append(h.history, c)

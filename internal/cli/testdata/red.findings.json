@@ -30,7 +30,8 @@
         {
           "event": "finding.opened",
           "round": 1,
-          "packet": "P-0001"
+          "packet": "P-0001",
+          "candidate": "sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898"
         }
       ]
     }

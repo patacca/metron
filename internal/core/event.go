@@ -154,7 +154,9 @@ type FindingFixClaimed struct {
 	ID     string `json:"id"`
 	Round  int    `json:"round"`
 	Packet string `json:"packet"`
-	Fix    Fix    `json:"fix"`
+	// Candidate is the digest of the candidate the fix was claimed on.
+	Candidate string `json:"candidate"`
+	Fix       Fix    `json:"fix"`
 }
 
 // FindingFixConfirmed is the payload of EventFindingFixConfirmed.

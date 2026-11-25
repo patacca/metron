@@ -151,6 +151,14 @@ The working tree is **clean** when all of the following hold outside
 
 Metron requires a clean tree whenever it binds something to a candidate.
 
+**A candidate is its content, not its place in history.** A commit that
+restores an earlier tree is the earlier candidate again, so undoing a change
+returns to a candidate the ledger has already seen. Everything the ledger
+records about a candidate is therefore bound to its digest: a verdict, a check
+result, and every step of a finding (section 7). What was established on one
+candidate is never carried over to a candidate on which the opposite was
+recorded.
+
 **What the cleanliness check does not cover.** It establishes that git
 considers the working tree identical to the commit. It does not establish more
 than that:
@@ -366,6 +374,15 @@ A finding is **unresolved** while `open` or `claimed`. Its **recurrence count**
 is the number of `fix-rejected` plus `reopened` events it has received.
 Reclassification changes the tier and nothing else.
 
+Each step in a finding's history names the candidate it was made on: the one
+the reviewer, verifier or auditor examined, or the one a fix was claimed on. A
+finding is **recorded on** every candidate on which it was opened or reopened,
+or on which a fix for it was rejected: on those candidates the ledger holds
+that the defect is present. A candidate **carries** a finding when the finding
+is blocking and `resolved` and the candidate is one it was recorded on. The fix
+that resolved it was necessarily confirmed on another candidate, so this one
+does not contain it.
+
 Reopening requires one of five reasons: `new-evidence`, `regression`,
 `invalid-verification`, `requirement-changed`, `contract-conflict`.
 
@@ -394,9 +411,10 @@ whose condition holds.
 | 6 | An auditor-owned escalation is open | `audit` | auditor |
 | 7 | A finding is `claimed` | `verify` | verifier |
 | 8 | A blocking finding is `open` | `fix` | implementer |
-| 9 | A mandatory check has no passing result on the candidate | `run-checks` | implementer |
-| 10 | The candidate has no GREEN verdict under the pinned contract | `review` | reviewer |
-| 11 | Otherwise | `none` (the gate is open) | |
+| 9 | The candidate carries a blocking finding (section 7) | `commit-changes` | implementer |
+| 10 | A mandatory check has no passing result on the candidate | `run-checks` | implementer |
+| 11 | The candidate has no GREEN verdict under the pinned contract | `review` | reviewer |
+| 12 | Otherwise | `none` (the gate is open) | |
 
 An open packet is **valid** while the pinned contract digest is the one it was
 issued under and, for a read-only role, the candidate digest is unchanged and
@@ -404,15 +422,21 @@ the tree is clean. An open packet that is no longer valid is ignored by
 `metron next` and voided when the next packet is issued.
 
 Row 5 precedes every packet-issuing row because a packet is bound to a
-candidate, and a candidate is a commit. Row 9 means a review round never starts
-on a candidate whose own mandatory checks fail; the latest result per
+candidate, and a candidate is a commit. Row 10 means a review round never
+starts on a candidate whose own mandatory checks fail; the latest result per
 requirement, candidate and command text is the one that counts.
 
-Row 10 is refused when the same candidate already received a non-GREEN verdict
-under the same contract digest and no escalation has been resolved since: an
-unchanged candidate cannot be resubmitted in the hope of a different verdict,
-and re-running checks does not count as a change. The action is then
-`commit-changes`, with that reason.
+Row 9 is what keeps an unchanged candidate from being submitted again in the
+hope of a different verdict. A RED verdict rests on the blocking findings its
+report opened or reopened, and each of them is recorded on the candidate. While
+one is unresolved, row 8 applies. Once its fix is confirmed, on another
+candidate by necessity, returning to this one neither revives an earlier
+verdict nor earns a new review: the candidate has to change. The same candidate
+can be reviewed again only when what its verdict rested on is gone: every such
+finding was withdrawn or reclassified to a non-blocking tier by an audit, or,
+after INDETERMINATE, governance resolved the evidence gap (row 4). Resolving
+some other escalation, re-running the checks or upholding a disputed finding
+changes none of that.
 
 A **round** is one independent, read-only, full-scope review of one candidate.
 Issuing a review packet opens a new round. Rounds are numbered from 1 across
@@ -530,10 +554,11 @@ the digest of its canonical JSON form.
   candidate. The last condition is checked only while that commit still
   exists; history may have been rewritten since. In a shallow clone, a commit
   at the boundary of the history is judged as if it had no parent.
-- For every finding it fixes, the candidate differs from the one on which
-  that finding was last opened, reopened or had a fix rejected. A fix
-  committed before the packet was requested is therefore valid; claiming a
-  rejected fix again without a new change is not.
+- For every finding it fixes, the candidate is one the finding was never
+  recorded on (section 7). A fix committed before the packet was requested is
+  therefore valid; claiming a rejected fix again without a new change is not,
+  and neither is returning to any tree on which the finding was opened,
+  reopened or had a fix rejected, however many changes lie in between.
 - A finding flagged root-cause-required carries a root-cause analysis.
 - A finding can be disputed once per pinned contract. After an auditor upholds
   it, it must be fixed, unless the contract is pinned again.
@@ -586,7 +611,7 @@ G = C ∧ B ∧ E ∧ I ∧ V
 | | Condition | Evaluated as |
 | --- | --- | --- |
 | C | Acceptance criteria satisfied | Every applicable requirement is `satisfied` in the reviewer report of the latest round |
-| B | No blockers | No unresolved T0 or T1 finding, and no open escalation |
+| B | No blockers | No unresolved T0 or T1 finding, no T0 or T1 finding carried by this candidate (section 7), and no open escalation |
 | E | Evidence sufficient | Every applicable requirement with a `command` has a passing result recorded for this candidate and this command text |
 | I | Integrity | The current candidate digest equals the reviewed one; the tree is clean; the contract digest equals the pinned one; the ledger verifies and was written under this protocol version; the report carrying the verdict is stored intact |
 | V | Independent verdict | The latest round's verdict is `GREEN`, issued for this candidate under this contract digest, by an author who never acted as implementer |

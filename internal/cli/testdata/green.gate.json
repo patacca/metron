@@ -15,7 +15,7 @@
     },
     {
       "name": "B",
-      "description": "No unresolved T0 or T1 finding and no open escalation",
+      "description": "No unresolved T0 or T1 finding, none that was recorded on this candidate and resolved on another, and no open escalation",
       "satisfied": true
     },
     {

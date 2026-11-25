@@ -67,6 +67,12 @@ func next(s State, f Facts) Action {
 	if ids := s.findingIDs(func(x Finding) bool { return x.Status == StatusOpen && x.Tier.Blocking() }); len(ids) > 0 {
 		return Action{Step: StepFix, Owner: RoleImplementer, Findings: ids, Reason: s.fixReason(ids)}
 	}
+	if ids := s.findingIDs(func(x Finding) bool { return x.carriedBy(f.Candidate.Digest) }); len(ids) > 0 {
+		return Action{Step: StepCommitChanges, Owner: RoleImplementer, Findings: ids,
+			Reason: fmt.Sprintf("blocking %s %s %s recorded on candidate %s, and the %s that resolved %s %s confirmed on another, so this candidate can be neither approved nor reviewed again: move to a candidate that contains the %s and commit it",
+				pick(len(ids), "finding", "findings"), strings.Join(ids, ", "), pick(len(ids), "was", "were"), f.Candidate.Digest,
+				pick(len(ids), "fix", "fixes"), pick(len(ids), "it", "them"), pick(len(ids), "was", "were"), pick(len(ids), "fix", "fixes"))}
+	}
 	if ids, reasons := missingChecks(s, *f.Contract, f.Candidate.Digest); len(ids) > 0 {
 		return Action{Step: StepRunChecks, Owner: RoleImplementer, Requirements: ids,
 			Reason: strings.Join(reasons, "; ") + ": make the checks pass on a committed candidate and record them"}
@@ -82,9 +88,6 @@ func next(s State, f Facts) Action {
 				why = append(why, r)
 			}
 		}
-	}
-	if r := s.resubmission(f); r != "" {
-		return Action{Step: StepCommitChanges, Owner: RoleImplementer, Reason: r}
 	}
 	return Action{Step: StepReview, Owner: RoleReviewer,
 		Reason: fmt.Sprintf("candidate %s has no GREEN verdict under the pinned contract (%s): review it", f.Candidate.Digest, strings.Join(why, "; "))}
@@ -146,29 +149,6 @@ func missingChecks(s State, c Contract, candidate string) ([]string, []string) {
 		ids = append(ids, r.ID)
 	}
 	return ids, reasons
-}
-
-// resubmission explains why the current candidate may not be reviewed again,
-// or returns "". A candidate whose latest verdict under the pinned contract is
-// not GREEN can be reviewed again only after an escalation has been resolved;
-// re-running checks does not count as a change.
-func (s State) resubmission(f Facts) string {
-	pin, ok := s.pin()
-	if !ok {
-		return ""
-	}
-	for i := len(s.rounds) - 1; i >= 0; i-- {
-		r := s.rounds[i]
-		if r.Verdict == "" || r.Candidate.Digest != f.Candidate.Digest || r.Contract != pin.Digest {
-			continue
-		}
-		if r.Verdict == VerdictGreen || r.verdictAt < s.resolvedAt {
-			return ""
-		}
-		return fmt.Sprintf("candidate %s already received %s in round %d of stage %s under this contract, and no escalation has been resolved since: change the candidate and commit it",
-			f.Candidate.Digest, r.Verdict, r.Number, r.Stage)
-	}
-	return ""
 }
 
 // pick returns the singular or the plural form for n items.

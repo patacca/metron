@@ -415,10 +415,11 @@ Each fix lists the full hashes of the commits that contain it, all lying
 between the round's candidate and the current one, and names the components
 it touched. The working tree must be clean. Every listed commit must change
 something outside `.metron/`, and for every finding fixed, the candidate must
-differ from the one on which that finding was last opened, reopened or had a
-fix rejected. A fix committed before the packet was requested is therefore
-valid, while claiming a rejected fix again without a new change is not: the
-verifier already said that change does not resolve the finding. A fix for a
+be one the finding was never recorded on: not the one it was opened or
+reopened on, and not any on which a fix for it was rejected. A fix committed
+before the packet was requested is therefore valid, while claiming a rejected
+fix again without a new change is not, and neither is going back to an earlier
+tree: the ledger already holds that the finding is present there. A fix for a
 finding flagged root-cause-required must include a root-cause analysis.
 
 A finding can be disputed once, with reasons. A dispute raises a `dispute`
@@ -469,13 +470,22 @@ A finding is unresolved while `open` or `claimed`. Only an auditor can
 change a recorded finding's tier, and only through adjudication.
 
 Every packet carries each finding's **history**: every step recorded for it,
-with the round, the packet whose report caused it, and what was said at the
-time, such as the fix's summary, the verifier's evidence, the justification
-for a reopening, a dispute or contradiction and how it was resolved, or the
-rationale for a withdrawal or reclassification. Continuity depends on it. A
-reviewer who suspects that a verification was wrong can read the evidence
-that confirmed the fix, and an auditor can read the reasoning of earlier
-audits instead of guessing at it.
+with the round, the packet whose report caused it, the candidate it was made
+on, and what was said at the time, such as the fix's summary, the verifier's
+evidence, the justification for a reopening, a dispute or contradiction and
+how it was resolved, or the rationale for a withdrawal or reclassification.
+Continuity depends on it. A reviewer who suspects that a verification was
+wrong can read the evidence that confirmed the fix, and an auditor can read
+the reasoning of earlier audits instead of guessing at it.
+
+**A step holds for the candidate it was made on.** A candidate is identified
+by its content, so undoing a change returns to a candidate the ledger has
+already seen. A finding is *recorded on* every candidate on which it was
+opened or reopened, or on which a fix for it was rejected. A fix confirmed on
+one candidate says nothing about those: a candidate that a resolved blocking
+finding was recorded on *carries* that finding. It cannot be approved, and it
+is not reviewed again; the candidate has to move to one that contains the
+fix.
 
 Prior resolutions are evidence, not precedent. A reviewer may question an
 earlier decision, but revisiting one must be traceable and based on
@@ -533,12 +543,16 @@ whether by an auditor or by governance, and audit directives are carried into
 every later packet, each with the packet it came from, and bind every role.
 
 One more safeguard is built into the loop itself: an unchanged candidate
-cannot be resubmitted in the hope of a different verdict. After a verdict
-other than GREEN, the same candidate can be reviewed again under the same
-contract only once an escalation has been resolved since; otherwise the
-candidate has to change, or governance has to pin a different contract.
-Re-running the checks does not count, because it changes nothing about the
-candidate. A failed assessment is resolved through correction, evidence or
+cannot be resubmitted in the hope of a different verdict. A RED verdict rests
+on the blocking findings its report opened or reopened, all recorded on that
+candidate, so the candidate is reviewed again only when none of them stands:
+an audit withdrew them or reclassified them to a non-blocking tier. An
+INDETERMINATE verdict rests on missing evidence, so its candidate is reviewed
+again only after governance has resolved the evidence gap. Upholding a
+disputed finding, resolving an unrelated escalation or re-running the checks
+changes nothing about what the verdict rested on, and going back to a
+candidate after its findings were fixed elsewhere does not either (section
+11). A failed assessment is resolved through correction, evidence or
 adjudication, not by asking again.
 
 ## 13. Verdicts
@@ -572,9 +586,10 @@ table whose condition holds.
 | 6 | An auditor-owned escalation is open | `audit` | auditor |
 | 7 | A finding is `claimed` | `verify` | verifier |
 | 8 | A blocking finding is `open` | `fix` | implementer |
-| 9 | A mandatory check has no passing result on the candidate | `run-checks` | implementer |
-| 10 | The candidate has no GREEN verdict under the pinned contract | `review` | reviewer |
-| 11 | Otherwise | `none`: the gate is open | |
+| 9 | The candidate carries a resolved blocking finding (section 11) | `commit-changes` | implementer |
+| 10 | A mandatory check has no passing result on the candidate | `run-checks` | implementer |
+| 11 | The candidate has no GREEN verdict under the pinned contract | `review` | reviewer |
+| 12 | Otherwise | `none`: the gate is open | |
 
 A **candidate** is a commit, identified by its candidate digest: a SHA-256
 over the commit's tree with everything under `.metron/` left out, so that
@@ -639,7 +654,7 @@ later state. Submitting the same report again succeeds and changes nothing.
 | | Condition | Evaluated as |
 | --- | --- | --- |
 | C | Acceptance criteria satisfied | Every applicable requirement is `satisfied` in the reviewer report of the latest round |
-| B | No blockers | No unresolved `T0` or `T1` finding, and no open escalation |
+| B | No blockers | No unresolved `T0` or `T1` finding, none carried by this candidate, and no open escalation |
 | E | Evidence sufficient | Every applicable requirement with a `command` has a passing result recorded for this candidate and this command text |
 | I | Integrity | The current candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version |
 | V | Independent verdict | The latest round's verdict is `GREEN`, for this candidate under this contract, by an author who never acted as implementer |

@@ -25,6 +25,7 @@ const (
 	opReingest
 	opImpostor
 	opLose
+	opCheckout
 	opCount
 )
 
@@ -175,6 +176,9 @@ func (s *sim) step(op, param byte) {
 		if open, ok := s.state.OpenPacket(); ok {
 			s.lost = open.Packet
 		}
+	case opCheckout:
+		// Return to a tree the repository has had before, as a revert does.
+		s.checkout(int(param) % (s.top + 1))
 	case opCommit:
 		s.commit(!bit(param, 0))
 	case opTree:
@@ -458,6 +462,11 @@ func (s *sim) check(prev State) {
 				s.t.Fatalf("the gate is open with %s %s %s", x.ID, x.Tier, x.Status)
 			}
 		}
+		for _, x := range s.state.Findings() {
+			if x.Tier.Blocking() && x.Status != StatusWithdrawn && slices.Contains(x.RecordedOn(), f.Candidate.Digest) {
+				s.t.Fatalf("the gate is open on a candidate that blocking finding %s was recorded on", x.ID)
+			}
+		}
 		for _, e := range s.state.Escalations() {
 			if e.Open {
 				s.t.Fatalf("the gate is open with escalation %s open", e.ID)
@@ -491,8 +500,9 @@ func commandSeeds() [][]byte {
 	stage := []byte{opChecks, 0, opPacket, 0, opAct, 1, opContract, 2, opPin, 0, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opChecks, 0, opPacket, 0, opAct, 0}
 	spiral := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opPacket, 0, opAct, 4, opPacket, 0, opAct, 0}
 	lost := []byte{opChecks, 0, opPacket, 0, opLose, 0, opAct, 0, opPacket, 0, opAct, 0}
+	revert := []byte{opChecks, 0, opPacket, 0, opAct, 1, opPacket, 0, opAct, 0, opPacket, 0, opAct, 0, opCheckout, 0, opChecks, 0, opPacket, 0, opCheckout, 1, opChecks, 0, opPacket, 0, opAct, 0}
 	misc := []byte{opTree, 0, opChecks, 0, opTree, 1, opChecks, 2, opPacket, 1, opPacket, 2, opPacket, 0, opImpostor, 0x19, opReingest, 1, opAct, 0, opReingest, 0, opReingest, 1, opCommit, 1, opPin, 1}
-	return [][]byte{happy, red, churn, dispute, withdraw, indeterminate, repin, stage, spiral, misc, lost}
+	return [][]byte{happy, red, churn, dispute, withdraw, indeterminate, repin, stage, spiral, misc, revert, lost}
 }
 
 func FuzzCommands(f *testing.F) {

@@ -85,11 +85,12 @@ func (in *ingestion) implementerTransition(b ImplementerBody) {
 			in.tr.add(ptr("body", "fixes", i, "finding"), "finding %s is %s: only an open finding can be fixed", x.ID, x.Status)
 			continue
 		}
-		switch candidate, event := in.s.lastBound(x); {
-		case event == "":
+		candidate := in.f.Candidate.Digest
+		if len(x.RecordedOn()) == 0 {
 			in.tr.add(ptr("body", "fixes", i), "finding %s has no recorded candidate: the ledger is inconsistent", x.ID)
-		case candidate == in.f.Candidate.Digest:
-			in.tr.add(ptr("body", "fixes", i), "the candidate is still %s, on which %s was last recorded by %s: commit a change that fixes it, then submit the report", candidate, x.ID, event)
+		} else if by, ok := x.recordedBy(candidate); ok {
+			in.tr.add(ptr("body", "fixes", i), "the candidate is %s, on which %s was recorded as present by %s in packet %s: a fix must produce a candidate the finding was never recorded on; commit a change that fixes it, then submit the report",
+				candidate, x.ID, by.Event, by.Packet)
 		}
 	}
 	for i, d := range b.Disputes {
@@ -106,7 +107,7 @@ func (in *ingestion) implementerTransition(b ImplementerBody) {
 func (in *ingestion) implementerEvents(b ImplementerBody) {
 	pk := in.pk
 	for _, fx := range b.Fixes {
-		in.add(EventFindingFixClaimed, FindingFixClaimed{ID: fx.Finding, Round: pk.Round, Packet: pk.Packet, Fix: fx})
+		in.add(EventFindingFixClaimed, FindingFixClaimed{ID: fx.Finding, Round: pk.Round, Packet: pk.Packet, Candidate: in.f.Candidate.Digest, Fix: fx})
 	}
 	disputes := slices.Clone(b.Disputes)
 	slices.SortStableFunc(disputes, func(a, b Dispute) int { return compareIDs(a.Finding, b.Finding) })

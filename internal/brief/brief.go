@@ -101,7 +101,7 @@ func instructions(v *view) (string, error) {
 func execute(name string, v *view) (string, error) {
 	t, err := template.New(name).
 		Option("missingkey=error").
-		Funcs(template.FuncMap{"codes": codes}).
+		Funcs(template.FuncMap{"codes": codes, "candidate": v.candidate}).
 		ParseFS(protocol.FS, dir+"/*.tmpl", dir+"/roles/*.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("parse the embedded protocol templates: %w", err)
@@ -192,6 +192,16 @@ func codes(items []string) string {
 		return strings.Join(quoted, "")
 	}
 	return strings.Join(quoted[:len(quoted)-1], ", ") + " and " + quoted[len(quoted)-1]
+}
+
+// candidate names a candidate digest relative to the packet's own candidate,
+// which is what a reader needs to know about a step in a finding's history:
+// whether it was made on the candidate in front of them or on another one.
+func (v *view) candidate(digest string) string {
+	if digest == v.Candidate.Digest {
+		return "this candidate"
+	}
+	return "candidate `" + digest + "`"
 }
 
 // normalize removes trailing whitespace from every line, collapses runs of
