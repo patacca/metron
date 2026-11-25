@@ -28,7 +28,7 @@ func (h *harness) fixAndVerify(id string) {
 	if h.next().Step == StepRunChecks {
 		h.checks(true)
 	}
-	h.accept(h.packet(), "ver-1", verify(map[string]string{id: VerificationConfirmed}, id))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{id: VerificationConfirmed}, id))
 }
 
 func blockersOf(g GateResult) []string {
@@ -127,7 +127,7 @@ func TestRejectedFixCannotBeClaimedOnAnEarlierRejectedCandidate(t *testing.T) {
 		if h.next().Step == StepRunChecks {
 			h.checks(true)
 		}
-		h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
+		h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
 		h.drain()
 	}
 	reject(h.commit(true))
@@ -136,13 +136,13 @@ func TestRejectedFixCannotBeClaimedOnAnEarlierRejectedCandidate(t *testing.T) {
 	second := h.tree
 	for _, tree := range []int{first, second, opened} {
 		fx := fix("F-0001", h.checkout(tree))
-		fx.RootCause = "analysed"
+		fx.Commits, fx.RootCause = h.unlisted(), "analysed"
 		ps := h.refused(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fx}}, LayerTransition)
-		if !hasProblem(ps, "/body/fixes/0") {
+		if len(ps) != 1 || !hasProblem(ps, "/body/fixes/0") {
 			t.Fatalf("tree %d: problems %+v", tree, ps)
 		}
 	}
-	fx := fix("F-0001", h.commit(true))
+	fx := h.repair("F-0001")
 	fx.RootCause = "analysed"
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fx}})
 }
@@ -170,7 +170,7 @@ func TestEarlierApprovalIsNotRevivedByAReturnToItsCandidate(t *testing.T) {
 		t.Fatalf("action %+v", a)
 	}
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.history[len(h.history)-1].Hash)}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.expect(StepReview)
 	h.accept(h.packet(), "rev-1", green(h.contract))
 	h.expect(StepNone)
@@ -187,7 +187,7 @@ func TestFindingHistoryRecordsCandidates(t *testing.T) {
 	if h.next().Step == StepRunChecks {
 		h.checks(true)
 	}
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
 	f, _ := lookup(h.state, "F-0001")
 	var got []string
 	for _, e := range f.History {

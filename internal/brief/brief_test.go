@@ -347,15 +347,14 @@ func TestRefusesInconsistentPackets(t *testing.T) {
 		{"duplicate finding", core.StepReview, func(p *core.Packet) { p.Findings = append(p.Findings, p.Findings[0]) }},
 		{"review with subjects", core.StepReview, func(p *core.Packet) { p.Subjects = []string{"F-0001"} }},
 		{"unknown subject", core.StepFix, func(p *core.Packet) { p.Subjects = append(p.Subjects, "F-0099") }},
-		{"unknown backlog finding", core.StepFix, func(p *core.Packet) { p.Backlog = append(p.Backlog, "F-0099") }},
-		{"root cause outside subjects and backlog", core.StepFix, func(p *core.Packet) {
+		{"root cause outside the subjects", core.StepFix, func(p *core.Packet) {
 			p.Findings = append(p.Findings, f1Resolved())
 			p.RootCauseRequired = []string{"F-0001"}
 		}},
 		{"fix without base", core.StepFix, func(p *core.Packet) { p.Base = nil }},
 		{"fix without subjects", core.StepFix, func(p *core.Packet) { p.Subjects, p.RootCauseRequired = nil, nil }},
 		{"fix with escalations", core.StepFix, func(p *core.Packet) { p.Escalations = fullAudit().Escalations }},
-		{"verify with backlog", core.StepVerify, func(p *core.Packet) { p.Backlog = []string{"F-0004"} }},
+		{"verify with a verified candidate", core.StepVerify, func(p *core.Packet) { p.Verified = &p.Candidate }},
 		{"verify subject without fix", core.StepVerify, func(p *core.Packet) { p.Findings[0].Fix = nil }},
 		{"audit without escalations", core.StepAudit, func(p *core.Packet) { p.Escalations = nil }},
 		{"audit with discharged escalation", core.StepAudit, func(p *core.Packet) { p.Escalations[0].Open = false }},
@@ -554,5 +553,48 @@ func TestAuditBeforeAnyRound(t *testing.T) {
 	}
 	if _, err := Prompt(p, packetDigest); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A review packet says which candidate the fixes were verified on, and the
+// brief says whether that is the candidate under review.
+func TestReviewBriefNamesTheVerifiedCandidate(t *testing.T) {
+	same := fullReview()
+	text, err := Instructions(same)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "That is the candidate in front of you.") || strings.Contains(text, "nobody has verified them") {
+		t.Fatal("the brief does not say that the verified candidate is the reviewed one")
+	}
+	other := fullReview()
+	other.Verified = &core.Candidate{Commit: commitBatch, Digest: digestBatch}
+	if text, err = Instructions(other); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "git log "+commitBatch+".."+commitFixed) || !strings.Contains(text, "nobody has verified them") {
+		t.Fatal("the brief does not warn about the commits made after the verification")
+	}
+	none := fullReview()
+	none.Verified = nil
+	if text, err = Instructions(none); err != nil || strings.Contains(text, "verified by a") {
+		t.Fatalf("a review without a verification before it mentions one: %v", err)
+	}
+}
+
+// A fix packet whose subjects already have a claimed fix asks for the claim
+// again, and does not offer a dispute.
+func TestFixBriefForLapsedClaims(t *testing.T) {
+	p := fullFix()
+	p.Findings[1].Status = core.StatusClaimed
+	p.Findings[1].Fix = fixF5()
+	text, err := Instructions(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"disputing it: `F-0004`.", "You already claimed a fix for `F-0005`", "Claim that fix again"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the brief lacks %q", want)
+		}
 	}
 }

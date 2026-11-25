@@ -7,7 +7,9 @@
   "data": {
     "id": "F-0001",
     "packet": "P-0004",
-    "evidence": "TestConcurrentPost passed 100 runs."
+    "evidence": "TestConcurrentPost passed 100 runs.",
+    "scope": "proportionate",
+    "scope_evidence": "The commit changes the retry loop and its test."
   },
   "hash": "e43c28e69db6705871162259bd96d4bc3ec12f2956cdbf81c4b84b882fbdb522"
 }

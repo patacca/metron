@@ -96,7 +96,7 @@ func TestRejectedFixesReachGovernance(t *testing.T) {
 		fx.RootCause = "analysed"
 		h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fx}})
 		h.checks(true)
-		raised = append(raised, raisedKinds(h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001")))...)
+		raised = append(raised, raisedKinds(h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001")))...)
 		rejections++
 		raised = append(raised, h.audits()...)
 	}
@@ -207,7 +207,7 @@ func TestSuccessfulStepsDoNotEndTheStreak(t *testing.T) {
 		id := seqID("F", round)
 		h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix(id, h.commit(true), fmt.Sprint("component-", round))}})
 		h.checks(true)
-		h.accept(h.packet(), "ver-1", verify(map[string]string{id: VerificationConfirmed}, id))
+		h.accept(h.verifying(), "ver-1", verify(map[string]string{id: VerificationConfirmed}, id))
 		if h.state.FailedStreak() != round {
 			t.Fatalf("a confirmed fix changed the streak to %d", h.state.FailedStreak())
 		}

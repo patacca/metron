@@ -173,5 +173,8 @@ func TestIngestFixWithoutChange(t *testing.T) {
 	// The reviewer may not act as implementer.
 	contains(t, "ingest error", r.ingest(exitNegative, fix(t, sk, "rev-1", commit)).err, `author "rev-1" acted as reviewer`)
 	r.ingest(exitOK, fix(t, sk, "impl-1", commit))
+	// The checks come before the verification.
+	r.expectNext(core.StepRunChecks)
+	r.must("check")
 	r.expectNext(core.StepVerify)
 }

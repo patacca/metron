@@ -401,6 +401,11 @@ gaps. Residual risks and the limits of the inspection (what was not
 examined, what could not be run) are recorded so that a GREEN verdict does
 not claim more than the review established.
 
+A reviewer also closes the backlog. An open finding of a non-blocking tier
+that the candidate no longer exhibits is listed as `addressed`, with the
+evidence, and is thereby resolved. A blocking finding is never closed this
+way.
+
 The review is read-only, full-scope and independent. Earlier verdicts, the
 number of rounds, the effort spent and deadlines do not change the standard
 a reviewer applies.
@@ -408,10 +413,18 @@ a reviewer applies.
 ### Implementer
 
 The implementer addresses every blocking finding in its packet, each with
-either a fix or a dispute, and may also fix non-blocking findings from the
-backlog. It works on the batch as a whole and looks for shared root causes
-before patching locally, because several findings with one cause fixed one
-at a time produce several patches and no cure.
+either a fix or a dispute, and nothing else. It works on the batch as a whole
+and looks for shared root causes before patching locally, because several
+findings with one cause fixed one at a time produce several patches and no
+cure.
+
+**A correction changes what its findings need and nothing more.** The
+backlog is not part of a fix packet. Improvements are ordinary development
+work: they are made outside a correction, on a candidate that is then
+reviewed like any other, and a later review closes the findings they
+address. An improvement folded into a correction is verified in a hurry, can
+break what was not broken, and turns a mandatory step into an open-ended
+one.
 
 Each fix lists the full hashes of the commits that contain it, all lying
 between the round's candidate and the current one, and names the components
@@ -424,6 +437,14 @@ fix again without a new change is not, and neither is going back to an earlier
 tree: the ledger already holds that the finding is present there. A fix for a
 finding flagged root-cause-required must include a root-cause analysis.
 
+**Every commit is accounted for.** Each commit made since the round's
+candidate that changes the candidate must be listed under a fix, in this
+report or an earlier accepted one. Metron lists the commits itself and refuses
+a report that leaves one out. A fix is claimed on the candidate it was
+submitted on; if the candidate changes before the verification, the claim has
+lapsed and the implementer makes it again, with the new commits listed. So no
+change reaches the verifier unattributed.
+
 A finding can be disputed once, with reasons. A dispute raises a `dispute`
 escalation and an auditor adjudicates it; if the auditor upholds the
 finding, it must be fixed. Weakening a check, a test or the contract to make
@@ -431,13 +452,25 @@ a finding disappear is not a fix.
 
 ### Verifier
 
-The verifier gives every claimed fix a result, `confirmed` or `rejected`,
-with evidence. Confirming is a positive claim: that the failure mechanism the
+The verifier works on a candidate whose mandatory checks have already
+passed. It gives every claimed fix a result, `confirmed` or `rejected`, with
+evidence. Confirming is a positive claim: that the failure mechanism the
 finding describes no longer occurs, checked by the verification method the
-finding names. The verifier also examines the impact surface of the changes
-and may report regressions as new findings, each naming the finding whose
-fix introduced it. A rejected fix returns the finding to `open` and counts
-towards its recurrence.
+finding names.
+
+It also judges the scope of every fix: `proportionate` when the fix's
+commits change only what resolving the finding needs, `excessive` when they
+change more, with the evidence for either. That every commit is listed under
+a finding shows only that it was labelled; whether it belongs there is an
+engineering judgment, and it is the verifier's. An excessive fix is rejected
+even when the finding is resolved.
+
+The verifier examines the impact surface of the changes and may report
+regressions as new findings, each naming the finding whose fix introduced
+it. A rejected fix returns the finding to `open` and counts towards its
+recurrence. A verification never issues a verdict: it establishes that fixes
+hold, and the full review that follows decides whether the candidate is
+acceptable.
 
 ### Auditor
 
@@ -473,15 +506,20 @@ this state machine:
 ```
             fix-claimed            fix-confirmed
   open ─────────────────▶ claimed ───────────────▶ resolved
-   ▲                         │                         │
-   │       fix-rejected      │                         │ reopened
-   └─────────────────────────┘◀────────────────────────┘
-   │
-   └── withdrawn (terminal; auditor adjudication only)
+   ▲ │                       │                       ▲ │
+   │ │     fix-rejected      │                       │ │ reopened
+   └─┼───────────────────────┘◀──────────────────────┼─┘
+     │                    addressed (non-blocking only)
+     ├───────────────────────────────────────────────┘
+     └── withdrawn (terminal; auditor adjudication only)
 ```
 
 A finding is unresolved while `open` or `claimed`. Only an auditor can
-change a recorded finding's tier, and only through adjudication.
+change a recorded finding's tier, and only through adjudication. A blocking
+finding is resolved by a fix that a verifier confirms. A non-blocking finding
+is resolved when a reviewer finds it addressed: nobody is asked to fix the
+backlog, so nobody claims or verifies a fix for it, but the record of it
+should not outlive the problem.
 
 Every packet carries each finding's **history**: every step recorded for it,
 with the round, the packet whose report caused it, the candidate it was made
@@ -640,10 +678,10 @@ table whose condition holds.
 | 4 | A governance-owned escalation is open | `adjudicate` | governance |
 | 5 | The working tree is not clean | `commit-changes` | implementer |
 | 6 | An auditor-owned escalation is open | `audit` | auditor |
-| 7 | A finding is `claimed` | `verify` | verifier |
-| 8 | A blocking finding is `open` | `fix` | implementer |
-| 9 | The candidate carries a resolved blocking finding (section 11) | `commit-changes` | implementer |
-| 10 | A mandatory check has no passing result on the candidate | `run-checks` | implementer |
+| 7 | A blocking finding is `open`, or a fix was claimed on a candidate other than this one | `fix` | implementer |
+| 8 | The candidate carries a resolved blocking finding (section 11) | `commit-changes` | implementer |
+| 9 | A mandatory check has no passing result on the candidate | `run-checks` | implementer |
+| 10 | A finding is `claimed` | `verify` | verifier |
 | 11 | The candidate has no GREEN verdict under the pinned contract | `review` | reviewer |
 | 12 | Otherwise | `none`: the gate is open | |
 
@@ -656,12 +694,20 @@ from 1 across the whole ledger and never restart, so a round number
 identifies one review unambiguously, whatever stage it belonged to.
 
 ```
-review ──RED──▶ fix ──▶ verify ──all confirmed──▶ review (new candidate)
-   │             ▲         │
-   │             └─rejected or regressions
+review ──RED──▶ fix ──▶ run-checks ──▶ verify ──all confirmed──▶ review
+   │             ▲           │            │
+   │             └───────────┴────────────┘
+   │               a check fails, a fix is rejected, or a regression blocks
    ├──INDETERMINATE──▶ adjudicate (governance supplies evidence or amends the contract)
    └──GREEN──▶ gate
 ```
+
+A correction is one batch on one candidate: every open blocking finding is
+fixed or disputed, the mandatory checks pass on the result, and one
+verification covers every claimed fix. The review that follows is of the
+whole candidate, and its packet names the candidate the fixes were verified
+on, so that a change made after the verification is not taken for a verified
+one.
 
 Whoever runs the loop, a person or an orchestrator, performs the action
 `metron next` names and stops in two cases: the step is `none`, because the

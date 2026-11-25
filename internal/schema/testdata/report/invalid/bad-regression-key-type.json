@@ -15,12 +15,16 @@
       {
         "finding": "F-0001",
         "result": "confirmed",
-        "evidence": "TestConcurrentPost passed 100 runs under -race."
+        "evidence": "TestConcurrentPost passed 100 runs under -race.",
+        "scope": "proportionate",
+        "scope_evidence": "The commits change only what the finding describes."
       },
       {
         "finding": "F-0004",
         "result": "rejected",
-        "evidence": "The journal write still precedes the fsync."
+        "evidence": "The journal write still precedes the fsync.",
+        "scope": "proportionate",
+        "scope_evidence": "The commits change only what the finding describes."
       }
     ],
     "regressions": [

@@ -183,6 +183,22 @@
       ],
       "additionalProperties": false
     },
+    "addressed": {
+      "type": "object",
+      "properties": {
+        "finding": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "finding",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
     "contractGap": {
       "type": "object",
       "properties": {
@@ -233,12 +249,20 @@
         },
         "evidence": {
           "$ref": "defs.schema.json#/$defs/text"
+        },
+        "scope": {
+          "$ref": "defs.schema.json#/$defs/fixScope"
+        },
+        "scope_evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
         }
       },
       "required": [
         "finding",
         "result",
-        "evidence"
+        "evidence",
+        "scope",
+        "scope_evidence"
       ],
       "additionalProperties": false
     },
@@ -295,6 +319,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/reopen"
+          }
+        },
+        "addressed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/addressed"
           }
         },
         "contract_gaps": {

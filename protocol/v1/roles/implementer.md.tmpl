@@ -32,18 +32,30 @@ information follows it, laid out for reading.
 
 ## What you are asked to do
 
+{{with .Unclaimed -}}
 Resolve each of these blocking findings, by fixing it or, if you believe it
-is wrong, by disputing it: {{codes .Subjects}}.
+is wrong, by disputing it: {{codes .}}.
+{{- end}}
 {{- with .Disputed}} An auditor has already adjudicated a dispute of
 {{codes .}}, and a finding can be disputed only once, so
 {{- if eq (len .) 1}} that one has{{else}} those have{{end}} to be fixed.
 {{- end}}
-{{- with .Backlog}}
+{{- with .Claimed}}
 
-The packet also lists open non-blocking findings as an optional backlog:
-{{codes .}}. You may fix any of them in the same batch when it is cheap and
-safe to do so; nothing requires it, and a backlog fix is verified like any
-other.{{end}}
+You already claimed a fix for {{codes .}}, on an earlier candidate, and the
+candidate has changed since. A claim is about one candidate: the commits made
+after it are in no fix, and nothing is verified until they are. Claim
+{{- if eq (len .) 1}} that fix{{else}} those fixes{{end}} again in this report,
+each with every commit that belongs to it, the ones you listed before
+included. A finding with a claimed fix can no longer be disputed.
+{{- end}}
+
+This is a correction, not an opportunity. Change what resolving these
+findings needs and nothing else. The ledger also holds findings that do not
+block, the backlog; they are not in this packet and are not fixed here.
+Improvements are ordinary development work: they are made outside a
+correction, reviewed like any other change, and closed by a later review.
+Mixing them in is how a correction breaks something that was not broken.
 
 ## Fix the batch as a batch
 
@@ -74,10 +86,12 @@ That is what the verifier will apply, so run it yourself before you submit.
 A regression test that fails before your change and passes after it is the
 strongest evidence you can give; describe what you added or ran in `tests`.
 
-Keep each change proportionate to its finding. Every change you make is
-verified and then reviewed again in full, and over-engineering is reviewable:
-an unrequested refactoring or a speculative abstraction widens what can go
-wrong and can become a finding of its own.
+Keep each change proportionate to its finding. The verifier judges, for each
+fix, whether its commits change only what resolving the finding needs, and
+rejects a fix that does more, whether or not the finding is resolved: an
+unrequested refactoring, a speculative abstraction or an improvement nobody
+asked for widens what can go wrong and what has to be checked. If the
+smallest sound fix is large, say why in the fix's `summary`.
 
 ## What a fix must not do
 
@@ -122,6 +136,26 @@ Every listed commit must be one added after the reviewed commit: reachable
 from the commit you submit, and not from the reviewed one. A commit that
 contains changes for several findings is listed under each of them.
 
+Every commit counts. Each commit made since the reviewed one that changes
+anything outside `.metron/` must be listed under a fix, in this report or in
+an earlier report of yours for the same review. This command lists them:
+
+```
+git rev-list {{.Base.Commit}}..HEAD
+```
+
+Metron refuses the report if one of them is in no fix. A commit that serves
+none of the findings does not belong in a correction: take it out of the
+history you submit, or, if it has to stay, list it under the finding it
+relates to and account for it in that fix's `summary`. The verifier reads
+every listed commit.
+
+After your report is accepted, the mandatory checks are run on the candidate
+you submitted, before anyone verifies it. Run them yourself first. If you
+commit anything after submitting, for example because a check failed, your
+claims lapse and you will be asked to make them again with the new commits
+listed.
+
 Every listed commit must also change something outside `.metron/`; a commit
 that changes only `.metron/` changes nothing that is reviewed, so it fixes
 nothing. And for each finding you fix, the candidate you submit must be one
@@ -145,7 +179,7 @@ appears in exactly one of `fixes` and `disputes`.
 
 | Member | Content |
 | --- | --- |
-| `fixes` | One entry per finding you fixed, including any from the backlog. The list is empty if you only dispute. |
+| `fixes` | One entry per finding you fixed. The list is empty if you only dispute. |
 | `disputes` | Optional. One entry per finding you dispute, with `finding` (its `F-` identifier) and `rationale`: why the finding is wrong, with your evidence. |
 | `notes` | Optional. Anything the verifier should know that belongs to no single fix, such as a shared cause behind several findings. |
 
@@ -154,7 +188,7 @@ Each entry in `fixes` has these members:
 | Member | Content |
 | --- | --- |
 | `finding` | The `F-` identifier of the finding fixed. |
-| `commits` | The full hashes of the commits that contain the fix; at least one. |
+| `commits` | The full hashes of every commit that belongs to the fix since the reviewed commit; at least one. |
 | `summary` | What you changed and why that removes the mechanism the finding describes. |
 | `components` | The files, modules or subsystems the fix touched; at least one. |
 | `root_cause` | Required for a finding flagged root-cause-required, and welcome for any other: why the defect occurred, why any earlier fix did not hold, and how this fix addresses the cause. |

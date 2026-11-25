@@ -40,6 +40,15 @@ type State struct {
 	// churn tracks, for the current campaign, the rounds in which each
 	// component was named in a fix.
 	churn []churn
+	// claimedOn is the digest of the candidate on which the claims that
+	// await verification stand: the one the latest fix was claimed on.
+	claimedOn string
+	// accounted lists the commits that accepted fix claims list: the part of
+	// every correction interval that is accounted for.
+	accounted []string
+	// verified is the candidate the latest verification examined, until the
+	// next verdict.
+	verified *Candidate
 	// counted is set once the batch of events being folded has been counted
 	// as a failed step, and midBatch while more events of that batch follow.
 	counted, midBatch bool
@@ -123,6 +132,7 @@ func (s State) clone() State {
 	s.decisions = slices.Clone(s.decisions)
 	s.actors = slices.Clone(s.actors)
 	s.churn = slices.Clone(s.churn)
+	s.accounted = slices.Clone(s.accounted)
 	return s
 }
 
@@ -162,6 +172,8 @@ func (s *State) apply(e Event) error {
 		return s.onFixConfirmed(e.Data)
 	case EventFindingFixRejected:
 		return s.onFixRejected(e.Data)
+	case EventFindingAddressed:
+		return s.onAddressed(e.Data)
 	case EventFindingReopened:
 		return s.onReopened(e.Data)
 	case EventFindingWithdrawn:

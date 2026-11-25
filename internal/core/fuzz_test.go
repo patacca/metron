@@ -323,16 +323,16 @@ func (s *sim) implementer(p Packet, param byte) ImplementerBody {
 		if slices.Contains(p.RootCauseRequired, id) && !bit(param, 2) {
 			x.RootCause = "shared assumption about empty input"
 		}
-		b.Fixes = append(b.Fixes, x)
-	}
-	if bit(param, 1) {
-		for _, id := range p.Backlog {
-			x := fix(id, commit, components...)
-			if slices.Contains(p.RootCauseRequired, id) {
-				x.RootCause = "r"
+		// Unless the bit says otherwise, the report accounts for every
+		// commit since the reviewed one, not only its own.
+		if !bit(param, 1) {
+			for _, c := range s.unlisted() {
+				if !slices.Contains(x.Commits, c) {
+					x.Commits = append(x.Commits, c)
+				}
 			}
-			b.Fixes = append(b.Fixes, x)
 		}
+		b.Fixes = append(b.Fixes, x)
 	}
 	if bit(param, 6) {
 		s.clean = false

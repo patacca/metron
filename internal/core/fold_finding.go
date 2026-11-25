@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -55,9 +56,15 @@ func (s *State) onFixClaimed(data []byte) error {
 	if err := s.answered(p.Packet, StepFix); err != nil {
 		return err
 	}
-	f, err := s.findingIn(p.ID, StatusOpen)
-	if err != nil {
-		return err
+	// A fix is claimed for an open finding, or claimed again for one whose
+	// claim was made on another candidate.
+	i := s.findingIndex(p.ID)
+	if i < 0 {
+		return fmt.Errorf("finding %q does not exist", p.ID)
+	}
+	f := &s.findings[i]
+	if f.Status != StatusOpen && f.Status != StatusClaimed {
+		return fmt.Errorf("finding %s is %s, not %s or %s", p.ID, f.Status, StatusOpen, StatusClaimed)
 	}
 	if p.Fix.Finding != p.ID {
 		return fmt.Errorf("the fix names finding %q, not %s", p.Fix.Finding, p.ID)
@@ -69,6 +76,12 @@ func (s *State) onFixClaimed(data []byte) error {
 	f.Status = StatusClaimed
 	f.Fix = &fix
 	s.record(f, EventFindingFixClaimed, p.Packet, p.Candidate, fix.Summary)
+	s.claimedOn = p.Candidate
+	for _, c := range fix.Commits {
+		if !slices.Contains(s.accounted, c) {
+			s.accounted = append(s.accounted, c)
+		}
+	}
 	for _, c := range fix.Components {
 		s.noteChurn(c, p.Round)
 	}
@@ -87,8 +100,56 @@ func (s *State) onFixConfirmed(data []byte) error {
 	if err != nil {
 		return err
 	}
+	if err := checkScope(p.Scope, p.ScopeEvidence); err != nil {
+		return err
+	}
+	if p.Scope != ScopeProportionate {
+		return fmt.Errorf("the confirmed fix of %s has scope %q: only a proportionate fix is confirmed", p.ID, p.Scope)
+	}
 	f.Status = StatusResolved
 	s.record(f, EventFindingFixConfirmed, p.Packet, s.examined(p.Packet), p.Evidence)
+	s.verify(p.Packet)
+	return nil
+}
+
+func checkScope(scope, evidence string) error {
+	if scope != ScopeProportionate && scope != ScopeExcessive {
+		return fmt.Errorf("%q is not a scope: use %s or %s", scope, ScopeProportionate, ScopeExcessive)
+	}
+	if blank(evidence) {
+		return errors.New("the scope has no evidence")
+	}
+	return nil
+}
+
+// verify records the candidate a verification examined.
+func (s *State) verify(packet string) {
+	if i := s.packetIndex(packet); i >= 0 {
+		c := s.packets[i].Candidate
+		s.verified = &c
+	}
+}
+
+func (s *State) onAddressed(data []byte) error {
+	p, err := payload[FindingAddressed](data)
+	if err != nil {
+		return err
+	}
+	if err := s.answered(p.Packet, StepReview); err != nil {
+		return err
+	}
+	f, err := s.findingIn(p.ID, StatusOpen)
+	if err != nil {
+		return err
+	}
+	switch {
+	case f.Tier.Blocking():
+		return fmt.Errorf("finding %s is %s: a blocking finding is resolved by a verified fix", p.ID, f.Tier)
+	case blank(p.Evidence):
+		return errors.New("the evidence is blank")
+	}
+	f.Status = StatusResolved
+	s.record(f, EventFindingAddressed, p.Packet, s.examined(p.Packet), p.Evidence)
 	return nil
 }
 
@@ -104,10 +165,18 @@ func (s *State) onFixRejected(data []byte) error {
 	if err != nil {
 		return err
 	}
+	if err := checkScope(p.Scope, p.ScopeEvidence); err != nil {
+		return err
+	}
 	f.Status = StatusOpen
 	f.Recurrences++
 	f.RootCauseRequired = f.RootCauseRequired || p.RootCauseRequired
-	s.record(f, EventFindingFixRejected, p.Packet, s.examined(p.Packet), p.Evidence)
+	note := p.Evidence
+	if p.Scope == ScopeExcessive {
+		note = "the fix changes more than the finding needs: " + p.ScopeEvidence + " | " + p.Evidence
+	}
+	s.record(f, EventFindingFixRejected, p.Packet, s.examined(p.Packet), note)
+	s.verify(p.Packet)
 	s.fail()
 	return nil
 }

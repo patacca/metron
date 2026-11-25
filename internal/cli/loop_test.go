@@ -88,20 +88,24 @@ func TestWholeLoop(t *testing.T) {
 	r.expectNext(core.StepSubmitReport)
 	commit := r.commitOnly("fix the greeting", "greeting.txt")
 	contains(t, "ingest output", r.ingest(exitOK, fix(t, sk, "impl-1", commit)).out, "finding.fix-claimed", "F-0001")
+	// The mandatory checks pass on the claimed candidate before it is
+	// verified.
+	r.expectNext(core.StepRunChecks)
+	r.expect(exitNegative, "packet")
+	r.must("check")
 	r.expectNext(core.StepVerify)
 
 	p, sk = r.packet()
-	if p.Action != core.StepVerify || p.Base == nil || p.Candidate.Commit != commit {
+	if p.Action != core.StepVerify || p.Base == nil || p.Candidate.Commit != commit || len(p.Evidence) != 1 || !p.Evidence[0].Passed {
 		t.Fatalf("verify packet %+v", p)
 	}
+	verified := p.Candidate
 	r.ingest(exitOK, verify(t, sk, "ver-1", core.VerificationConfirmed))
-	r.expectNext(core.StepRunChecks)
-	r.must("check")
 	r.expectNext(core.StepReview)
 
 	p, sk = r.packet()
-	if p.Round != 2 || len(p.History) != 1 || p.History[0].Verdict != core.VerdictRed {
-		t.Fatalf("second review packet round %d history %+v", p.Round, p.History)
+	if p.Round != 2 || len(p.History) != 1 || p.History[0].Verdict != core.VerdictRed || p.Verified == nil || *p.Verified != verified {
+		t.Fatalf("second review packet round %d history %+v verified %+v", p.Round, p.History, p.Verified)
 	}
 	contains(t, "ingest output", r.ingest(exitOK, review(t, sk, "rev-1", nil)).out, "round 2: GREEN by rev-1", "Next step:    none, the gate is open")
 	r.expectNext(core.StepNone)

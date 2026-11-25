@@ -295,10 +295,16 @@ func summarize(e core.Event) string {
 		return fmt.Sprintf("%s: %s", d.ID, d.Evidence)
 	case core.EventFindingFixRejected:
 		d := decode[core.FindingFixRejected](e)
+		if d.Scope == core.ScopeExcessive {
+			return fmt.Sprintf("%s: the fix changes more than the finding needs (%s); %s", d.ID, d.ScopeEvidence, d.Evidence)
+		}
 		return fmt.Sprintf("%s: %s", d.ID, d.Evidence)
 	case core.EventFindingReopened:
 		d := decode[core.FindingReopened](e)
 		return fmt.Sprintf("%s (%s): %s", d.ID, d.Reason, d.Justification)
+	case core.EventFindingAddressed:
+		d := decode[core.FindingAddressed](e)
+		return fmt.Sprintf("%s: %s", d.ID, d.Evidence)
 	case core.EventFindingWithdrawn:
 		d := decode[core.FindingWithdrawn](e)
 		return fmt.Sprintf("%s: %s", d.ID, d.Rationale)

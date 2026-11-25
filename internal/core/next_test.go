@@ -74,13 +74,19 @@ func TestNextReasonText(t *testing.T) {
 	if a, want := g.next(), "blocking findings F-0001, F-0002 are open: fix or dispute each"; a.Reason != want {
 		t.Fatalf("reason\n got %q\nwant %q", a.Reason, want)
 	}
-	// F-0001 is disputed and upheld while the fix of F-0002 is rejected.
+	// F-0001 is disputed and upheld, then both fixes are rejected.
 	g.accept(g.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0002", g.commit(true))},
 		Disputes: []Dispute{{Finding: "F-0001", Rationale: "not a defect"}}})
 	ap := g.packet()
 	g.accept(ap, "aud-1", AuditorBody{Resolutions: resolutions(ap, "it stands"),
 		Adjudications: []Adjudication{{Finding: "F-0001", Decision: DecisionUphold, Rationale: "reproducible"}}})
-	g.accept(g.packet(), "ver-1", verify(map[string]string{"F-0002": VerificationRejected}, "F-0002"))
+	// The upheld finding is fixed before anything is verified: a correction
+	// is verified as one batch, on one candidate.
+	if a, want := g.next(), "blocking finding F-0001 is open and was already disputed: fix it"; a.Step != StepFix || a.Reason != want {
+		t.Fatalf("action %+v, want reason %q", a, want)
+	}
+	g.accept(g.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", g.commit(true))}})
+	g.accept(g.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected, "F-0002": VerificationRejected}, "F-0001", "F-0002"))
 	if a, want := g.next(), "blocking findings F-0001, F-0002 are open: fix F-0001, which was already disputed, and fix or dispute F-0002"; a.Reason != want {
 		t.Fatalf("reason\n got %q\nwant %q", a.Reason, want)
 	}
@@ -123,7 +129,7 @@ func TestGateIndependentVerdict(t *testing.T) {
 		h.checks(true)
 		h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
 		h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-		h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+		h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 		h.checks(true)
 		return h
 	}

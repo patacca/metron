@@ -56,7 +56,7 @@ func TestScenarioStageChange(t *testing.T) {
 	h.checks(true)
 	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checks(true)
 	reviewed := h.candidate()
 	h.accept(h.packet(), "rev-1", red(h.contract, "crash again"))
@@ -78,7 +78,7 @@ func TestScenarioStageChange(t *testing.T) {
 		t.Fatalf("fix packet after the stage change %+v", fp)
 	}
 	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0002", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"))
 	h.checks(true)
 	rp := h.packet()
 	if rp.Round != 3 || !slices.Contains(rp.ApplicableRequirements, "REQ-4") || len(rp.History) != 0 {
@@ -98,7 +98,7 @@ func TestScenarioHistoryRoundsAcrossStages(t *testing.T) {
 	h.checks(true)
 	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checks(true)
 	h.accept(h.packet(), "rev-1", red(h.contract, "crash again"))
 
@@ -109,7 +109,7 @@ func TestScenarioHistoryRoundsAcrossStages(t *testing.T) {
 		before[f.ID] = len(f.History)
 	}
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0002", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"))
 	h.checks(true)
 	b := review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated, "REQ-4": RequirementViolated}, blocker("loss", "REQ-4"))
 	b.Reopen = []Reopen{{Finding: "F-0001", Reason: ReopenRegression, Justification: "it is back"}}

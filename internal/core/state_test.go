@@ -103,10 +103,10 @@ func TestFindingHistory(t *testing.T) {
 		Adjudications: []Adjudication{{Finding: "F-0001", Decision: DecisionReclassify, Tier: TierCritical, Rationale: "data loss"}}})
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
 	y := h.candidate().Digest
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
 	z := h.candidate().Digest
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checks(true)
 	b := review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated})
 	b.Reopen = []Reopen{{Finding: "F-0001", Reason: ReopenInvalidVerification, Justification: "the repro still fails"}}

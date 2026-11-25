@@ -100,17 +100,27 @@ func TestScenarioRedFixVerifyGreen(t *testing.T) {
 	}
 	eqTypes(t, h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}}),
 		EventReportAccepted, EventFindingFixClaimed)
+	// The mandatory checks pass on the claimed candidate before anyone
+	// verifies it, and the verifier sees their results.
+	h.expect(StepRunChecks)
+	if _, err := PlanPacket(h.state, h.facts()); err == nil {
+		t.Fatal("a verify packet was planned before the checks passed")
+	}
+	h.checks(true)
 	h.expect(StepVerify)
 	vp := h.packet()
-	if vp.Action != StepVerify || !vp.ReadOnly || *vp.Base != reviewed || vp.Candidate == reviewed {
+	if vp.Action != StepVerify || !vp.ReadOnly || *vp.Base != reviewed || vp.Candidate == reviewed ||
+		len(vp.Evidence) != 1 || !vp.Evidence[0].Passed || vp.Evidence[0].Candidate != vp.Candidate.Digest {
 		t.Fatalf("verify packet %+v", vp)
 	}
 	eqTypes(t, h.accept(vp, "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001")),
 		EventReportAccepted, EventFindingFixConfirmed)
-	h.expect(StepRunChecks)
-	h.checks(true)
+	// The checks already hold for this candidate, so the review follows, and
+	// its packet names the candidate the fixes were verified on.
+	h.expect(StepReview)
 	rp := h.packet()
-	if rp.Round != 2 || len(rp.History) != 1 || rp.History[0].Verdict != VerdictRed || len(rp.Findings) != 1 {
+	if rp.Round != 2 || len(rp.History) != 1 || rp.History[0].Verdict != VerdictRed || len(rp.Findings) != 1 ||
+		rp.Verified == nil || *rp.Verified != vp.Candidate || *rp.Verified != rp.Candidate {
 		t.Fatalf("second review packet %+v", rp)
 	}
 	h.accept(rp, "rev-1", green(h.contract))
@@ -130,7 +140,7 @@ func TestScenarioRootCauseRequired(t *testing.T) {
 			t.Fatalf("attempt %d: root cause required too early", attempt)
 		}
 		h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-		d := h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
+		d := h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
 		if got := d[1].Data.(FindingFixRejected).RootCauseRequired; got != (attempt == 2) {
 			t.Fatalf("attempt %d: root_cause_required %t", attempt, got)
 		}
@@ -152,7 +162,7 @@ func TestScenarioRootCauseRequired(t *testing.T) {
 	fx := fix("F-0001", c)
 	fx.RootCause = "the parser assumed non-empty input everywhere"
 	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fx}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	if f, _ := lookup(h.state, "F-0001"); !f.RootCauseRequired || f.Status != StatusResolved {
 		t.Fatalf("the flag did not stay set: %+v", f)
 	}
@@ -192,6 +202,8 @@ func TestScenarioDispute(t *testing.T) {
 			t.Fatalf("problems %+v", ps)
 		}
 		h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
+		h.expect(StepRunChecks)
+		h.checks(true)
 		h.expect(StepVerify)
 	})
 
@@ -251,7 +263,7 @@ func TestScenarioUnchangedCandidateResubmission(t *testing.T) {
 	reviewed := h.tree
 	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checkout(reviewed)
 	a := h.expect(StepCommitChanges)
 	if !slices.Equal(a.Findings, []string{"F-0001"}) || !strings.Contains(a.Reason, "neither approved nor reviewed again") {
@@ -275,14 +287,14 @@ func TestScenarioFixCommittedBeforePacket(t *testing.T) {
 		t.Fatal("the fix packet is not bound to the current candidate")
 	}
 	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", early)}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationRejected}, "F-0001"))
 	// Claiming the rejected fix again without a new change is refused.
 	fp = h.packet()
 	if ps := h.refused(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", early)}}, LayerTransition); !hasProblem(ps, "/body/fixes/0") {
 		t.Fatalf("problems %+v", ps)
 	}
 	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.expect(StepVerify)
+	h.expect(StepRunChecks)
 }
 
 func TestScenarioNonConvergenceBeyondThreshold(t *testing.T) {
@@ -407,7 +419,7 @@ func TestScenarioComponentChurn(t *testing.T) {
 			t.Fatalf("round %d raised %v, want %v", round, got, want)
 		}
 		h.drain()
-		h.accept(h.packet(), "ver-1", verify(map[string]string{id: VerificationConfirmed}, id))
+		h.accept(h.verifying(), "ver-1", verify(map[string]string{id: VerificationConfirmed}, id))
 		h.checks(true)
 	}
 }
@@ -445,7 +457,7 @@ func TestScenarioRegressionSpiral(t *testing.T) {
 			reg := blocker("leak", "REQ-1")
 			reg.IntroducedBy = "F-0001"
 			b.Regressions = []FindingInput{reg}
-			d := h.accept(h.packet(), "ver-1", b)
+			d := h.accept(h.verifying(), "ver-1", b)
 			var want []EscalationKind
 			if tc.spiral {
 				want = []EscalationKind{EscalationRegressionSpiral}
@@ -496,7 +508,7 @@ func TestScenarioRoleSeparation(t *testing.T) {
 		t.Fatalf("problems %+v", ps)
 	}
 	h.accept(fp, "impl-1", body)
-	vp := h.packet()
+	vp := h.verifying()
 	confirmed := verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001")
 	h.refused(vp, "impl-1", confirmed, LayerTransition)
 	h.accept(vp, "ver-1", confirmed)
@@ -512,7 +524,7 @@ func TestScenarioRoleSeparation(t *testing.T) {
 	}
 	h.accept(ap, "aud-1", audit)
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0002", h.commit(true))}})
-	vp = h.packet()
+	vp = h.verifying()
 	h.refused(vp, "aud-1", verify(map[string]string{"F-0002": VerificationConfirmed}, "F-0002"), LayerTransition)
 }
 
@@ -521,7 +533,7 @@ func TestScenarioReplayAndIdempotentIngest(t *testing.T) {
 	h.checks(true)
 	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checks(true)
 	h.accept(h.packet(), "rev-1", green(h.contract))
 

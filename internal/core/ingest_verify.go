@@ -24,6 +24,18 @@ func (in *ingestion) checkVerifier(b VerifierBody) {
 		if blank(v.Evidence) {
 			in.sem.add(p+"/evidence", "the evidence is blank: say what the result rests on")
 		}
+		switch v.Scope {
+		case ScopeProportionate:
+		case ScopeExcessive:
+			if v.Result == VerificationConfirmed {
+				in.sem.add(p+"/result", "the fix of %s is confirmed although its scope is %s: reject it, so that the implementer takes out what the finding does not need", v.Finding, ScopeExcessive)
+			}
+		default:
+			in.sem.add(p+"/scope", "%q is not %q or %q: say whether the fix changes only what resolving the finding needs", v.Scope, ScopeProportionate, ScopeExcessive)
+		}
+		if blank(v.ScopeEvidence) {
+			in.sem.add(p+"/scope_evidence", "the scope evidence is blank: say what the fix's commits change and why each change is or is not needed to resolve the finding")
+		}
 	}
 	for _, id := range in.pk.Subjects {
 		if _, ok := seen[id]; !ok {
@@ -55,10 +67,12 @@ func (in *ingestion) verifierEvents(b VerifierBody) {
 			if in.find(v.Finding).Tier.Blocking() {
 				confirmed++
 			}
-			in.add(EventFindingFixConfirmed, FindingFixConfirmed{ID: v.Finding, Packet: pk.Packet, Evidence: v.Evidence})
+			in.add(EventFindingFixConfirmed, FindingFixConfirmed{ID: v.Finding, Packet: pk.Packet, Evidence: v.Evidence,
+				Scope: v.Scope, ScopeEvidence: v.ScopeEvidence})
 		} else {
 			rejected = append(rejected, v.Finding)
 			in.add(EventFindingFixRejected, FindingFixRejected{ID: v.Finding, Packet: pk.Packet, Evidence: v.Evidence,
+				Scope: v.Scope, ScopeEvidence: v.ScopeEvidence,
 				RootCauseRequired: in.find(v.Finding).Recurrences+1 >= in.th.RootCauseAfter})
 		}
 	}

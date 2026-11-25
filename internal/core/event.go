@@ -18,6 +18,7 @@ const (
 	EventFindingFixClaimed   EventType = "finding.fix-claimed"
 	EventFindingFixConfirmed EventType = "finding.fix-confirmed"
 	EventFindingFixRejected  EventType = "finding.fix-rejected"
+	EventFindingAddressed    EventType = "finding.addressed"
 	EventFindingReopened     EventType = "finding.reopened"
 	EventFindingWithdrawn    EventType = "finding.withdrawn"
 	EventFindingReclassified EventType = "finding.reclassified"
@@ -98,7 +99,6 @@ type PacketIssued struct {
 	// Digest is the digest of the packet's canonical JSON form.
 	Digest            string   `json:"digest"`
 	Subjects          []string `json:"subjects,omitempty"`
-	Backlog           []string `json:"backlog,omitempty"`
 	RootCauseRequired []string `json:"root_cause_required,omitempty"`
 	Escalations       []string `json:"escalations,omitempty"`
 	Adjudicable       []string `json:"adjudicable,omitempty"`
@@ -164,6 +164,11 @@ type FindingFixConfirmed struct {
 	ID       string `json:"id"`
 	Packet   string `json:"packet"`
 	Evidence string `json:"evidence"`
+	// Scope is the verifier's judgment of what the fix changes against what
+	// the finding needs, and ScopeEvidence what it rests on. A confirmed fix
+	// is always proportionate.
+	Scope         string `json:"scope"`
+	ScopeEvidence string `json:"scope_evidence"`
 }
 
 // FindingFixRejected is the payload of EventFindingFixRejected.
@@ -171,9 +176,22 @@ type FindingFixRejected struct {
 	ID       string `json:"id"`
 	Packet   string `json:"packet"`
 	Evidence string `json:"evidence"`
+	// Scope and ScopeEvidence are as in FindingFixConfirmed. A fix that
+	// changes more than its finding needs is rejected for that alone.
+	Scope         string `json:"scope"`
+	ScopeEvidence string `json:"scope_evidence"`
 	// RootCauseRequired is true when this rejection brings the finding's
 	// recurrence count to the contract's threshold.
 	RootCauseRequired bool `json:"root_cause_required"`
+}
+
+// FindingAddressed is the payload of EventFindingAddressed: a reviewer found
+// an open non-blocking finding addressed by work done outside any correction
+// cycle, with the evidence for it.
+type FindingAddressed struct {
+	ID       string `json:"id"`
+	Packet   string `json:"packet"`
+	Evidence string `json:"evidence"`
 }
 
 // FindingReopened is the payload of EventFindingReopened.

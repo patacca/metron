@@ -134,6 +134,58 @@ func (h *harness) describe(base string, hashes []string) []Commit {
 	return out
 }
 
+// interval lists the commits made after base, as the repository would: the
+// history is linear, so they are the ones recorded after it. It is unknown
+// when the repository no longer has base.
+func (h *harness) interval(base string) ([]Commit, bool) {
+	b := slices.IndexFunc(h.history, func(c Commit) bool { return c.Hash == base })
+	if b < 0 {
+		return nil, false
+	}
+	var out []Commit
+	for _, c := range h.history[b+1:] {
+		out = append(out, Commit{Hash: c.Hash, Reachable: true, Substantive: c.Substantive, Paths: c.Paths})
+	}
+	return out, true
+}
+
+// unlisted returns the commits since the reviewed one that change the
+// candidate and that no accepted fix lists yet.
+func (h *harness) unlisted() []string {
+	base, ok := h.state.base()
+	if !ok {
+		return nil
+	}
+	commits, _ := h.interval(base.Candidate.Commit)
+	var out []string
+	for _, c := range commits {
+		if c.Substantive && !slices.Contains(h.state.accounted, c.Hash) {
+			out = append(out, c.Hash)
+		}
+	}
+	return out
+}
+
+// repair commits a change and returns a fix for id that lists every commit
+// since the reviewed one that no fix accounts for yet, that commit included.
+func (h *harness) repair(id string, components ...string) Fix {
+	h.commit(true)
+	fx := fix(id, "", components...)
+	fx.Commits = h.unlisted()
+	return fx
+}
+
+// verifying records passing checks on the candidate the fixes were claimed
+// on, which the loop requires before a verification, and returns the verify
+// packet.
+func (h *harness) verifying() Packet {
+	h.tb.Helper()
+	if h.next().Step == StepRunChecks {
+		h.checks(true)
+	}
+	return h.packet()
+}
+
 // lookup returns the finding with the given identifier.
 func lookup(s State, id string) (Finding, bool) {
 	if i := s.findingIndex(id); i >= 0 {
@@ -278,6 +330,9 @@ func (h *harness) ingest(r Report) ([]Draft, bool, error) {
 			f.Commits = h.describe(p.Base.Commit, hashes)
 		}
 	}
+	if p, ok := h.state.Packet(r.Packet); ok && p.Base != nil && r.Role == RoleImplementer {
+		f.Interval, f.IntervalKnown = h.interval(p.Base.Commit)
+	}
 	if h.amend != nil {
 		h.amend(&f)
 	}
@@ -372,10 +427,12 @@ func fix(id, commit string, components ...string) Fix {
 	return Fix{Finding: id, Commits: []string{commit}, Summary: "guard the nil case", Components: components}
 }
 
+// verify builds a verifier body that finds every fix proportionate.
 func verify(results map[string]string, subjects ...string) VerifierBody {
 	var b VerifierBody
 	for _, id := range subjects {
-		b.Verifications = append(b.Verifications, Verification{Finding: id, Result: results[id], Evidence: "ran the repro"})
+		b.Verifications = append(b.Verifications, Verification{Finding: id, Result: results[id], Evidence: "ran the repro",
+			Scope: ScopeProportionate, ScopeEvidence: "the commits change the nil guard and its test, nothing else"})
 	}
 	return b
 }

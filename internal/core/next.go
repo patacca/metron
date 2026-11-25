@@ -68,12 +68,8 @@ func next(s State, f Facts) Action {
 		return Action{Step: StepAudit, Owner: RoleAuditor, Escalations: ids,
 			Reason: fmt.Sprintf("%s must be discharged by an audit", strings.Join(ids, ", "))}
 	}
-	if ids := s.findingIDs(func(x Finding) bool { return x.Status == StatusClaimed }); len(ids) > 0 {
-		return Action{Step: StepVerify, Owner: RoleVerifier, Findings: ids,
-			Reason: fmt.Sprintf("the %s of %s %s claimed and must be verified", pick(len(ids), "fix", "fixes"), strings.Join(ids, ", "), pick(len(ids), "is", "are"))}
-	}
-	if ids := s.findingIDs(func(x Finding) bool { return x.Status == StatusOpen && x.Tier.Blocking() }); len(ids) > 0 {
-		return Action{Step: StepFix, Owner: RoleImplementer, Findings: ids, Reason: s.fixReason(ids)}
+	if ids := s.toFix(f.Candidate.Digest); len(ids) > 0 {
+		return Action{Step: StepFix, Owner: RoleImplementer, Findings: ids, Reason: s.fixReason(ids, f.Candidate.Digest)}
 	}
 	if ids := s.findingIDs(func(x Finding) bool { return x.carriedBy(f.Candidate.Digest) }); len(ids) > 0 {
 		return Action{Step: StepCommitChanges, Owner: RoleImplementer, Findings: ids,
@@ -84,6 +80,10 @@ func next(s State, f Facts) Action {
 	if ids, reasons := missingChecks(s, *f.Contract, f.Candidate.Digest); len(ids) > 0 {
 		return Action{Step: StepRunChecks, Owner: RoleImplementer, Requirements: ids,
 			Reason: strings.Join(reasons, "; ") + ": make the checks pass on a committed candidate and record them"}
+	}
+	if ids := s.findingIDs(func(x Finding) bool { return x.Status == StatusClaimed }); len(ids) > 0 {
+		return Action{Step: StepVerify, Owner: RoleVerifier, Findings: ids,
+			Reason: fmt.Sprintf("the %s of %s %s claimed on this candidate and must be verified", pick(len(ids), "fix", "fixes"), strings.Join(ids, ", "), pick(len(ids), "is", "are"))}
 	}
 	g := Gate(s, f)
 	if g.Open {
@@ -167,26 +167,58 @@ func pick(n int, one, many string) string {
 	return many
 }
 
-// fixReason names the open blocking findings and offers a dispute only for
-// those that have not been disputed under the pinned contract.
-func (s State) fixReason(ids []string) string {
-	var disputed, open []string
+// lapsed reports whether the claims that await verification were made on
+// another candidate than the given one. A claim is about a candidate: once
+// the candidate changes, the commits since are in no fix, so the claims are
+// made again before anything is verified.
+func (s State) lapsed(candidate string) bool {
+	return candidate != s.claimedOn && slices.ContainsFunc(s.findings, func(x Finding) bool { return x.Status == StatusClaimed })
+}
+
+// toFix returns the findings an implementer must address on the given
+// candidate, in identifier order: the open blocking ones and, when the claims
+// have lapsed, the claimed ones.
+func (s State) toFix(candidate string) []string {
+	lapsed := s.lapsed(candidate)
+	return s.findingIDs(func(x Finding) bool {
+		return x.Status == StatusOpen && x.Tier.Blocking() || x.Status == StatusClaimed && lapsed
+	})
+}
+
+// fixReason names the findings to fix: the open blocking ones, offering a
+// dispute only for those not yet disputed under the pinned contract, and the
+// ones whose claim has lapsed.
+func (s State) fixReason(ids []string, candidate string) string {
+	var disputed, open, claimed []string
 	for _, id := range ids {
-		if s.findings[s.findingIndex(id)].Disputed {
+		switch x := s.findings[s.findingIndex(id)]; {
+		case x.Status == StatusClaimed:
+			claimed = append(claimed, id)
+		case x.Disputed:
 			disputed = append(disputed, id)
-		} else {
+		default:
 			open = append(open, id)
 		}
 	}
-	n := len(ids)
-	list := strings.Join(ids, ", ")
-	switch {
-	case len(disputed) == 0:
-		return fmt.Sprintf("blocking %s %s %s open: fix or dispute %s", pick(n, "finding", "findings"), list, pick(n, "is", "are"), pick(n, "it", "each"))
-	case len(open) == 0:
-		return fmt.Sprintf("blocking %s %s %s open and %s already disputed: fix %s", pick(n, "finding", "findings"), list,
-			pick(n, "is", "are"), pick(n, "was", "were"), pick(n, "it", "each"))
+	var parts []string
+	if n := len(disputed) + len(open); n > 0 {
+		blocking := append(slices.Clone(disputed), open...)
+		slices.SortFunc(blocking, compareIDs)
+		list := strings.Join(blocking, ", ")
+		switch {
+		case len(disputed) == 0:
+			parts = append(parts, fmt.Sprintf("blocking %s %s %s open: fix or dispute %s", pick(n, "finding", "findings"), list, pick(n, "is", "are"), pick(n, "it", "each")))
+		case len(open) == 0:
+			parts = append(parts, fmt.Sprintf("blocking %s %s %s open and %s already disputed: fix %s", pick(n, "finding", "findings"), list,
+				pick(n, "is", "are"), pick(n, "was", "were"), pick(n, "it", "each")))
+		default:
+			parts = append(parts, fmt.Sprintf("blocking findings %s are open: fix %s, which %s already disputed, and fix or dispute %s",
+				list, strings.Join(disputed, ", "), pick(len(disputed), "was", "were"), strings.Join(open, ", ")))
+		}
 	}
-	return fmt.Sprintf("blocking findings %s are open: fix %s, which %s already disputed, and fix or dispute %s",
-		list, strings.Join(disputed, ", "), pick(len(disputed), "was", "were"), strings.Join(open, ", "))
+	if n := len(claimed); n > 0 {
+		parts = append(parts, fmt.Sprintf("the %s of %s %s claimed on candidate %s and the candidate is now %s: claim %s again in a report that accounts for every commit since the reviewed one",
+			pick(n, "fix", "fixes"), strings.Join(claimed, ", "), pick(n, "was", "were"), s.claimedOn, candidate, pick(n, "it", "them")))
+	}
+	return strings.Join(parts, "; ")
 }

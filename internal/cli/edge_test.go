@@ -123,6 +123,7 @@ func TestUnchangedCandidate(t *testing.T) {
 	_, sk = r.packet()
 	r.write("greeting.txt", "hello\n")
 	r.ingest(exitOK, fix(t, sk, "impl-1", r.commit("fix the greeting")))
+	r.must("check")
 	_, sk = r.packet()
 	r.ingest(exitOK, verify(t, sk, "ver-1", core.VerificationConfirmed))
 	r.write("greeting.txt", "helo\n")

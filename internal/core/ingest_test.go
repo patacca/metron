@@ -62,7 +62,7 @@ func reviewerSetup(t *testing.T) (*harness, Packet) {
 	h.accept(h.packet(), "rev-1", review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated},
 		blocker("crash", "REQ-1"), improvement("long")))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checks(true)
 	return h, h.packet()
 }
@@ -269,16 +269,16 @@ func TestReviewerRules(t *testing.T) {
 	})
 }
 
-// implementerSetup leaves the fix packet open with F-0001 (T1) as subject and
-// F-0002 (T2) as backlog.
+// implementerSetup leaves the fix packet open with F-0001 (T1) as its only
+// subject: F-0002 (T2) is open too, and no part of a correction.
 func implementerSetup(t *testing.T) (*harness, Packet) {
 	h := newHarness(t)
 	h.checks(true)
 	h.accept(h.packet(), "rev-1", review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated},
 		blocker("crash", "REQ-1"), improvement("long")))
 	p := h.packet()
-	if !slices.Equal(p.Subjects, []string{"F-0001"}) || !slices.Equal(p.Backlog, []string{"F-0002"}) {
-		t.Fatalf("fix packet subjects %v backlog %v", p.Subjects, p.Backlog)
+	if !slices.Equal(p.Subjects, []string{"F-0001"}) || len(p.Findings) != 1 || p.Findings[0].ID != "F-0001" {
+		t.Fatalf("fix packet subjects %v findings %+v", p.Subjects, p.Findings)
 	}
 	return h, p
 }
@@ -299,13 +299,9 @@ func TestImplementerRules(t *testing.T) {
 		{name: "fix the subject", body: one(func(x *Fix) {}), check: func(t *testing.T, h *harness, d []Draft) {
 			eqTypes(t, d, EventReportAccepted, EventFindingFixClaimed)
 		}},
-		{name: "fix the subject and the backlog", body: fixes(func(h *harness, c string) ImplementerBody {
+		{name: "a non-blocking finding fixed in a correction", body: fixes(func(h *harness, c string) ImplementerBody {
 			return ImplementerBody{Fixes: []Fix{fix("F-0001", c), fix("F-0002", c)}}
-		}), check: func(t *testing.T, h *harness, d []Draft) {
-			if a := h.next(); !slices.Equal(a.Findings, []string{"F-0001", "F-0002"}) {
-				t.Fatalf("verify %+v", a)
-			}
-		}},
+		}), layer: LayerSemantic, path: "/body/fixes/1/finding"},
 		{name: "dispute only, without a commit", body: func(h *harness) any { return ImplementerBody{Disputes: []Dispute{dispute}} }},
 		{name: "subject not addressed", body: fixes(func(h *harness, c string) ImplementerBody {
 			return ImplementerBody{Fixes: []Fix{fix("F-0002", c)}}
@@ -319,7 +315,7 @@ func TestImplementerRules(t *testing.T) {
 		{name: "fixed and disputed", body: fixes(func(h *harness, c string) ImplementerBody {
 			return ImplementerBody{Fixes: []Fix{fix("F-0001", c)}, Disputes: []Dispute{dispute}}
 		}), layer: LayerSemantic, path: "/body/disputes/0/finding"},
-		{name: "backlog disputed", body: fixes(func(h *harness, c string) ImplementerBody {
+		{name: "a non-blocking finding disputed", body: fixes(func(h *harness, c string) ImplementerBody {
 			return ImplementerBody{Fixes: []Fix{fix("F-0001", c)}, Disputes: []Dispute{{Finding: "F-0002", Rationale: "r"}}}
 		}), layer: LayerSemantic, path: "/body/disputes/0/finding"},
 		{name: "blank dispute rationale", body: func(h *harness) any {
@@ -338,8 +334,26 @@ func TestImplementerRules(t *testing.T) {
 				for i := range f.Commits {
 					f.Commits[i].InBase = false // the base commit no longer exists
 				}
+				f.Interval, f.IntervalKnown = nil, false
 			}
 		}},
+		{name: "a commit that no fix lists", prep: func(h *harness) { h.commit(true) }, body: one(func(x *Fix) {}),
+			layer: LayerTransition, path: "/body/fixes"},
+		{name: "every commit since the review listed", body: func(h *harness) any {
+			h.commit(true)
+			return ImplementerBody{Fixes: []Fix{h.repair("F-0001")}}
+		}, check: func(t *testing.T, h *harness, d []Draft) {
+			if n := len(d[1].Data.(FindingFixClaimed).Fix.Commits); n != 2 || len(h.unlisted()) != 0 {
+				t.Fatalf("%d commits listed, %v left", n, h.unlisted())
+			}
+		}},
+		{name: "a ledger-only commit needs no fix", prep: func(h *harness) { h.commit(false) }, body: one(func(x *Fix) {})},
+		{name: "a dispute with a commit that no fix lists", prep: func(h *harness) { h.commit(true) },
+			body: func(h *harness) any { return ImplementerBody{Disputes: []Dispute{dispute}} }, layer: LayerTransition, path: "/body/fixes"},
+		{name: "a commit that no fix lists, reviewed commit gone", prep: func(h *harness) {
+			h.commit(true)
+			h.amend = func(f *Facts) { f.Interval, f.IntervalKnown = nil, false }
+		}, body: one(func(x *Fix) {})},
 		{name: "commit not examined", body: one(func(x *Fix) {}), prep: func(h *harness) {
 			h.amend = func(f *Facts) { f.Commits = nil }
 		}, layer: LayerTransition, path: "/body/fixes/0/commits/0"},
@@ -366,7 +380,7 @@ func verifierSetup(t *testing.T) (*harness, Packet) {
 	h.accept(h.packet(), "rev-1", review(h.contract, VerdictRed, map[string]string{"REQ-1": RequirementViolated},
 		blocker("crash", "REQ-1"), improvement("long")))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	return h, h.packet()
+	return h, h.verifying()
 }
 
 func TestVerifierRules(t *testing.T) {
@@ -475,7 +489,7 @@ func TestIngestEventOrder(t *testing.T) {
 	h.checks(true)
 	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
 	h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix("F-0001", h.commit(true))}})
-	h.accept(h.packet(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
 	h.checks(true)
 
 	contradicting := improvement("b")

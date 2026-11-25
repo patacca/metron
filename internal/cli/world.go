@@ -237,10 +237,20 @@ func (c *ctx) gather(s *site) (*world, error) {
 // makes the tree unclean.
 const ignoreCaseReason = "git is set to ignore case (core.ignoreCase) on a file system that distinguishes it, as after copying the repository from a case-insensitive system, so git overlooks files whose names differ only by case: set it to false"
 
-// describe observes the commits that the fixes of a report list, relative to
-// HEAD and to the base of the report's packet. A report that lists none, or
-// whose packet has no base, needs no description: the core judges it without.
+// describe observes what an implementer report is judged against: the
+// commits its fixes list, relative to HEAD and to the base of the report's
+// packet, and the correction interval, every commit HEAD contains and that
+// base does not. Any other report, and one whose packet has no base, needs
+// no description: the core judges it without.
 func (w *world) describe(r core.Report) error {
+	rec, ok := w.state.Packet(r.Packet)
+	if !ok || rec.Base == nil || r.Role != core.RoleImplementer {
+		return nil
+	}
+	var err error
+	if w.facts.Interval, w.facts.IntervalKnown, err = w.repo.Interval(rec.Base.Commit); err != nil {
+		return fmt.Errorf("list the commits since the reviewed one: %w", err)
+	}
 	var body struct {
 		Fixes []struct {
 			Commits []string `json:"commits"`
@@ -253,8 +263,7 @@ func (w *world) describe(r core.Report) error {
 	for _, f := range body.Fixes {
 		hashes = append(hashes, f.Commits...)
 	}
-	rec, ok := w.state.Packet(r.Packet)
-	if len(hashes) == 0 || !ok || rec.Base == nil {
+	if len(hashes) == 0 {
 		return nil
 	}
 	commits, err := w.repo.Describe(rec.Base.Commit, hashes)

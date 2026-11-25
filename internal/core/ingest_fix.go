@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Ingestion of implementer reports.
@@ -21,8 +22,7 @@ func (in *ingestion) checkImplementer(b ImplementerBody) {
 	}
 	for i, fx := range b.Fixes {
 		p := ptr("body", "fixes", i)
-		allowed := slices.Contains(in.pk.Subjects, fx.Finding) || slices.Contains(in.pk.Backlog, fx.Finding)
-		address(p, fx.Finding, allowed, "a subject or a backlog item")
+		address(p, fx.Finding, slices.Contains(in.pk.Subjects, fx.Finding), "a subject")
 		if len(fx.Commits) == 0 {
 			in.sem.add(p+"/commits", "no commit is listed: list the full hashes of the commits that contain the fix")
 		}
@@ -58,6 +58,21 @@ func (in *ingestion) checkImplementer(b ImplementerBody) {
 	}
 }
 
+// unaccounted returns the commits of the correction interval that change the
+// candidate and that no fix lists, in this report or in an earlier accepted
+// one.
+func (in *ingestion) unaccounted(b ImplementerBody) []Commit {
+	var out []Commit
+	for _, c := range in.f.Interval {
+		listed := slices.Contains(in.s.accounted, c.Hash) ||
+			slices.ContainsFunc(b.Fixes, func(fx Fix) bool { return slices.Contains(fx.Commits, c.Hash) })
+		if c.Substantive && !listed {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (in *ingestion) implementerTransition(b ImplementerBody) {
 	if !in.f.Clean {
 		in.tr.add("", "the working tree has changes outside .metron/: commit them, then submit the report")
@@ -81,7 +96,9 @@ func (in *ingestion) implementerTransition(b ImplementerBody) {
 			}
 		}
 		x := in.find(fx.Finding)
-		if x.Status != StatusOpen {
+		// A subject is open, or claimed on a candidate that has changed
+		// since, in which case its fix is claimed again.
+		if x.Status != StatusOpen && x.Status != StatusClaimed {
 			in.tr.add(ptr("body", "fixes", i, "finding"), "finding %s is %s: only an open finding can be fixed", x.ID, x.Status)
 			continue
 		}
@@ -98,9 +115,27 @@ func (in *ingestion) implementerTransition(b ImplementerBody) {
 		switch {
 		case x.Disputed:
 			in.tr.add(ptr("body", "disputes", i, "finding"), "finding %s was already disputed: after adjudication it must be fixed", x.ID)
+		case x.Status == StatusClaimed:
+			in.tr.add(ptr("body", "disputes", i, "finding"), "finding %s already has a claimed fix: claim it again with every commit that belongs to it, in fixes", x.ID)
 		case x.Status != StatusOpen:
 			in.tr.add(ptr("body", "disputes", i, "finding"), "finding %s is %s: only an open finding can be disputed", x.ID, x.Status)
 		}
+	}
+	// Every commit that changed the candidate since the reviewed one belongs
+	// to a fix. The rule holds while the reviewed commit still exists.
+	if missing := in.unaccounted(b); len(missing) > 0 {
+		const show = 5
+		var names []string
+		for _, c := range missing[:min(show, len(missing))] {
+			names = append(names, c.Hash)
+		}
+		more := ""
+		if len(missing) > show {
+			more = fmt.Sprintf(" and %d more", len(missing)-show)
+		}
+		in.tr.add("/body/fixes", "%s %s%s %s the candidate since the reviewed commit %s, and no fix lists %s: every such commit belongs to a fix, so list each under the finding it serves, or take what serves no finding out of the candidate's history",
+			pick(len(missing), "commit", "commits"), strings.Join(names, ", "), more, pick(len(missing), "changes", "change"),
+			in.pk.Base.Commit, pick(len(missing), "it", "them"))
 	}
 }
 

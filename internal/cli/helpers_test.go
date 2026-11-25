@@ -348,6 +348,7 @@ func verify(t *testing.T, sk core.Report, author, result string) []byte {
 	unmarshal(t, string(sk.Body), &b)
 	for i := range b.Verifications {
 		b.Verifications[i].Result, b.Verifications[i].Evidence = result, "cat greeting.txt prints hello"
+		b.Verifications[i].Scope, b.Verifications[i].ScopeEvidence = core.ScopeProportionate, "the commit changes one word in greeting.txt"
 	}
 	return complete(t, sk, author, b)
 }

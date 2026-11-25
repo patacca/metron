@@ -18,6 +18,11 @@ type Packet struct {
 	// Base is the candidate the round reviewed. It is set for fix and verify
 	// packets, where the role works on the changes since then.
 	Base *Candidate `json:"base,omitempty"`
+	// Verified is the candidate the latest verification examined. It is set
+	// for a review packet when fixes were verified since the previous
+	// verdict: a reviewed candidate that differs from it holds changes no
+	// verifier saw.
+	Verified *Candidate `json:"verified,omitempty"`
 	// ReadOnly tells the role it must not change the candidate. Metron
 	// rejects the report if it did.
 	ReadOnly bool `json:"read_only"`
@@ -34,10 +39,8 @@ type Packet struct {
 	// Subjects are the findings the report must address: the blocking
 	// findings to fix, or the claimed fixes to verify.
 	Subjects []string `json:"subjects,omitempty"`
-	// Backlog lists open non-blocking findings an implementer may also fix.
-	Backlog []string `json:"backlog,omitempty"`
-	// RootCauseRequired lists the subjects and backlog findings whose fix
-	// must include a root-cause analysis.
+	// RootCauseRequired lists the subjects whose fix must include a
+	// root-cause analysis.
 	RootCauseRequired []string `json:"root_cause_required,omitempty"`
 	// Escalations are the escalations an audit must discharge.
 	Escalations []Escalation `json:"escalations,omitempty"`

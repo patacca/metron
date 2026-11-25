@@ -1,0 +1,13 @@
+{
+  "seq": 11,
+  "time": "2026-03-14T09:26:53Z",
+  "prev": "14c795baef1229956e39c6d81c0c511bb3800a180133f0ef5ca866f102a1d12e",
+  "type": "finding.addressed",
+  "more": 0,
+  "data": {
+    "id": "F-0003",
+    "packet": "P-0007",
+    "evidence": "The backoff cap is now read from configuration, and the pilot's value is recorded in CAL-1."
+  },
+  "hash": "e43c28e69db6705871162259bd96d4bc3ec12f2956cdbf81c4b84b882fbdb522"
+}

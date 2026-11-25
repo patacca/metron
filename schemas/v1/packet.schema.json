@@ -33,6 +33,9 @@
     "base": {
       "$ref": "defs.schema.json#/$defs/candidate"
     },
+    "verified": {
+      "$ref": "defs.schema.json#/$defs/candidate"
+    },
     "read_only": {
       "type": "boolean"
     },
@@ -55,9 +58,6 @@
       }
     },
     "subjects": {
-      "$ref": "defs.schema.json#/$defs/findingIdList"
-    },
-    "backlog": {
       "$ref": "defs.schema.json#/$defs/findingIdList"
     },
     "root_cause_required": {

@@ -180,6 +180,13 @@
         "unverified"
       ]
     },
+    "fixScope": {
+      "type": "string",
+      "enum": [
+        "proportionate",
+        "excessive"
+      ]
+    },
     "protocol": {
       "type": "string",
       "const": "metron.protocol/v1"
@@ -522,6 +529,7 @@
         "finding.fix-claimed",
         "finding.fix-confirmed",
         "finding.fix-rejected",
+        "finding.addressed",
         "finding.reopened",
         "finding.withdrawn",
         "finding.reclassified",

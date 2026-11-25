@@ -25,6 +25,11 @@ check results (`evidence`), every finding in the ledger with its history
 decisions (`decisions`). If you received this brief as a prompt, the same
 information follows it, laid out for reading.
 
+Since the last review, fixes for earlier findings were verified by a
+verifier on commit `c3e5a7b9d1f30246813579bdf02468ace1357902` (candidate digest `sha256:3333333333333333333333333333333333333333333333333333333333333333`). That is the candidate in front of you.
+Either way the verification covered the fixes, not the candidate: your
+review is of the whole candidate.
+
 ## What you are deciding
 
 You are deciding whether this candidate is sufficiently correct, reliable,
@@ -239,6 +244,13 @@ otherwise a loop can be kept going indefinitely by re-arguing settled points.
   invalid, and say in your justification what it missed.
 - A finding that is still unresolved is already recorded; do not report it
   again. If you find something connected to it, name it in `related`.
+- An `open` finding of a non-blocking tier is part of the backlog. Nobody is
+  asked to fix it, but ordinary work may have dealt with it. If this
+  candidate no longer exhibits what such a finding describes, list it in
+  `addressed` with the evidence: what you examined and what it showed. That
+  resolves the finding. Mark only what you checked: a commit message that
+  claims to fix it is not evidence. A blocking finding is never closed this
+  way; it is resolved by a fix that a verifier confirms.
 - You cannot change the tier of a recorded finding; only an auditor can. If an
   open non-blocking finding turns out to be blocking, open a new blocking
   finding with the evidence that makes it so and name the old one in
@@ -300,6 +312,7 @@ The body has these members:
 | `requirements` | Exactly one entry per applicable requirement: `requirement` (its identifier), `status` (`satisfied`, `violated` or `unverified`) and `evidence`, the checks, tests, measurements or reasoning behind the status, specific enough for someone to repeat. For `unverified`, say what evidence is missing and why you could not obtain it. |
 | `findings` | The new findings of this review, described below. The list may be empty. |
 | `reopen` | Optional. Resolved findings you reopen, each with `finding` (its `F-` identifier), `reason` and `justification`. |
+| `addressed` | Optional. Open non-blocking findings that this candidate no longer exhibits, each with `finding` (its `F-` identifier) and `evidence`. |
 | `contract_gaps` | Optional. Risks the contract does not cover, each with `title`, `description` (the risk, its evidence, and why no applicable requirement or unacceptable risk covers it) and optionally `suggested_requirement`, wording governance could adopt. |
 | `verdict` | `GREEN`, `RED` or `INDETERMINATE`, as derived above. |
 | `justification` | Why the verdict follows: for `RED`, the blocking findings and what they cite; for `INDETERMINATE`, the unverified requirements and the evidence each lacks; for `GREEN`, the basis for concluding that every requirement is satisfied and nothing blocks. |

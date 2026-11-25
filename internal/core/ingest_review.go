@@ -90,6 +90,22 @@ func (in *ingestion) checkReviewer(b ReviewerBody) {
 		}
 	}
 
+	closed := make(map[string]string)
+	for i, ad := range b.Addressed {
+		p := ptr("body", "addressed", i)
+		switch prev, dup := closed[ad.Finding]; {
+		case !in.exists(ad.Finding):
+			in.sem.add(p+"/finding", "finding %q does not exist: mark a finding of this ledger as addressed", ad.Finding)
+		case dup:
+			in.sem.add(p+"/finding", "finding %s is already marked addressed at %s: mark it once", ad.Finding, prev)
+		default:
+			closed[ad.Finding] = p
+		}
+		if blank(ad.Evidence) {
+			in.sem.add(p+"/evidence", "the evidence is blank: say what shows that the candidate no longer exhibits the finding")
+		}
+	}
+
 	for i, g := range b.ContractGaps {
 		p := ptr("body", "contract_gaps", i)
 		if blank(g.Title) {
@@ -275,6 +291,14 @@ func (in *ingestion) reviewerTransition(b ReviewerBody) {
 			in.tr.add(ptr("body", "reopen", i, "finding"), "finding %s is %s: only a resolved finding can be reopened", ro.Finding, st)
 		}
 	}
+	for i, ad := range b.Addressed {
+		switch x := in.find(ad.Finding); {
+		case x.Tier.Blocking():
+			in.tr.add(ptr("body", "addressed", i, "finding"), "finding %s is %s: a blocking finding is resolved by a fix that a verifier confirms, not by a review", x.ID, x.Tier)
+		case x.Status != StatusOpen:
+			in.tr.add(ptr("body", "addressed", i, "finding"), "finding %s is %s: only an open finding can be marked addressed", x.ID, x.Status)
+		}
+	}
 }
 
 func (in *ingestion) reviewerEvents(b ReviewerBody) {
@@ -283,6 +307,9 @@ func (in *ingestion) reviewerEvents(b ReviewerBody) {
 		x := in.find(ro.Finding)
 		in.add(EventFindingReopened, FindingReopened{ID: x.ID, Packet: pk.Packet, Reason: ro.Reason, Justification: ro.Justification,
 			RootCauseRequired: x.Recurrences+1 >= in.th.RootCauseAfter})
+	}
+	for _, ad := range b.Addressed {
+		in.add(EventFindingAddressed, FindingAddressed{ID: ad.Finding, Packet: pk.Packet, Evidence: ad.Evidence})
 	}
 	for _, fi := range b.Findings {
 		id := in.open(RoleReviewer, fi)

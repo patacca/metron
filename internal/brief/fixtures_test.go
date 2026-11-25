@@ -395,6 +395,7 @@ func fullReview() core.Packet {
 		f6Preference(), f7Withdrawn(),
 	}
 	p.History = history(2)
+	p.Verified = &core.Candidate{Commit: commitFixed, Digest: digestFixed}
 	return p
 }
 
@@ -408,11 +409,10 @@ func fullFix() core.Packet {
 		passed("REQ-9", "go test ./internal/delivery -run TestLatencyBudget", digestBatch),
 	}
 	p.Subjects = []string{"F-0004", "F-0005"}
-	p.Backlog = []string{"F-0002", "F-0003", "F-0006"}
 	p.RootCauseRequired = []string{"F-0004"}
 	rejected := &core.Fix{Finding: "F-0004", Commits: []string{commitBatch}, Summary: "Wait for the sync in the batch endpoint as well.",
 		Components: []string{"internal/delivery/batch.go", "internal/delivery/accept.go"}}
-	p.Findings = []core.Finding{f2Reclassified(), f3Calibration(), f4(core.StatusOpen, rejected, 8), f5(core.StatusOpen, nil, 3), f6Preference()}
+	p.Findings = []core.Finding{f4(core.StatusOpen, rejected, 8), f5(core.StatusOpen, nil, 3)}
 	p.History = history(2)
 	return p
 }

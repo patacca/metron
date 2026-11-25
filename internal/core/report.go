@@ -53,6 +53,9 @@ type ReviewerBody struct {
 	Findings []FindingInput `json:"findings"`
 	// Reopen lists resolved findings the reviewer reopens.
 	Reopen []Reopen `json:"reopen,omitempty"`
+	// Addressed lists open non-blocking findings the reviewer found
+	// addressed on this candidate.
+	Addressed []Addressed `json:"addressed,omitempty"`
 	// ContractGaps are risks the contract does not cover. They go to
 	// governance and cannot block by themselves.
 	ContractGaps  []ContractGap `json:"contract_gaps,omitempty"`
@@ -98,6 +101,13 @@ type Reopen struct {
 	Justification string       `json:"justification"`
 }
 
+// Addressed closes an open non-blocking finding that the candidate no longer
+// exhibits, with the evidence for it.
+type Addressed struct {
+	Finding  string `json:"finding"`
+	Evidence string `json:"evidence"`
+}
+
 // ContractGap is a risk the reviewer believes the contract should cover.
 type ContractGap struct {
 	Title       string `json:"title"`
@@ -133,12 +143,23 @@ type Verification struct {
 	Finding  string `json:"finding"`
 	Result   string `json:"result"`
 	Evidence string `json:"evidence"`
+	// Scope says whether the fix's commits change only what resolving the
+	// finding needs, and ScopeEvidence what they change and why that is or
+	// is not needed. A fix whose scope is excessive is rejected.
+	Scope         string `json:"scope"`
+	ScopeEvidence string `json:"scope_evidence"`
 }
 
 // Verification results.
 const (
 	VerificationConfirmed = "confirmed"
 	VerificationRejected  = "rejected"
+)
+
+// Scopes of a fix, as a verifier judges them.
+const (
+	ScopeProportionate = "proportionate"
+	ScopeExcessive     = "excessive"
 )
 
 // AuditorBody is an auditor's report discharging a packet's escalations.

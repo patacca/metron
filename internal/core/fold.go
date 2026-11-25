@@ -152,7 +152,7 @@ func (s *State) onPacketIssued(data []byte) error {
 	case p.Round < 0:
 		return fmt.Errorf("round %d is negative", p.Round)
 	}
-	for _, list := range [][]string{p.Subjects, p.Backlog, p.RootCauseRequired, p.Adjudicable} {
+	for _, list := range [][]string{p.Subjects, p.RootCauseRequired, p.Adjudicable} {
 		for _, id := range list {
 			if s.findingIndex(id) < 0 {
 				return fmt.Errorf("the packet cites finding %q, which does not exist", id)
@@ -290,6 +290,7 @@ func (s *State) onVerdict(data []byte) error {
 	r.Verdict = p.Verdict
 	r.Reviewer = p.Reviewer
 	r.Requirements = p.Requirements
+	s.verified = nil
 	if p.Verdict == VerdictGreen {
 		s.streak = 0
 		s.convergenceRaised = false

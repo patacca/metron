@@ -42,11 +42,13 @@ func (s *sim) cooperate() bool {
 		case RoleReviewer:
 			s.accept(p, "co-rev", green(p.Contract))
 		case RoleImplementer:
-			commit := s.commit(true)
+			// The report accounts for every commit since the reviewed one,
+			// whoever made it.
+			s.commit(true)
 			var b ImplementerBody
 			for _, id := range p.Subjects {
-				fx := fix(id, commit)
-				fx.RootCause = "analysed"
+				fx := fix(id, "")
+				fx.Commits, fx.RootCause = s.unlisted(), "analysed"
 				b.Fixes = append(b.Fixes, fx)
 			}
 			s.accept(p, "co-impl", b)
@@ -91,11 +93,13 @@ func (s *sim) obstruct() {
 		case RoleReviewer:
 			s.accept(p, "co-rev", red(p.Contract, "never good enough"))
 		case RoleImplementer:
-			commit := s.commit(true)
+			// The report accounts for every commit since the reviewed one,
+			// whoever made it.
+			s.commit(true)
 			var b ImplementerBody
 			for _, id := range p.Subjects {
-				fx := fix(id, commit)
-				fx.RootCause = "analysed"
+				fx := fix(id, "")
+				fx.Commits, fx.RootCause = s.unlisted(), "analysed"
 				b.Fixes = append(b.Fixes, fx)
 			}
 			s.accept(p, "co-impl", b)

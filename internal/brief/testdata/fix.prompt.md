@@ -30,10 +30,12 @@ Resolve each of these blocking findings, by fixing it or, if you believe it
 is wrong, by disputing it: `F-0004` and `F-0005`. An auditor has already adjudicated a dispute of
 `F-0005`, and a finding can be disputed only once, so that one has to be fixed.
 
-The packet also lists open non-blocking findings as an optional backlog:
-`F-0002`, `F-0003` and `F-0006`. You may fix any of them in the same batch when it is cheap and
-safe to do so; nothing requires it, and a backlog fix is verified like any
-other.
+This is a correction, not an opportunity. Change what resolving these
+findings needs and nothing else. The ledger also holds findings that do not
+block, the backlog; they are not in this packet and are not fixed here.
+Improvements are ordinary development work: they are made outside a
+correction, reviewed like any other change, and closed by a later review.
+Mixing them in is how a correction breaks something that was not broken.
 
 ## Fix the batch as a batch
 
@@ -63,10 +65,12 @@ That is what the verifier will apply, so run it yourself before you submit.
 A regression test that fails before your change and passes after it is the
 strongest evidence you can give; describe what you added or ran in `tests`.
 
-Keep each change proportionate to its finding. Every change you make is
-verified and then reviewed again in full, and over-engineering is reviewable:
-an unrequested refactoring or a speculative abstraction widens what can go
-wrong and can become a finding of its own.
+Keep each change proportionate to its finding. The verifier judges, for each
+fix, whether its commits change only what resolving the finding needs, and
+rejects a fix that does more, whether or not the finding is resolved: an
+unrequested refactoring, a speculative abstraction or an improvement nobody
+asked for widens what can go wrong and what has to be checked. If the
+smallest sound fix is large, say why in the fix's `summary`.
 
 ## What a fix must not do
 
@@ -111,6 +115,26 @@ Every listed commit must be one added after the reviewed commit: reachable
 from the commit you submit, and not from the reviewed one. A commit that
 contains changes for several findings is listed under each of them.
 
+Every commit counts. Each commit made since the reviewed one that changes
+anything outside `.metron/` must be listed under a fix, in this report or in
+an earlier report of yours for the same review. This command lists them:
+
+```
+git rev-list 9b2d4f6a8c0e1357924680ace13579bdf0246813..HEAD
+```
+
+Metron refuses the report if one of them is in no fix. A commit that serves
+none of the findings does not belong in a correction: take it out of the
+history you submit, or, if it has to stay, list it under the finding it
+relates to and account for it in that fix's `summary`. The verifier reads
+every listed commit.
+
+After your report is accepted, the mandatory checks are run on the candidate
+you submitted, before anyone verifies it. Run them yourself first. If you
+commit anything after submitting, for example because a check failed, your
+claims lapse and you will be asked to make them again with the new commits
+listed.
+
 Every listed commit must also change something outside `.metron/`; a commit
 that changes only `.metron/` changes nothing that is reviewed, so it fixes
 nothing. And for each finding you fix, the candidate you submit must be one
@@ -144,7 +168,7 @@ appears in exactly one of `fixes` and `disputes`.
 
 | Member | Content |
 | --- | --- |
-| `fixes` | One entry per finding you fixed, including any from the backlog. The list is empty if you only dispute. |
+| `fixes` | One entry per finding you fixed. The list is empty if you only dispute. |
 | `disputes` | Optional. One entry per finding you dispute, with `finding` (its `F-` identifier) and `rationale`: why the finding is wrong, with your evidence. |
 | `notes` | Optional. Anything the verifier should know that belongs to no single fix, such as a shared cause behind several findings. |
 
@@ -153,7 +177,7 @@ Each entry in `fixes` has these members:
 | Member | Content |
 | --- | --- |
 | `finding` | The `F-` identifier of the finding fixed. |
-| `commits` | The full hashes of the commits that contain the fix; at least one. |
+| `commits` | The full hashes of every commit that belongs to the fix since the reviewed commit; at least one. |
 | `summary` | What you changed and why that removes the mechanism the finding describes. |
 | `components` | The files, modules or subsystems the fix touched; at least one. |
 | `root_cause` | Required for a finding flagged root-cause-required, and welcome for any other: why the defect occurred, why any earlier fix did not hold, and how this fix addresses the cause. |
@@ -410,82 +434,6 @@ History, oldest first:
 - Round 2, `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
 - Round 2, `escalation.raised` in packet `P-0008`: the implementer disputes F-0005: the replay tool is not part of the pilot, so the dependency direction blocks nothing at this stage
 - Round 2, `escalation.resolved` in packet `P-0009`, on this candidate: Upheld: REQ-3 requires that internal/store import neither of the other packages, whether or not the replay tool ships.
-
-## Optional backlog
-
-Open non-blocking findings you may also fix.
-
-### F-0002: Each accepted event is written with its own fsync
-
-- Tier `T2`, reclassified from `T1`, in `performance`
-- Status `open`; opened in round 1 by the reviewer; recurrences: 0
-- Disputed once; cannot be disputed again
-- Components: `internal/store/append.go`
-- Requirement: `REQ-9`
-
-Description: Appends are synced one at a time, which caps throughput at the disk's sync rate.
-
-Evidence: A benchmark on the reference machine reaches 400 appends per second.
-
-Impact: Throughput headroom above the envelope's 50 events per second is smaller than it could be.
-
-Blocking rationale: Latency could exceed the budget under bursts.
-
-Verification: TestLatencyBudget passes at 200 events per second.
-
-Proportionality:
-
-- Proposed change: Group appends that arrive within 5 ms into one sync.
-- Regression risk: Group commit changes the durability point of each event.
-- Deferral cost: None identified beyond the pilot.
-
-Expected benefit: Roughly eight times the append throughput.
-
-Deferral rationale: The envelope's load is an eighth of the measured capacity.
-
-History, oldest first:
-
-- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
-- Round 1, `escalation.raised` in packet `P-0002`: the implementer disputes F-0002: the envelope's load is an eighth of the measured capacity, so REQ-9 is not at risk
-- Round 1, `escalation.resolved` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: The latency budget holds at the envelope's load with a wide margin; F-0002 is an improvement, not a deficiency.
-- Round 1, `finding.reclassified` in packet `P-0003`, on candidate `sha256:6666666666666666666666666666666666666666666666666666666666666666`: T1 to T2: TestLatencyBudget passes at 50 events per second with a 99th percentile of 40 ms.
-
-### F-0003: The 5-minute backoff cap may delay recovery for long outages
-
-- Tier `T3`, in `reliability`
-- Status `open`; opened in round 1 by the reviewer; recurrences: 0
-- Components: `internal/delivery/retry.go`
-- Related: `F-0001`
-
-Description: After a long outage a recovered subscriber may wait up to five minutes for the next attempt.
-
-Evidence: Follows from the backoff schedule in retry.go.
-
-Impact: Slower catch-up after outages longer than ten minutes.
-
-Evidence needed: Outage durations of pilot subscribers.
-
-Reassess when: Two weeks of pilot traffic have been delivered.
-
-History, oldest first:
-
-- Round 1, `finding.opened` in packet `P-0001`, on candidate `sha256:1111111111111111111111111111111111111111111111111111111111111111`
-
-### F-0006: Constructor takes seven positional parameters
-
-- Tier `T4`, in `simplicity`
-- Status `open`; opened in round 2 by the reviewer; recurrences: 0
-- Components: `internal/delivery/dispatcher.go`
-
-Description: An options struct would make call sites easier to read.
-
-Evidence: dispatcher.go, NewDispatcher.
-
-Impact: Readability only.
-
-History, oldest first:
-
-- Round 2, `finding.opened` in packet `P-0007`, on candidate `sha256:2222222222222222222222222222222222222222222222222222222222222222`
 
 ## Rounds of this stage
 

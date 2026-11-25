@@ -34,6 +34,7 @@ var eventPayloads = map[core.EventType]reflect.Type{
 	core.EventFindingFixClaimed:   reflect.TypeOf(core.FindingFixClaimed{}),
 	core.EventFindingFixConfirmed: reflect.TypeOf(core.FindingFixConfirmed{}),
 	core.EventFindingFixRejected:  reflect.TypeOf(core.FindingFixRejected{}),
+	core.EventFindingAddressed:    reflect.TypeOf(core.FindingAddressed{}),
 	core.EventFindingReopened:     reflect.TypeOf(core.FindingReopened{}),
 	core.EventFindingWithdrawn:    reflect.TypeOf(core.FindingWithdrawn{}),
 	core.EventFindingReclassified: reflect.TypeOf(core.FindingReclassified{}),

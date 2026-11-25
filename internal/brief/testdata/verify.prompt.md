@@ -19,6 +19,11 @@ lists them:
 git log 9b2d4f6a8c0e1357924680ace13579bdf0246813..c3e5a7b9d1f30246813579bdf02468ace1357902
 ```
 
+Every one of them that changes the candidate is listed under at least one of
+the claimed fixes; Metron refused the implementer's report otherwise. The
+mandatory checks have been run on this candidate and passed; their results
+are in the packet.
+
 The review is governed by Metron, a program that runs the loop around you. It
 issued this packet, will validate your report, and records your results in
 its ledger: a confirmed fix resolves its finding, a rejected one sends it back
@@ -67,6 +72,32 @@ the fix's `root_cause` states what the implementer found. Check that the
 analysis is plausible and that the change addresses the cause it identifies.
 Another local patch at the symptom is grounds for rejection, even if the
 symptom is gone for now.
+
+## Is each fix proportionate?
+
+A correction changes what its findings need and nothing else. For each fix,
+read every commit it lists and decide whether the change is necessary and
+proportionate to resolving that finding. Give the result in `scope`:
+
+- `proportionate`: everything the commits change serves the fix: the change
+  that removes the mechanism, the tests for it, and what that change
+  unavoidably touches.
+- `excessive`: the commits also change something the finding does not need:
+  an unrelated refactoring, a feature, an optimization or abstraction nobody
+  asked for, a rewrite where a local change would do, or a "while I was
+  there" improvement, however reasonable it looks.
+
+Say in `scope_evidence` what the commits change and why each part is, or is
+not, needed. A list of file names is not an answer: that every commit names
+a finding only shows that it was labelled. A large change can be
+proportionate when the smallest sound fix is large, and a root-cause fix
+that replaces several local patches usually is; say so.
+
+An `excessive` fix is rejected, even when the finding itself is resolved,
+and Metron refuses a report that confirms one. The implementer then submits
+the fix without the excess. This keeps improvements out of corrections,
+where they are verified in a hurry and can break what was not broken; they
+belong in ordinary work that is reviewed on its own.
 
 ## Regressions
 
@@ -146,7 +177,7 @@ The body has these members:
 
 | Member | Content |
 | --- | --- |
-| `verifications` | Exactly one entry per claimed fix in this packet, with `finding` (its `F-` identifier), `result` (`confirmed` or `rejected`) and `evidence`: what you ran or examined, and what it showed. |
+| `verifications` | Exactly one entry per claimed fix in this packet, with `finding` (its `F-` identifier), `result` (`confirmed` or `rejected`), `evidence` (what you ran or examined, and what it showed), `scope` (`proportionate` or `excessive`) and `scope_evidence` (what the fix's commits change, and why each part is or is not needed to resolve the finding). A fix whose scope is `excessive` is `rejected`. |
 | `regressions` | Optional. New findings introduced by these fixes, each with `introduced_by` set, described below. |
 | `notes` | Optional. Observations that belong to no single verification, including problems you noticed that these changes did not introduce. |
 
@@ -492,12 +523,16 @@ empty value where one is required.
       {
         "finding": "F-0004",
         "result": "",
-        "evidence": ""
+        "evidence": "",
+        "scope": "",
+        "scope_evidence": ""
       },
       {
         "finding": "F-0005",
         "result": "",
-        "evidence": ""
+        "evidence": "",
+        "scope": "",
+        "scope_evidence": ""
       }
     ]
   }

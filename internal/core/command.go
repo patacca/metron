@@ -188,6 +188,10 @@ func PlanPacket(s State, f Facts) (PacketPlan, error) {
 	case StepReview:
 		p.Round = len(s.rounds) + 1
 		p.Findings = slices.Clone(s.findings)
+		if s.verified != nil {
+			v := *s.verified
+			p.Verified = &v
+		}
 	case StepFix, StepVerify:
 		base, ok := s.base()
 		if !ok {
@@ -195,14 +199,13 @@ func PlanPacket(s State, f Facts) (PacketPlan, error) {
 		}
 		p.Base, p.Round = &base.Candidate, base.Number
 		if a.Step == StepFix {
-			p.Subjects = s.findingIDs(func(x Finding) bool { return x.Status == StatusOpen && x.Tier.Blocking() })
-			p.Backlog = s.findingIDs(func(x Finding) bool { return x.Status == StatusOpen && !x.Tier.Blocking() })
-			p.RootCauseRequired = s.findingIDs(func(x Finding) bool { return x.Status == StatusOpen && x.RootCauseRequired })
+			p.Subjects = s.toFix(f.Candidate.Digest)
+			p.RootCauseRequired = s.findingIDs(func(x Finding) bool { return slices.Contains(p.Subjects, x.ID) && x.RootCauseRequired })
 		} else {
 			p.Subjects = s.findingIDs(func(x Finding) bool { return x.Status == StatusClaimed })
 		}
 		for _, x := range s.findings {
-			if slices.Contains(p.Subjects, x.ID) || slices.Contains(p.Backlog, x.ID) {
+			if slices.Contains(p.Subjects, x.ID) {
 				p.Findings = append(p.Findings, x)
 			}
 		}
@@ -268,7 +271,7 @@ func IssuePacket(s State, f Facts, p Packet, digest string) ([]Draft, error) {
 	drafts = append(drafts, Draft{Type: EventPacketIssued, Data: PacketIssued{
 		Packet: p.ID, Role: p.Role, Action: p.Action, Round: p.Round, Candidate: p.Candidate, Base: p.Base,
 		Contract: p.ContractDigest, Protocol: ProtocolVersion, Digest: digest,
-		Subjects: p.Subjects, Backlog: p.Backlog, RootCauseRequired: p.RootCauseRequired,
+		Subjects: p.Subjects, RootCauseRequired: p.RootCauseRequired,
 		Escalations: escalations, Adjudicable: p.Adjudicable,
 	}})
 	// The packet that uses up the campaign budget is the last one issued

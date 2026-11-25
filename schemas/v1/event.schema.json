@@ -270,6 +270,25 @@
       "if": {
         "properties": {
           "type": {
+            "const": "finding.addressed"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/findingAddressed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
             "const": "finding.reopened"
           }
         },
@@ -486,9 +505,6 @@
         "subjects": {
           "$ref": "defs.schema.json#/$defs/findingIdList"
         },
-        "backlog": {
-          "$ref": "defs.schema.json#/$defs/findingIdList"
-        },
         "root_cause_required": {
           "$ref": "defs.schema.json#/$defs/findingIdList"
         },
@@ -664,12 +680,20 @@
         },
         "evidence": {
           "$ref": "defs.schema.json#/$defs/text"
+        },
+        "scope": {
+          "$ref": "defs.schema.json#/$defs/fixScope"
+        },
+        "scope_evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
         }
       },
       "required": [
         "id",
         "packet",
-        "evidence"
+        "evidence",
+        "scope",
+        "scope_evidence"
       ],
       "additionalProperties": false
     },
@@ -685,6 +709,12 @@
         "evidence": {
           "$ref": "defs.schema.json#/$defs/text"
         },
+        "scope": {
+          "$ref": "defs.schema.json#/$defs/fixScope"
+        },
+        "scope_evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
+        },
         "root_cause_required": {
           "type": "boolean"
         }
@@ -693,7 +723,29 @@
         "id",
         "packet",
         "evidence",
+        "scope",
+        "scope_evidence",
         "root_cause_required"
+      ],
+      "additionalProperties": false
+    },
+    "findingAddressed": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "defs.schema.json#/$defs/findingId"
+        },
+        "packet": {
+          "$ref": "defs.schema.json#/$defs/packetId"
+        },
+        "evidence": {
+          "$ref": "defs.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "id",
+        "packet",
+        "evidence"
       ],
       "additionalProperties": false
     },

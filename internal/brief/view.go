@@ -23,17 +23,20 @@ type view struct {
 	Later      []core.Requirement
 
 	// The packet's findings, resolved from its identifier lists. Others are
-	// the findings in none of the three lists.
+	// the findings in neither list.
 	SubjectFindings     []core.Finding
-	BacklogFindings     []core.Finding
 	AdjudicableFindings []core.Finding
 	OtherFindings       []core.Finding
 
-	// RootCause lists the subjects and backlog findings whose fix must include
-	// a root-cause analysis, whether the packet or the finding itself says so.
-	// Disputed lists the subjects that have already been disputed.
+	// RootCause lists the subjects whose fix must include a root-cause
+	// analysis, whether the packet or the finding itself says so. Disputed
+	// lists the subjects that have already been disputed. Claimed lists the
+	// subjects of a fix packet whose fix was claimed on an earlier candidate
+	// and is claimed again, and Unclaimed the others.
 	RootCause []string
 	Disputed  []string
+	Claimed   []string
+	Unclaimed []string
 
 	// Kinds groups an audit packet's escalations by kind.
 	Kinds escalationKinds
@@ -166,29 +169,31 @@ func (v *view) findings() error {
 	if v.SubjectFindings, err = resolve("subjects", v.Subjects); err != nil {
 		return err
 	}
-	if v.BacklogFindings, err = resolve("backlog", v.Backlog); err != nil {
-		return err
-	}
 	if v.AdjudicableFindings, err = resolve("adjudicable findings", v.Adjudicable); err != nil {
 		return err
 	}
 	for _, id := range v.RootCauseRequired {
-		if !slices.Contains(v.Subjects, id) && !slices.Contains(v.Backlog, id) {
-			return fmt.Errorf("packet %s requires a root-cause analysis for %s, which is neither a subject nor in the backlog", v.ID, id)
-		}
-	}
-	for _, f := range slices.Concat(v.SubjectFindings, v.BacklogFindings) {
-		if f.RootCauseRequired || slices.Contains(v.RootCauseRequired, f.ID) {
-			v.RootCause = append(v.RootCause, f.ID)
+		if !slices.Contains(v.Subjects, id) {
+			return fmt.Errorf("packet %s requires a root-cause analysis for %s, which is not a subject", v.ID, id)
 		}
 	}
 	for _, f := range v.SubjectFindings {
+		if f.RootCauseRequired || slices.Contains(v.RootCauseRequired, f.ID) {
+			v.RootCause = append(v.RootCause, f.ID)
+		}
 		if f.Disputed {
 			v.Disputed = append(v.Disputed, f.ID)
 		}
+		switch {
+		case !v.IsFix:
+		case f.Status == core.StatusClaimed:
+			v.Claimed = append(v.Claimed, f.ID)
+		default:
+			v.Unclaimed = append(v.Unclaimed, f.ID)
+		}
 	}
 	for _, f := range v.Findings {
-		if !slices.Contains(v.Subjects, f.ID) && !slices.Contains(v.Backlog, f.ID) && !slices.Contains(v.Adjudicable, f.ID) {
+		if !slices.Contains(v.Subjects, f.ID) && !slices.Contains(v.Adjudicable, f.ID) {
 			v.OtherFindings = append(v.OtherFindings, f)
 		}
 	}
@@ -204,8 +209,11 @@ func (v *view) action() error {
 	if !v.IsFix && !v.IsVerify && len(v.Subjects) > 0 {
 		return refuse("lists subjects")
 	}
-	if !v.IsFix && (len(v.Backlog) > 0 || len(v.RootCauseRequired) > 0) {
-		return refuse("lists a backlog or root-cause requirements")
+	if !v.IsFix && len(v.RootCauseRequired) > 0 {
+		return refuse("lists root-cause requirements")
+	}
+	if !v.IsReview && v.Verified != nil {
+		return refuse("names a verified candidate")
 	}
 	if !v.IsAudit && (len(v.Escalations) > 0 || len(v.Adjudicable) > 0) {
 		return refuse("lists escalations or adjudicable findings")

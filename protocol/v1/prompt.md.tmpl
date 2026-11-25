@@ -21,6 +21,9 @@ information the brief above refers to.
 {{- with .Base}}
 - Reviewed commit: `{{.Commit}}`, digest `{{.Digest}}`
 {{- end}}
+{{- with .Verified}}
+- Fixes last verified on: commit `{{.Commit}}`, digest `{{.Digest}}`{{if eq .Digest $.Candidate.Digest}}, which is this candidate{{else}}, which is not this candidate{{end}}
+{{- end}}
 - Contract digest: `{{.ContractDigest}}`
 - Read-only: {{if .ReadOnly}}yes, the candidate must not change{{else}}no, you are expected to commit changes{{end}}
 
@@ -168,16 +171,6 @@ Reassess when: {{.ReassessWhen}}
 {{- with .SubjectFindings}}
 
 ## {{if $.IsFix}}Findings to fix or dispute{{else}}Claimed fixes to verify{{end}}
-{{- range .}}
-
-{{template "finding-record" .}}
-{{- end}}
-{{- end}}
-{{- with .BacklogFindings}}
-
-## Optional backlog
-
-Open non-blocking findings you may also fix.
 {{- range .}}
 
 {{template "finding-record" .}}
