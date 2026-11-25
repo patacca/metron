@@ -1,0 +1,156 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0004",
+  "packet_digest": "sha256:8e4a4dd3ef5680c6d1800c983d0982e09ea10b410b6e74a1841fbe5e60cad5e2",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Verified that all three ingestion paths (upsert_listing, import_records, apply_update) store prices as exact integer minor units using round() to handle IEEE 754 representation errors. Tested with prices ending in .99, .49, .95 across multiple currencies. All produce correct price_minor values (e.g., '19,99 \u20ac' \u2192 1999 EUR, '17.99' GBP \u2192 1799 GBP)."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active returns listings ordered by price_minor ascending, filtered by category, currency, and status='active', with optional query terms matched case-insensitively against search_text. Tests cover ordering, filters, limit, and non-ASCII query terms (umlauts). The function meets the search agents' need for interactive buyer queries."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "The database holds public listing data (titles, prices, seller display names) and is not encrypted at rest, but ACC-1 accepts this risk for controlled validation. The workstation's full-disk encryption is the only protection. No credentials, tokens, or sensitive authentication data are stored. SQL injection is prevented by parameterized queries throughout."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "Verified that upsert_listing preserves price history across re-upserts by using conditional INSERT/UPDATE instead of INSERT OR REPLACE. The ON DELETE CASCADE on price_history.listing_id no longer fires on re-upsert. Tested with three successive upserts on the same listing: all three price history rows are preserved in order. Listings are never lost except by explicit delete_listing or purge_removed."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid input is rejected with ValueError naming the field and reason. A batch with one invalid record stores nothing (transaction rollback). upsert_listing and apply_update raise ValueError for unknown backend/currency/status, unreadable price, or naive datetime. apply_update raises LookupError for unknown listing. Tests confirm rejected calls leave the database unchanged."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "The transaction() context manager wraps all writes in BEGIN/COMMIT with ROLLBACK on exception. A failure mid-batch leaves the store exactly as it was. The single-writer constraint (one ingestion process, one connection, one thread) is enforced by the operating envelope, not by the code, but the code is safe under that constraint. SQLite's timeout=10.0 handles brief contention from readers."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale inserts 50,000 listings (all active, same category and currency) and measures cheapest_active with limit=20, with and without query terms. The fastest of 5 runs is under 250ms. The query uses indexes on (category, status) and (listing_id, observed_at), and instr() on search_text for query matching. Performance meets the interactive buyer requirement."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "No material inefficiencies. The schema uses appropriate indexes. Queries are parameterized and use covering indexes where beneficial. The price_history INSERT only fires when (price_minor, currency) changes, avoiding duplicate rows. normalize_title is called on every ingestion but is fast (NFKC + casefold + split/join). No unnecessary allocations or copies."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "The operating envelope caps the store at 50,000 listings and 500,000 price history rows. The schema, indexes, and queries are designed for this scale. cheapest_active performs well at the envelope limit. The single-writer constraint avoids concurrency complexity. SQLite handles this scale comfortably on a workstation."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "The package uses only the Python standard library (sqlite3, json, re, unicodedata, datetime, difflib, os, collections, contextlib, math). No external dependencies. The schema is created and upgraded only by numbered migrations in schema.py (MIGRATIONS tuple, migrate function). No other code issues DDL. The three ingestion paths (upsert_listing, import_records, apply_update) are cleanly separated. The package structure is clear and maintainable."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Code is well-structured with clear separation of concerns: schema.py for migrations, prices.py for parsing, normalize.py for validation, store.py for the store, updates.py for watcher updates, bulk.py for imports, dedup.py for deduplication. Functions have docstrings explaining their purpose and behavior. Error messages name the field and reason. The code is easy to understand and modify."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No significant technical debt. The code is clean, well-tested, and follows a consistent style. The schema migrations are append-only and clearly documented. The use of round() instead of int() for price_minor is a pragmatic fix for IEEE 754 representation errors. The deduplication thresholds (CAL-1) are provisional but clearly marked as such."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "The design is appropriately simple for the scope. No unnecessary abstraction or premature optimization. The three ingestion paths are distinct but share validation logic through normalize.py. The schema is minimal and evolves through numbered migrations. The code does what it needs to do without extra complexity."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "The test suite runs offline, writes only to temporary directories, and passes (40 tests, exit 0). Tests cover all three ingestion paths, price parsing, query behavior, schema migrations, deduplication, and error handling. The tests are deterministic and isolated. The working tree is clean after the test run."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns the number of listings per backend and status, and the number of price history rows. import_records and import_jsonl return counts of listings inserted, updated, and price changes. Rejected records raise ValueError naming the position (record number or line number) and the reason. The operator can tell what the store holds and what an import did."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "The schema migrations preserve data when upgrading from earlier versions. test_older_database_is_upgraded_in_place verifies that a v1 database is upgraded to the current version without losing data. The API is stable: open_store, upsert_listing, apply_update, import_records, import_jsonl, cheapest_active, find_duplicates, stats, delete_listing, purge_removed. No breaking changes."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "The store is a single SQLite file on the operator's workstation. It can be deployed by copying the file, monitored via stats(), and rolled back by restoring a previous file. The schema migrations are automatic on open_store. The single-writer constraint simplifies operations. The bounded launch (14 days or 50,000 listings) is a clear operational boundary."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "Resource consumption is proportionate to the objectives. SQLite is lightweight and requires no server. The store fits in memory at the envelope scale. The queries are efficient and use indexes. The bounded launch limits the total data collected. No unnecessary compute or storage."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "Verified by inspection and reproduction: all three ingestion paths use round(parse_amount(price, currency) * minor_unit_factor(currency)) to compute price_minor. Tested with prices '19,99 \u20ac' EUR \u2192 1999, '17.99' GBP \u2192 1799, '49,99 z\u0142' PLN \u2192 4999, '0.99' EUR \u2192 99, '99.99' EUR \u2192 9999, '1299.99' EUR \u2192 129999 across upsert_listing, import_records, and apply_update. All produce the correct integer minor units. round() handles IEEE 754 representation errors where the product is slightly below the true integer (e.g., 19.99 * 100 = 1998.9999999999998 rounds to 1999)."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "satisfied",
+        "evidence": "Verified by inspection and reproduction: upsert_listing uses conditional INSERT (for new listings) and UPDATE (for existing listings) instead of INSERT OR REPLACE. When a listing already exists, the code issues UPDATE listings SET ... WHERE id = ?, so the listing row is never deleted and the ON DELETE CASCADE on price_history.listing_id never fires. Reproduced: three successive upsert_listing calls on the same (kleinanzeigen, '1') key with prices '100 \u20ac'/'90 \u20ac'/'80 \u20ac' at t0/t1/t2. price_history returns 3 rows with price_minor 10000/9000/8000 at t0/t1/t2 in order. The listing's id and first_seen_at remain unchanged. The price history is preserved across re-upserts."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "Inspected cheapest_active in store.py:217-245 and tests in test_query.py. The query filters by category, status='active', currency, and optionally by query terms using instr(search_text, ?) > 0. It orders by price_minor, id and applies LIMIT. Tests cover ordering by price (test_cheapest_first_with_ties_in_insertion_order), status/category/currency filters (test_only_active_listings_of_the_category_and_currency), limit (test_limit), and query terms with non-ASCII letters in either case (test_query_terms_ignore_case_including_umlauts). All tests pass."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "Inspected all modules in listings/: __init__.py, schema.py, prices.py, normalize.py, store.py, updates.py, bulk.py, dedup.py. All imports are from the Python standard library (sqlite3, json, re, unicodedata, datetime, difflib, os, collections, contextlib, math). No external dependencies. The schema is created and upgraded only by numbered migrations in schema.py (MIGRATIONS tuple with versions 1-4, migrate function). No other code issues DDL. test_schema.py verifies that a v1 database is upgraded to the current version without losing data."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "Ran python3 -m unittest discover -s tests -q. Exit status 0, output 'Ran 40 tests in 1.016s OK'. The test suite runs offline, writes only to temporary directories (StoreTestCase uses tempfile.mkdtemp), and leaves the working tree clean (git status shows nothing to commit)."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "Inspected stats() in store.py:247-259: returns {'listings': total, 'by_backend': {backend: {status: count}}, 'price_history_rows': count}. Inspected import_records in bulk.py:31-126: returns {'inserted': count, 'updated': count, 'price_changes': count}. import_jsonl delegates to import_records. Rejected records raise ValueError naming the position (e.g., 'record 2: ...' or 'path.jsonl, line 3: ...') and the reason. Tests confirm the counts and error messages."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "Inspected validation in normalize.py (listing_key, check_status, require_text, utc_timestamp) and prices.py (parse_amount). All raise ValueError with descriptive messages for invalid input. The transaction() context manager in store.py:69-84 wraps writes in BEGIN/COMMIT with ROLLBACK on exception. test_bulk.py:test_one_invalid_record_rejects_the_batch verifies that a batch with one invalid record stores nothing. test_store.py:test_invalid_listing_is_refused and test_updates.py:test_refused_update_changes_nothing verify that rejected calls leave the database unchanged."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_query.py:EnvelopeScaleTest.test_cheapest_active_at_envelope_scale inserts 50,000 listings (all active, same category 'bikes', same currency 'EUR') and measures cheapest_active with limit=20, with query=None, 'modell 12', and 'gr\u00f6\u00dfe s'. The fastest of 5 runs is under 0.250 seconds. The test passes. The query uses indexes on (category, status) and instr() on search_text for query matching. Performance meets the interactive buyer requirement at the envelope scale."
+      },
+      {
+        "requirement": "REQ-9",
+        "status": "unverified",
+        "evidence": "REQ-9 requires demonstrating that find_duplicates reports at least 95% precision on a sample of at least 500 pairs of real listings labelled by hand. The operating envelope states that the real listings exist only once the bounded launch has collected them. At this stage, before the bounded launch, the labelled sample does not exist. The deduplication thresholds (SIMILARITY_THRESHOLD=0.82, PRICE_TOLERANCE_PERCENT=15) are provisional (CAL-1) and their precision/recall cannot be measured without real data. The criterion cannot be evaluated at this stage. This is not a calibration (which is about parameter values) but about whether the requirement's criterion can be checked. The evidence (real labelled data) is missing and cannot be obtained until after the bounded launch runs."
+      }
+    ],
+    "findings": [],
+    "verdict": "INDETERMINATE",
+    "justification": "REQ-9 is unverified because its criterion requires a labelled sample of at least 500 pairs of real listings, which does not exist before the bounded launch. The bounded launch is authorized by a GREEN gate, but the launch is needed to produce the evidence for REQ-9. This is a chicken-and-egg problem: the gate cannot open until REQ-9 is verified, but REQ-9 cannot be verified until the gate opens and the launch runs. Governance must decide whether to amend the contract (e.g., defer REQ-9 verification until after the bounded launch, or accept a proxy metric) or supply the missing evidence (e.g., provide a pre-existing labelled sample from a similar dataset). All other requirements (REQ-1 through REQ-8) are satisfied with evidence. No blocking findings (T0 or T1) are opened. The verdict is INDETERMINATE because REQ-9 is unverified."
+  }
+}

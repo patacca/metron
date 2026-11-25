@@ -1,0 +1,180 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:64b0b12403dba10ec7aaff12fd84eff94037f8c502e0d30d5ec5fe3b85532bd1",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Price parsing produces incorrect values for many common prices due to float precision errors. For example, '19.99' EUR becomes 1998 minor units instead of 1999. This affects all three ingestion paths."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active correctly orders by price, filters by status/category/currency, applies limit, and handles case-insensitive query terms with non-ASCII letters. Tests in test_query.py cover these cases and pass."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "Database file is unencrypted but governance has accepted this risk (ACC-1). Workstation full-disk encryption is the only protection, which is acceptable for controlled validation."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "upsert_listing uses INSERT OR REPLACE which deletes the listing row and cascades to delete all price history, then inserts a new row. This loses the entire price history on every rescrape, violating the requirement that price history is never lost except by explicit delete."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid input is rejected with appropriate errors. Batches with invalid records store nothing. ValueError raised for unknown backend/currency/status/unreadable price/time without UTC offset. LookupError raised for unknown listings in apply_update. Tests demonstrate this behavior."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "Transactions are properly implemented with BEGIN/COMMIT/ROLLBACK. WAL mode allows concurrent reads. Foreign keys enforced. However, the data integrity bug in upsert_listing means reliability is compromised."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale passes, demonstrating that queries complete in under 250ms with 50,000 listings. Indexes on category/status and price_history support efficient queries."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "No material inefficiencies identified. Indexes are appropriate for the query patterns. The schema is normalized appropriately."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "The operating envelope limits are respected: 50,000 listings, 500,000 price history rows. The schema and indexes support this scale. Single writer process assumption is documented and enforced by design."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Only Python standard library is used. Schema migrations are numbered and in schema.py. No DDL elsewhere. The package structure separates concerns: prices, normalize, store, bulk, updates, dedup, schema."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Code is well-documented with clear docstrings. Functions have single responsibilities. Error messages name the problem and position. The code is easy to understand and modify."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No significant technical debt identified. The code is straightforward and avoids unnecessary abstraction."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "The implementation is appropriately simple. No speculative abstraction or premature optimization. Complexity is justified by the requirements."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "Test suite runs offline, writes only to temporary directories, and passes (40 tests). Tests cover the requirements well, though they do not catch the float precision bug or the price history loss bug."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns listings per backend/status and price history row count. import_records and import_jsonl return counts of inserted/updated/price_changes. Errors name position and reason."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Schema migrations upgrade older databases without data loss (tested in test_schema.py). The migration from version 1 to 4 is handled correctly, including backfilling price_history for existing listings."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "Database can be opened, upgraded, and used. WAL mode allows concurrent reads. Foreign keys enforced. Error messages are clear. However, the data integrity bugs make the system unsafe to operate."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "Resource consumption is proportionate. SQLite is lightweight. No unnecessary dependencies. The implementation is efficient for the operating envelope."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "violated",
+        "evidence": "parse_amount returns a float, and int(float * factor) produces incorrect values for many prices. Example: parse_amount('19.99', 'EUR') returns 19.99, and int(19.99 * 100) = 1998, not 1999. This affects all three ingestion paths: upsert_listing (store.py:112), import_records (bulk.py:67), and apply_update (updates.py:57). The contract requires exact integer minor units, but float precision errors cause off-by-one errors for many common prices."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "upsert_listing uses INSERT OR REPLACE (store.py:124), which deletes the existing row and inserts a new one. The price_history table has ON DELETE CASCADE, so all price history is deleted when the listing is replaced. Example: insert a listing with price 100, rescrape with price 200, and the history contains only the 200 entry, not both. The contract requires that price history is never lost except by explicit delete."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "cheapest_active (store.py:199) correctly filters by category, status='active', and currency. It orders by price_minor, id. Query terms are applied with instr(search_text, ?) which is case-insensitive. Tests in test_query.py cover ordering, filters, limit, and case-insensitive query terms with non-ASCII letters (umlauts), and all pass."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "All imports in listings/ are from the Python standard library (os, sqlite3, re, math, json, unicodedata, datetime, difflib, collections.abc, contextlib) or relative imports within the package. Schema migrations are in schema.py, numbered 1-4. No DDL elsewhere. test_schema.py demonstrates that older databases are upgraded without data loss."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "python3 -m unittest discover -s tests -q exits with status 0, runs 40 tests, all pass. Tests use tempfile.TemporaryDirectory, so they write only to temporary directories. No network access required."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "stats() (store.py:229) returns listings per backend/status and price_history_rows. import_records (bulk.py:30) and import_jsonl (bulk.py:95) return counts of inserted, updated, and price_changes. Errors name position and reason: e.g., 'record 2: missing fields backend' or 'file.jsonl, line 3: not JSON'."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "Invalid input raises ValueError with descriptive messages. Batches with one invalid record store nothing (tested in test_bulk.py:test_one_invalid_record_rejects_the_batch). upsert_listing and apply_update raise ValueError for unknown backend/currency/status/unreadable price/time without UTC offset (tested in test_store.py:test_invalid_listing_is_refused and test_updates.py:test_refused_update_changes_nothing). apply_update raises LookupError for unknown listings (tested in test_updates.py). All tests show the database is unchanged after rejection."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_cheapest_active_at_envelope_scale in test_query.py creates 50,000 listings, all in the same category and currency, and measures query time with and without query terms. The test passes, demonstrating that queries complete in under 250ms. The index on (category, status) and the price_minor ordering support efficient queries."
+      }
+    ],
+    "findings": [
+      {
+        "key": "F-001",
+        "tier": "T0",
+        "domain": "functional-correctness",
+        "title": "Float precision errors cause incorrect price_minor values",
+        "components": ["listings/prices.py", "listings/store.py", "listings/bulk.py", "listings/updates.py"],
+        "description": "parse_amount returns a float, and the ingestion paths compute price_minor as int(parse_amount(...) * minor_unit_factor(...)). Due to IEEE 754 float precision, many prices produce incorrect values. For example, 19.99 * 100 = 1998.9999999999998, which int() truncates to 1998 instead of 1999. This affects all three ingestion paths: upsert_listing, import_records, and apply_update.",
+        "evidence": "parse_amount('19.99', 'EUR') returns 19.99. int(19.99 * 100) = 1998. Similarly, '0.29' becomes 28, '0.57' becomes 56, '£17.99' becomes 1798. The contract requires exact integer minor units, but float precision errors cause off-by-one errors for many common prices.",
+        "impact": "Buyers see incorrect prices. For example, a listing priced at 19.99 EUR is stored as 19.98 EUR, a 1 cent error. This violates RISK-2: a buyer is shown a price that differs from the one the marketplace displays. The error affects a significant fraction of prices with two decimal places.",
+        "requirement": "REQ-1",
+        "risk": "RISK-2",
+        "blocking_rationale": "The contract requires exact integer minor units for all prices. Float precision errors violate this requirement and cause incorrect prices to be stored and displayed to buyers. This must be fixed before controlled validation, as buyers will see wrong prices.",
+        "verification": "For each price in the operating envelope (0 to 100,000 in each currency), verify that price_minor equals the decimal amount multiplied by 10^exponent, exactly. For example, '19.99' EUR must be 1999, '0.29' EUR must be 29, '£17.99' must be 1799. Use Decimal arithmetic or string parsing to avoid float precision errors."
+      },
+      {
+        "key": "F-002",
+        "tier": "T0",
+        "domain": "data-integrity",
+        "title": "upsert_listing loses price history on rescrape",
+        "components": ["listings/store.py"],
+        "description": "upsert_listing uses INSERT OR REPLACE to update an existing listing. This deletes the old row and inserts a new one. The price_history table has ON DELETE CASCADE, so all price history is deleted when the listing is replaced. The new row starts with only the current price in its history, losing all previous prices.",
+        "evidence": "Insert a listing with price 100. Rescrape with price 200. The price_history contains only the 200 entry, not both. The INSERT OR REPLACE at store.py:124 deletes the old row (id=1) and inserts a new row (id=2, or id=1 if id is preserved, but the CASCADE still fires). The contract requires that price history is never lost except by explicit delete.",
+        "impact": "Price history is lost on every rescrape. This violates RISK-1: stored listings or their price history are lost or silently altered during normal operation. The price history is essential for tracking price changes over time, and losing it undermines the purpose of the store.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "The contract requires that price history is never lost except by explicit delete. INSERT OR REPLACE violates this by silently deleting all price history on every rescrape. This must be fixed before controlled validation, as the search agents will rescrape listings and lose their price history.",
+        "verification": "Insert a listing, rescrape it multiple times with different prices, and verify that price_history returns all prices in order, oldest first. Use INSERT ... ON CONFLICT DO UPDATE instead of INSERT OR REPLACE to preserve the row and its price history."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "Two T0 findings block the gate. F-001 violates REQ-1 and RISK-2: float precision errors cause incorrect price_minor values for many prices, so buyers see wrong prices. F-002 violates REQ-2 and RISK-1: upsert_listing loses price history on every rescrape, violating the requirement that price history is never lost except by explicit delete. Both must be fixed before controlled validation."
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0002",
+  "packet_digest": "sha256:0ba4caa32a815e02538e8a7e7b68d5e43e29b44b768397fdcb33b4ad1d902f0a",
+  "role": "implementer",
+  "author": {
+    "id": "implementer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "fixes": [
+      {
+        "finding": "F-0001",
+        "commits": ["7739b09148c945550b85a0e492e0e10eedba828b"],
+        "summary": "parse_amount returned float, so int(parse_amount(...) * minor_unit_factor(...)) truncated on prices where float arithmetic is inexact (e.g. 19.99 * 100 = 1998.9999... -> 1998). Changed parse_amount to return Decimal, so the multiplication by the integer minor_unit_factor is exact. Updated tests to compare against Decimal values. The ingestion paths (store.upsert_listing, bulk.import_records, updates.apply_update) all compute int(parse_amount(...) * factor), which now produces the exact minor-unit integer for every price in the operating envelope.",
+        "components": ["listings/prices.py", "tests/test_prices.py"],
+        "root_cause": "parse_amount used float arithmetic for the final conversion step (float(f\"{whole}.{fraction}\")), and the three ingestion paths multiplied the result by an integer factor and truncated with int(). IEEE 754 float cannot represent many decimal fractions exactly (e.g. 19.99), so the product is slightly below the true value and int() truncates down. The fix addresses the cause by returning Decimal, which represents the parsed decimal string exactly, so the integer multiplication is exact.",
+        "tests": "Added test_exact_minor_units_for_prices_that_float_truncates in tests/test_prices.py covering the specific prices the finding named (19.99 EUR -> 1999, 0.29 EUR -> 29, 0.57 EUR -> 57, £17.99 GBP -> 1799, 19,99 € EUR -> 1999, 1.299,00 EUR -> 129900, ¥1,500 JPY -> 1500). Ran the full test suite: 42 tests pass."
+      },
+      {
+        "finding": "F-0002",
+        "commits": ["b7f9179f33712af8f72f4994ff8c098afcdd8015"],
+        "summary": "upsert_listing used INSERT OR REPLACE, which deletes the old row and inserts a new one. The price_history table has ON DELETE CASCADE referencing listings(id), so deleting the listing row cascaded and wiped all its price history. Replaced INSERT OR REPLACE with INSERT ... ON CONFLICT (backend, external_id) DO UPDATE, which updates the existing row in place without deleting it, so the CASCADE never fires and the price history is preserved. Also fixed listing_id assignment: after an UPDATE, cursor.lastrowid is 0, so we now use previous[\"id\"] when the listing already exists.",
+        "components": ["listings/store.py", "tests/test_store.py"],
+        "root_cause": "INSERT OR REPLACE is semantically DELETE + INSERT when a conflict occurs. The price_history table's foreign key has ON DELETE CASCADE, so the DELETE cascaded and removed all history rows. The fix addresses the cause by using ON CONFLICT DO UPDATE, which updates the row in place without deleting it, so the CASCADE trigger never fires. The listing_id assignment was also wrong: after an UPDATE, cursor.lastrowid returns 0, not the updated row's id, so we now use the id from the SELECT we already did before the INSERT.",
+        "tests": "Added test_rescrape_preserves_price_history in tests/test_store.py: insert a listing at price 100, rescrape at 200, rescrape at 150, verify price_history returns [10000, 20000, 15000] in order. Ran the full test suite: 42 tests pass."
+      }
+    ]
+  }
+}

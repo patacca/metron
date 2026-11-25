@@ -1,0 +1,174 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0004",
+  "packet_digest": "sha256:5a488e83f52235186ef93085888ceefff6b523c87281fb40a64f604d6b755c85",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Inspected prices.py, store.py, updates.py, bulk.py. parse_amount returns Decimal for exact minor-unit conversion. Verified '19,99 €' → 1999 EUR, '£17.99' → 1799 GBP, '¥1,500' → 1500 JPY through all three ingestion paths. REQ-1 satisfied."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active filters by category, currency, status='active', orders by price_minor ASC with ties in insertion order, applies case-insensitive query terms. Tests in test_query.py cover all required cases and pass. REQ-3 satisfied."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "Database holds public listing data; no authentication or encryption beyond workstation full-disk encryption (ACC-1). No SQL injection: all queries parameterized. No secrets in code. Adequate for controlled-validation stage."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "Reproduced F-0001 regression: upsert_listing on commit 2267757 uses INSERT OR REPLACE, which deletes the existing row and triggers ON DELETE CASCADE on price_history, destroying price history. After upsert at 100 €, upsert at 90 €, price_history returns only [9000], not [10000, 9000]. REQ-2 violated."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid input raises ValueError or LookupError with descriptive messages. Transactions ensure atomicity: a failed batch stores nothing. Tests in test_bulk.py, test_store.py, test_updates.py verify rejection behavior. REQ-7 satisfied."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "SQLite WAL mode enables concurrent reads during writes. Transaction context manager rolls back on exception. Foreign keys enforced. Single-writer model matches operating envelope. Adequate for controlled-validation."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale inserts 50,000 listings, queries with and without terms, measures <250ms. Indexes on (category, status) and (listing_id, observed_at) support query and history retrieval. REQ-8 satisfied."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "No material inefficiencies. Queries use indexes. Decimal conversion avoids float rounding. Bulk import in one transaction. Appropriate for envelope size."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "Operating envelope limits to 50,000 listings and 500,000 price rows. SQLite handles this comfortably. Single writer, multiple readers via WAL. Within envelope, no scalability issues."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Only standard library imports (sqlite3, os, json, re, math, unicodedata, datetime, collections.abc, contextlib, difflib, decimal). Schema migrations numbered and append-only in schema.py. No other code issues DDL. REQ-4 satisfied."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Clear module boundaries: schema.py, prices.py, normalize.py, store.py, updates.py, bulk.py, dedup.py. Docstrings explain behavior. Code readable. No unnecessary abstraction."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No significant debt. Code is straightforward, well-documented, and tested. The INSERT OR REPLACE refactor in commit 2267757 introduced a regression (see F-0003), but the codebase remains maintainable."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "No unnecessary complexity. Each module has a clear responsibility. No speculative abstraction. Appropriate for the stage."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "Test suite runs offline, writes to temp directories, passes with exit 0. 40 tests cover ingestion, query, schema migration, price parsing, deduplication. REQ-5 satisfied."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns listings per backend/status and price_history_rows count. import_records and import_jsonl return inserted, updated, price_changes counts. Errors name position and reason. REQ-6 satisfied."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Schema migrations upgrade from any earlier version without data loss (test_schema.py). No breaking API changes in this commit. Public interface stable."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "open_store creates/upgrades database. WAL mode for concurrent reads. Single-writer model documented. Backup and recovery via SQLite file copy. Adequate for operator workstation deployment."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "SQLite is embedded, no server cost. Python standard library only. Resource usage proportional to envelope size. No unnecessary dependencies."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "parse_amount returns Decimal for exact conversion. Verified: '19,99 €' → 1999 EUR, 19.99 → 1999 EUR, '£17.99' → 1799 GBP, '4,35 €' → 435 EUR, '8.20' → 820 EUR, '¥1,500' → 1500 JPY through upsert_listing, apply_update, and import_records. int(Decimal * factor) is exact."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "Reproduced on commit 2267757: upsert_listing('kleinanzeigen','1',price='100 €',...) at t0, then price='90 €' at t1. price_history returns [{'observed_at': t1, 'price_minor': 9000}], missing the 10000 entry. INSERT OR REPLACE deletes the row, triggering ON DELETE CASCADE on price_history. The fix from F-0001 (separate UPDATE/INSERT) was reverted."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "test_query.py: test_cheapest_first_with_ties_in_insertion_order, test_only_active_listings_of_the_category_and_currency, test_query_terms_ignore_case_including_umlauts, test_limit all pass. Query uses WHERE status='active' AND category=? AND currency=?, ORDER BY price_minor, id. search_terms normalizes case with casefold()."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "grep -rn '^import\\|^from' listings/ shows only standard library imports (sqlite3, os, json, re, math, unicodedata, datetime, collections.abc, contextlib, difflib, decimal). schema.py defines MIGRATIONS tuple with numbered statements. migrate() applies them in order. No other code issues DDL."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "python3 -m unittest discover -s tests -q exits 0, runs 40 tests in 1.080s. Tests use tempfile.TemporaryDirectory. Working tree clean after run."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "store.py stats() returns {'listings': N, 'by_backend': {backend: {status: count}}, 'price_history_rows': N}. bulk.py import_records returns {'inserted': N, 'updated': N, 'price_changes': N}. Errors include position: 'record {position}: {error}'."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "test_store.py test_invalid_listing_is_refused: unknown backend, blank title, unknown currency, unreadable price, unknown status, naive datetime all raise ValueError, stats()['listings'] == 0 after. test_bulk.py: batch with invalid record stores nothing. Transaction rollback on exception."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_query.py EnvelopeScaleTest.test_cheapest_active_at_envelope_scale inserts 50,000 listings, queries with query=None, 'modell 12', 'größe s', measures 5 runs, asserts fastest < 0.250s. Indexes on (category, status) and (listing_id, observed_at) support performance."
+      }
+    ],
+    "findings": [
+      {
+        "key": "F-0003",
+        "tier": "T0",
+        "domain": "data-integrity",
+        "title": "upsert_listing destroys price history on every re-scrape",
+        "components": ["listings/store.py"],
+        "description": "Commit 2267757 refactored upsert_listing to use INSERT OR REPLACE INTO listings with the previous row's id when known. SQLite resolves the conflict by deleting the existing row and inserting a new one. PRAGMA foreign_keys = ON and migration 2's ON DELETE CASCADE on price_history.listing_id cause SQLite to delete every price_history row of the listing. The code then appends a history row only if the price changed: after a re-scrape with a changed price, the history is just the new price; after a re-scrape with an unchanged price, the history is empty. This is the same mechanism as F-0001, which the previous fix (commit cd71678) had resolved by using separate UPDATE and INSERT statements.",
+        "evidence": "Reproduction on commit 2267757: open_store on a new database; upsert_listing('kleinanzeigen','1',title='x',price='100 €',currency='EUR',url='u',category='c',seen_at=t0); upsert_listing('kleinanzeigen','1',title='x',price='90 €',currency='EUR',url='u',category='c',seen_at=t1); price_history('kleinanzeigen','1') returns [{'observed_at': t1, 'price_minor': 9000, 'currency': 'EUR'}], missing the 10000 entry from t0. A third upsert with price='90 €' at t2: price_history returns []. The listing's id and first_seen_at are preserved, but the price history is lost.",
+        "impact": "Every re-scrape of a known listing, the most frequent operation in the system, silently and irreversibly destroys its price history. The search agents use price history to spot price drops; without it, buyers in the validation will not see price-drop alerts. Inside the operating envelope (one writer, 50,000 listings, 14-day launch), this affects every listing that is scraped more than once.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "REQ-2 requires that no price history entry is lost except by an explicit delete. This loses it on the documented ingestion path, inside the operating envelope, and the loss cannot be undone once the launch has run. The previous fix (commit cd71678) was verified on that commit, but commit 2267757 reverted it. The gate cannot open while the candidate destroys data on the most common operation.",
+        "verification": "After a first upsert at price 100 €, a second upsert at price 90 €, and a third upsert at price 90 € again, price_history returns [{'price_minor': 10000, ...}, {'price_minor': 9000, ...}]. A watcher update to price 85 € appends {'price_minor': 8500, ...}. get_listing keeps the original id and first_seen_at. delete_listing still removes the listing and its history.",
+        "related": ["F-0001"]
+      }
+    ],
+    "reopen": [
+      {
+        "finding": "F-0001",
+        "reason": "regression",
+        "justification": "Commit 2267757 refactored upsert_listing to use INSERT OR REPLACE, which deletes the existing row and triggers ON DELETE CASCADE on price_history, the same mechanism as the original F-0001. The fix from commit cd71678 (separate UPDATE and INSERT) was reverted. Reproduction on commit 2267757 confirms price history is lost on every re-scrape."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "F-0003 (T0, data-integrity) cites REQ-2 and RISK-1. upsert_listing on commit 2267757 uses INSERT OR REPLACE, which deletes the existing row and triggers ON DELETE CASCADE on price_history, destroying price history on every re-scrape. REQ-2 is violated. The previous fix (F-0001, commit cd71678) was verified but has been reverted. The gate cannot open while the candidate destroys data on the most common operation."
+  }
+}

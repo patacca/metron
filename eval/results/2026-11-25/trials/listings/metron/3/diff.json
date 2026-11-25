@@ -1,0 +1,38 @@
+{
+  "seed": "ab07aad623c1b013f511390fd9c6148194e343f8",
+  "head": "005bc8107348e6da41d2c73a0edf3d13ee1674cf",
+  "files": [
+    {
+      "path": "listings/bulk.py",
+      "added": 3,
+      "deleted": 5
+    },
+    {
+      "path": "listings/prices.py",
+      "added": 42,
+      "deleted": 1
+    },
+    {
+      "path": "listings/store.py",
+      "added": 16,
+      "deleted": 8
+    },
+    {
+      "path": "listings/updates.py",
+      "added": 2,
+      "deleted": 3
+    },
+    {
+      "path": "tests/test_prices.py",
+      "added": 14,
+      "deleted": 1
+    },
+    {
+      "path": "tests/test_store.py",
+      "added": 10,
+      "deleted": 0
+    }
+  ],
+  "added": 87,
+  "deleted": 18
+}

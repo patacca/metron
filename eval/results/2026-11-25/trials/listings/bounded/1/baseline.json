@@ -1,0 +1,38 @@
+{
+  "arm": "bounded",
+  "rounds": [
+    {
+      "review": {
+        "verdict": "request_changes",
+        "findings": [
+          {
+            "title": "Floating-point truncation stores wrong price minor units",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py",
+              "listings/bulk.py",
+              "listings/updates.py"
+            ],
+            "description": "All three ingestion paths compute the stored minor-unit integer as `int(parse_amount(price, currency) * minor_unit_factor(currency))`. `parse_amount` returns a Python float, and `int()` truncates toward zero. For many amounts within the operating envelope, `float * 100` is slightly below the true integer (e.g. `19.99 * 100 = 1998.9999999999998`, `0.29 * 100 = 28.999999999999996`, `0.57 * 100 = 56.99999999999999`), so `int()` stores 1998, 28 and 56 instead of 1999, 29 and 57. This directly violates REQ-1, which requires the stored `price_minor` and price-history entry to equal the decimal amount times 10^exponent exactly, and triggers RISK-2 (buyer shown a price that differs from the marketplace). Fix: use `round(parse_amount(...) * factor)` (or compute the minor integer directly from the parsed whole/fraction strings in `parse_amount` to avoid the float entirely)."
+          },
+          {
+            "title": "INSERT OR REPLACE deletes the listing's price history on every rescrape",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py"
+            ],
+            "description": "`ListingStore.upsert_listing` uses `INSERT OR REPLACE INTO listings (id, ...) VALUES (?, ...)` with the previous row's id when the listing already exists. SQLite's REPLACE is documented as a DELETE + INSERT: the existing row is deleted before the new one is inserted. The `price_history` table declares `listing_id INTEGER NOT NULL REFERENCES listings (id) ON DELETE CASCADE`, so every price-history row for that listing is deleted along with it. Verified on a minimal schema: two history rows before REPLACE, zero after. This fires on every rescrape of a known listing (the normal path for the live scrapers), and violates REQ-2 (\"an entry of its price history is never lost or altered, except by an explicit delete\") and RISK-1 (price history silently lost during normal operation). Fix: use `INSERT ... ON CONFLICT (backend, external_id) DO UPDATE SET ...` (as `import_records` already does), or split into explicit UPDATE/INSERT branches that preserve the row id."
+          }
+        ]
+      },
+      "fixed": true
+    },
+    {
+      "review": {
+        "verdict": "approve",
+        "findings": []
+      }
+    }
+  ],
+  "final": "approved"
+}

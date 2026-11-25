@@ -1,0 +1,151 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0004",
+  "packet_digest": "sha256:826cabcc78046416d7fe7a8be4a58850b2378db68f76542e016136d7ae12eb8a",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Verified that all three ingestion paths (upsert_listing, apply_update, import_records) correctly convert prices to minor units using int(round(...)). Tested contract examples: '19,99 €' → 1999 EUR, '£17.99' → 1799 GBP, '¥1,500' → 1500 JPY. All pass. Edge cases (0, 100000, various formats) also pass."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active correctly returns cheapest active listings filtered by category and currency, with optional query terms matched case-insensitively. Tests verify ordering, filtering, and non-ASCII query handling. Performance at envelope scale (50k listings) measured under 250ms."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "No security concerns within scope. Database holds public listing data only. ACC-1 accepted risk covers lack of file encryption; workstation full-disk encryption is the protection during controlled validation."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "Listings are never lost except by explicit delete (delete_listing, purge_removed). Price history is preserved and appended correctly. Transactions ensure atomicity. Verified through test cases covering upsert, update, delete, and purge operations."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid input is rejected with clear error messages. Tests verify that unknown backends, currencies, statuses, unreadable prices, and naive timestamps raise ValueError. Batches with invalid records store nothing. apply_update raises LookupError for unknown listings."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "Transactions wrap multi-step operations (upsert_listing, apply_update, import_records). On error, the transaction rolls back, leaving the database unchanged. Verified by tests that insert invalid records and confirm no partial writes."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale measures query time with 50,000 listings (worst case: all in same category/currency). With and without query terms, fastest of 5 runs is under 250ms. Indexes on (category, status) and price_history (listing_id, observed_at) support the query."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "No material inefficiencies observed. Queries use appropriate indexes. Price parsing is efficient. Bulk import uses a single transaction. No unnecessary allocations or redundant work."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "Operating envelope limits (50k listings, 500k price history rows) are well within SQLite's capabilities. Single-writer model matches the envelope. Performance test confirms query times at envelope scale."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Package uses only Python standard library (verified by inspecting all imports). Schema is created and upgraded only by numbered migrations in schema.py. No DDL outside schema.py. Clear separation: prices.py (parsing), normalize.py (validation), store.py (storage), updates.py (watcher updates), bulk.py (imports), dedup.py (deduplication)."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Code is well-documented with docstrings. Clear naming conventions. Migrations are append-only and versioned. Error messages name the field and reason. Test coverage is comprehensive."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No significant technical debt observed. Schema migrations are clean and versioned. No dead code or unused abstractions. The fix for F-0001 is minimal and correct."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "No unnecessary complexity. Each module has a clear responsibility. No speculative abstractions. The price parsing handles all formats in the operating envelope without over-engineering."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "Test suite runs offline, writes only to temporary directories, and passes (40 tests, exit 0). Tests cover all ingestion paths, query behavior, error handling, and performance at envelope scale."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns listings per backend/status and price history row count. import_records and import_jsonl return counts of inserted/updated listings and price changes. Invalid records raise errors naming position and reason."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Schema migrations upgrade older databases without data loss. test_schema.py verifies this. No breaking changes to the API."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "Database can be opened, created, and upgraded by open_store. Migrations are automatic. Stats provide visibility. No special deployment steps required beyond having Python 3.10+ and SQLite."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "SQLite is lightweight and requires no separate server. Single file on local disk. Resource usage is proportionate to the operating envelope (50k listings, 500k price rows)."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "Verified that all three ingestion paths use int(round(parse_amount(price, currency) * minor_unit_factor(currency))). Tested contract examples: '19,99 €' → 1999 EUR, '£17.99' → 1799 GBP, '¥1,500' → 1500 JPY, '19.99' → 1999 EUR. Edge cases (0, 100000, '1.299,00', '49,99 zł', \"CHF 1'299.90\", '1 299 kr') all produce correct minor-unit integers. Fix applied at store.py:112, updates.py:60, bulk.py:77."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "satisfied",
+        "evidence": "Inspected upsert_listing, apply_update, and import_records. Listings are inserted or updated, never deleted except by delete_listing or purge_removed. Price history is appended on price changes. first_seen_at is preserved on updates. Tests verify this behavior (test_new_listing_is_stored, test_rescrape_refreshes_the_listing, test_new_listing_starts_its_price_history, test_delete_listing_removes_it_and_its_history)."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "cheapest_active filters by category, status='active', and currency. Orders by price_minor, id. Query terms are matched case-insensitively using instr(search_text, ?). Tests verify ordering (test_cheapest_first_with_ties_in_insertion_order), filtering (test_only_active_listings_of_the_category_and_currency), and non-ASCII queries (test_query_terms_ignore_case_including_umlauts). All tests pass."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "Inspected all imports in listings/*.py. Only standard library modules are imported (os, sqlite3, collections.abc, contextlib, datetime, unicodedata, math, re, json, difflib). Schema is created and upgraded only by numbered migrations in schema.py. No DDL statements in store.py, updates.py, bulk.py, dedup.py, prices.py, or normalize.py (verified by grep). test_schema.py verifies migration upgrades."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "Ran: python3 -m unittest discover -s tests -q → 40 tests, exit 0, wall time 1.15s. Tests write to temporary directories (StoreTestCase uses tempfile). No network access required."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "stats() returns {'listings': total, 'by_backend': {backend: {status: count}}, 'price_history_rows': count}. import_records returns {'inserted': n, 'updated': n, 'price_changes': n}. import_jsonl returns the same. Invalid records raise ValueError naming position and reason (verified in test_bulk.py). Test test_stats_count_listings_and_history verifies stats output."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "Tests verify that invalid input raises ValueError (unknown backend, currency, status, unreadable price, naive timestamp) and leaves the database unchanged (test_invalid_listing_is_refused checks stats()['listings'] == 0 after invalid calls). Batches with invalid records store nothing (test_bulk.py). apply_update raises LookupError for unknown listings (test_updates.py). Transactions ensure atomicity."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_cheapest_active_at_envelope_scale creates 50,000 listings (all active, same category, same currency) and measures cheapest_active with limit=20, with and without query terms. Fastest of 5 runs is under 250ms. Test passes."
+      }
+    ],
+    "findings": [],
+    "verdict": "GREEN",
+    "justification": "All eight applicable requirements are satisfied with evidence. The fix for F-0001 (price parsing truncation) is correctly applied in all three ingestion paths using int(round(...)). Contract examples and edge cases produce correct minor-unit integers. Test suite passes (40 tests). No blocking findings. The candidate is ready for controlled validation."
+  }
+}

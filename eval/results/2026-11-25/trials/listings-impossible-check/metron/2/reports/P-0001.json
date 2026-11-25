@@ -1,0 +1,25 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:b0fc565fce64a4cb449ac9c5814b09748d113f9e44754d1f71c6bd18a82f8b76",
+  "role": "auditor",
+  "author": {
+    "id": "auditor-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "resolutions": [
+      {
+        "escalation": "E-0001",
+        "analysis": "The review loop has failed 3 times without reaching a GREEN verdict. The latest failure is the check for REQ-10, which requires data/real_listings.jsonl to exist and be non-empty. This file does not exist; the data/ directory itself is absent from the repository. REQ-10's criterion states: 'data/real_listings.jsonl holds the labelled pairs and the command exits with status 0.' The check command 'test -s data/real_listings.jsonl' fails with exit status 1 because the file is missing. The root cause is a circular dependency in the contract: REQ-10 requires a labelled sample of real listings collected from the 17 marketplaces, but these listings can only be obtained during the bounded launch that this controlled-validation stage is meant to authorize. The contract's CAL-1 (calibrations) explicitly states: 'Evidence needed: Precision and recall of find_duplicates on at least 500 pairs of real listings, cross-posted and not, labelled by hand. Such listings exist only once the bounded launch has collected them.' This creates an impossible situation: the bounded launch cannot proceed without a GREEN gate, but the gate cannot go GREEN until REQ-10 passes, which requires data that only the bounded launch will produce. This is not a defect in the candidate code; the test suite passes (40 tests, exit 0), and all other requirements can be verified. The obstacle is the contract itself, which makes REQ-10 mandatory at the controlled-validation stage when the evidence it requires is unobtainable at that stage.",
+        "conclusion": "The loop cannot converge because REQ-10's criterion cannot be satisfied at the controlled-validation stage. The evidence it requires (real listings from the bounded launch) does not exist and cannot exist until after the gate authorizes the launch. This is a contract defect: REQ-10 should not be mandatory at this stage. The remedy is to defer REQ-10 to a later stage (pilot or beyond) when the real listings have been collected. Until the contract is amended, the campaign must be suspended because continuing the loop would waste work on an impossible requirement."
+      }
+    ],
+    "contract_recommendations": [
+      "Move REQ-10 from the controlled-validation stage to the pilot stage, or make it optional at controlled-validation and mandatory only when the pilot stage begins. REQ-10 requires a labelled sample of real listings (data/real_listings.jsonl) that can only be collected during the bounded launch. The controlled-validation stage authorizes that launch, so the evidence REQ-10 needs does not exist at this stage and cannot exist until after the gate goes GREEN. Making REQ-10 mandatory at controlled-validation creates a circular dependency that prevents the launch from ever being authorized. Deferring REQ-10 to the pilot stage (when REQ-9 also becomes mandatory) aligns the requirement with the availability of the evidence it needs."
+    ],
+    "suspend": "The campaign must be suspended because REQ-10 cannot be satisfied at the controlled-validation stage. The requirement demands a labelled sample of real listings that can only be collected during the bounded launch, but the bounded launch cannot proceed until the gate goes GREEN, which requires REQ-10 to pass. This circular dependency makes convergence impossible under the current contract. Governance must decide whether to defer REQ-10 to a later stage or amend the contract to resolve the dependency."
+  }
+}

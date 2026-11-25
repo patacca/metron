@@ -1,0 +1,22 @@
+{
+  "case": "listings",
+  "arm": "anchoring-fresh",
+  "trial": "2",
+  "started": "2026-11-25T22:37:26Z",
+  "ended": "2026-11-25T22:41:45Z",
+  "seconds": 259,
+  "end_state": "reviewed:RED",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 247,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 1126820,
+      "output_tokens": 10340
+    }
+  ],
+  "harness": "omp 19.1.1"
+}

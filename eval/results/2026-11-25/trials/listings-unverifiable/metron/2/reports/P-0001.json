@@ -1,0 +1,85 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:31798c756196500d8006fe4ee8fdf18a2b4181799383ae053191ccd2e74acee7",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {"domain": "functional-correctness", "status": "assessed", "summary": "Inspected prices.parse_amount, store.upsert_listing, updates.apply_update, bulk.import_records. parse_amount correctly handles text forms in the envelope, but the conversion to minor units uses float multiplication, producing wrong integers for many common prices (e.g. '19.99' EUR → 1998 instead of 1999) across all three ingestion paths."},
+      {"domain": "objective-alignment", "status": "assessed", "summary": "cheapest_active filters by category/currency/status, orders by price_minor then id, and applies query terms via instr on search_text. tests/test_query.py covers ordering, filters, limit, and case-insensitive non-ASCII terms. The function meets its objective."},
+      {"domain": "security-privacy", "status": "assessed", "summary": "No network, no credentials, no secrets. Database file is unencrypted but this is ACC-1. Only public listing data is stored. No exploitable surface beyond SQL injection, which is mitigated by parameterized queries throughout."},
+      {"domain": "data-integrity", "status": "assessed", "summary": "With PRAGMA foreign_keys=ON (enabled by open_store), INSERT OR REPLACE in upsert_listing deletes the old listings row and cascades to price_history, silently dropping prior price history entries. After three upserts with changing prices only one history row remains. REQ-2 violated."},
+      {"domain": "stability", "status": "assessed", "summary": "Invalid input is rejected with ValueError/LookupError; transactions roll back on error; tests/test_bulk.py, test_store.py, test_updates.py verify atomicity. Stability inside the envelope is adequate."},
+      {"domain": "reliability", "status": "assessed", "summary": "Single writer, single connection, single thread per the envelope. sqlite3.connect timeout=10s. transaction() context manager rolls back on BaseException. Adequate for the envelope."},
+      {"domain": "performance", "status": "assessed", "summary": "test_cheapest_active_at_envelope_scale exercises 50,000 listings and asserts <250ms with and without query. Indexes on (category, status) and price_history(listing_id, observed_at) support the query. Meets REQ-8."},
+      {"domain": "optimization", "status": "assessed", "summary": "No material inefficiencies inside the envelope. The query uses indexed columns and LIMIT. No unnecessary work."},
+      {"domain": "scalability", "status": "assessed", "summary": "Envelope caps at 50,000 listings and 500,000 history rows. SQLite handles this comfortably. No scalability concern within the envelope."},
+      {"domain": "architecture", "status": "assessed", "summary": "Only stdlib imports (sqlite3, json, os, re, math, unicodedata, datetime, collections.abc, contextlib, difflib). Schema created and upgraded solely by numbered migrations in schema.py. No other code issues DDL. REQ-4 satisfied."},
+      {"domain": "maintainability", "status": "assessed", "summary": "Code is well-structured, modules have clear responsibilities, docstrings explain intent. Easy to follow."},
+      {"domain": "technical-debt", "status": "assessed", "summary": "No significant technical debt. The float-based price conversion is a defect, not deferred work."},
+      {"domain": "simplicity", "status": "assessed", "summary": "No unnecessary abstraction. Each module does one job. The package is appropriately simple for its scope."},
+      {"domain": "testability", "status": "assessed", "summary": "Test suite runs offline, writes to temp dirs, passes. REQ-5 satisfied."},
+      {"domain": "observability", "status": "assessed", "summary": "stats() returns per-backend/status counts and history row count. import_records/import_jsonl return inserted/updated/price_changes counts. Errors name position and reason. REQ-6 satisfied."},
+      {"domain": "compatibility", "status": "assessed", "summary": "Migrations upgrade older databases in place without data loss (test_older_database_is_upgraded_in_place). Schema version is checked and refused if newer. REQ-4 satisfied."},
+      {"domain": "operational-readiness", "status": "assessed", "summary": "Single-file SQLite on local disk, full-disk encryption per envelope. open_store creates/upgrades. No special deployment needed. Adequate for the envelope."},
+      {"domain": "cost-efficiency", "status": "assessed", "summary": "SQLite is free, no external dependencies. Resource usage is minimal. No cost concern."}
+    ],
+    "requirements": [
+      {"requirement": "REQ-1", "status": "violated", "evidence": "parse_amount returns float; store.py:112, updates.py:60, bulk.py:77 compute int(parse_amount(price, currency) * minor_unit_factor(currency)). Reproduction: upsert_listing with price='19.99', currency='EUR' stores price_minor=1998 instead of 1999. Same error for '0.29'→28, '1.15'→114, '37.37'→3736, '71.71'→7170, '74.74'→7473. The error propagates through all three ingestion paths."},
+      {"requirement": "REQ-2", "status": "violated", "evidence": "open_store enables PRAGMA foreign_keys=ON (store.py:41). upsert_listing uses INSERT OR REPLACE (store.py:124), which deletes the old row when the unique constraint conflicts, cascading to price_history via ON DELETE CASCADE. Reproduction: three upserts with prices 10.00, 20.00, 30.00 EUR at different times yields price_history of length 1 (only the last price) instead of 3. The first price and intermediate changes are lost."},
+      {"requirement": "REQ-3", "status": "satisfied", "evidence": "cheapest_active filters by category, status='active', currency, applies query terms via instr(search_text, ?), orders by price_minor then id, limits. tests/test_query.py covers ordering, filters, limit, case-insensitive non-ASCII terms (kühlschrank, BOSCH Kühl). All tests pass."},
+      {"requirement": "REQ-4", "status": "satisfied", "evidence": "grep confirms no non-stdlib imports in listings/. Schema created/upgraded only by MIGRATIONS in schema.py. No other code issues DDL. tests/test_schema.py verifies upgrade from v1 preserves data."},
+      {"requirement": "REQ-5", "status": "satisfied", "evidence": "python3 -m unittest discover -s tests -q exits 0, 40 tests pass. Tests use tempfile, no network."},
+      {"requirement": "REQ-6", "status": "satisfied", "evidence": "stats() returns listings total, by_backend per status, price_history_rows. import_records returns {inserted, updated, price_changes}. import_jsonl delegates to import_records. Errors name position/line and reason (test_one_invalid_record_rejects_the_batch, test_malformed_line_rejects_the_dump)."},
+      {"requirement": "REQ-7", "status": "satisfied", "evidence": "Invalid input raises ValueError/LookupError; transaction() rolls back on exception. tests verify atomicity: one invalid record stores nothing; unknown backend/currency/status/price raises ValueError; unknown listing raises LookupError; state unchanged."},
+      {"requirement": "REQ-8", "status": "satisfied", "evidence": "test_cheapest_active_at_envelope_scale creates 50,000 listings, queries with and without terms, asserts <250ms. Passes on this machine."},
+      {"requirement": "REQ-9", "status": "unverified", "evidence": "REQ-9 requires precision/recall on 500+ real labelled pairs. Such data exists only after the bounded launch collects listings. The contract's CAL-1 acknowledges this. Cannot verify on this candidate; no labelled sample is available."}
+    ],
+    "findings": [
+      {
+        "key": "float-price-conversion",
+        "tier": "T1",
+        "domain": "functional-correctness",
+        "title": "Price conversion uses float multiplication and stores wrong minor units for common prices",
+        "components": ["listings/store.py:112", "listings/updates.py:60", "listings/bulk.py:77", "listings/prices.py"],
+        "description": "parse_amount returns a float; the three ingestion paths compute int(parse_amount(price, currency) * minor_unit_factor(currency)). Because float cannot represent many decimal fractions exactly, the product is slightly below the true integer and int() truncates downward. '19.99' EUR becomes 1998 instead of 1999; '0.29' becomes 28; '1.15' becomes 114; '37.37' becomes 3736; '71.71' becomes 7170; '74.74' becomes 7473. The error affects every ingestion path (upsert_listing, apply_update, import_records/import_jsonl) and every currency with a non-zero exponent.",
+        "evidence": "Reproduction: `store.upsert_listing('blocket','1',title='T',price='19.99',currency='EUR',url='u',category='c',seen_at=datetime(2024,1,1,tzinfo=timezone.utc))` followed by `store.get_listing('blocket','1')['price_minor']` returns 1998. Same via apply_update and import_records. Exhaustive check of all two-decimal values 0.00–99.99 EUR shows 6 wrong results from float multiplication alone; real-world prices like 19.99, 29.99, 49.99 are affected.",
+        "impact": "Inside the envelope, buyers are shown prices that differ from what the marketplace displays. A €19.99 listing is stored and shown as €19.98. The error is systematic and affects a large fraction of real prices. Violates RISK-2.",
+        "requirement": "REQ-1",
+        "risk": "RISK-2",
+        "blocking_rationale": "The defect violates a core functional requirement and realizes an unacceptable risk. Buyers in the validation will see wrong prices, undermining the purpose of the stage. Must be fixed before any data is collected.",
+        "verification": "For each price in a representative set (e.g. '19.99', '0.29', '1.15', '37.37', '71.71', '74.74', '1299.00', '¥1,500'), verify that upsert_listing, apply_update, and import_records store the exact minor units: 1999, 29, 115, 3737, 7171, 7474, 129900, 1500. Check price_history entries match. The fix should use Decimal or integer arithmetic, not float multiplication."
+      },
+      {
+        "key": "upsert-replace-cascades-history",
+        "tier": "T0",
+        "domain": "data-integrity",
+        "title": "INSERT OR REPLACE in upsert_listing deletes prior price history via ON DELETE CASCADE",
+        "components": ["listings/store.py:124-142", "listings/schema.py:41"],
+        "description": "open_store enables PRAGMA foreign_keys=ON (store.py:41). upsert_listing uses INSERT OR REPLACE INTO listings, which on conflict deletes the old row and inserts a new one. The price_history table has ON DELETE CASCADE on listing_id, so the cascade deletes all prior price history entries. The code then inserts one new history row, leaving only the latest price. REQ-2 requires the first price followed by every change; this implementation keeps only the last.",
+        "evidence": "Reproduction: three upsert_listing calls for the same (backend, external_id) with prices 10.00, 20.00, 30.00 EUR at different times. price_history returns length 1 with only the 30.00 entry. With foreign_keys=OFF the cascade does not fire and history is preserved, but open_store turns it ON. The schema test passes because it only does one upsert.",
+        "impact": "Every re-scrape of a listing with a changed price loses all prior price history. Inside the envelope, scrapers run repeatedly; history is the project's core asset. This is irreversible data loss, violating RISK-1 and REQ-2.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "Data loss of price history is a critical invariant violation. The history cannot be recovered once lost. Must be fixed before any data is collected.",
+        "verification": "Insert a listing, upsert it twice with changing prices, then verify price_history returns three entries (initial + two changes) in order. Verify the listing's id is unchanged. The fix should use INSERT ... ON CONFLICT DO UPDATE (as import_records does) instead of INSERT OR REPLACE, or disable the cascade and manage history explicitly."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "Two blocking findings: float-price-conversion (T1, REQ-1, RISK-2) causes wrong prices to be stored across all ingestion paths; upsert-replace-cascades-history (T0, REQ-2, RISK-1) silently deletes price history on every re-scrape. Both violate mandatory requirements and realize unacceptable risks. REQ-9 is unverified because the labelled sample it requires does not yet exist (CAL-1 acknowledges this); this does not affect the RED verdict from the two blockers.",
+    "residual_risks": [
+      "REQ-9 (deduplication precision) cannot be verified until the bounded launch collects real cross-posted listings; the thresholds in CAL-1 are provisional.",
+      "If the implementer fixes the price conversion by switching to Decimal, performance at envelope scale should be re-checked; Decimal arithmetic is slower than float."
+    ],
+    "limitations": [
+      "REQ-9 could not be verified: no labelled sample of 500+ real cross-posted listings exists yet. The contract acknowledges this in CAL-1.",
+      "Performance was verified on this workstation; the operator's workstation may differ, but the test asserts <250ms and passes here."
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "seed": "1f3fd69bb32cc0e1dc624d742f4ec18ce9076555",
+  "head": "ee144996664a39b831a60dbf5b6a0825f6584cde",
+  "files": [
+    {
+      "path": "listings/bulk.py",
+      "added": 1,
+      "deleted": 1
+    },
+    {
+      "path": "listings/store.py",
+      "added": 40,
+      "deleted": 22
+    },
+    {
+      "path": "listings/updates.py",
+      "added": 1,
+      "deleted": 1
+    }
+  ],
+  "added": 42,
+  "deleted": 24
+}

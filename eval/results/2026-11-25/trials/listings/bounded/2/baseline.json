@@ -1,0 +1,38 @@
+{
+  "arm": "bounded",
+  "rounds": [
+    {
+      "review": {
+        "verdict": "request_changes",
+        "findings": [
+          {
+            "title": "INSERT OR REPLACE cascades and deletes price history",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py"
+            ],
+            "description": "The upsert_listing method uses INSERT OR REPLACE, which deletes the old listing row and inserts a new one. The price_history table has ON DELETE CASCADE, so all historical prices for that listing are deleted. This violates REQ-2: 'A stored listing is never lost, and an entry of its price history is never lost or altered, except by an explicit delete.' The fix is to use INSERT ... ON CONFLICT (backend, external_id) DO UPDATE SET ... instead of INSERT OR REPLACE, which preserves the rowid and does not trigger the cascade."
+          },
+          {
+            "title": "Float rounding causes incorrect price_minor values",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py",
+              "listings/updates.py",
+              "listings/bulk.py"
+            ],
+            "description": "All three ingestion paths compute price_minor as int(parse_amount(price, currency) * minor_unit_factor(currency)). Because parse_amount returns a float, this causes rounding errors: 19.99 * 100 = 1998.9999999999998, which int() truncates to 1998 instead of 1999. This violates REQ-1: 'Every price in a format the operating envelope lists is stored as the exact integer number of minor units it stands for.' The fix is to use Decimal arithmetic or round() before int(), e.g., int(round(parse_amount(price, currency) * minor_unit_factor(currency)))."
+          }
+        ]
+      },
+      "fixed": true
+    },
+    {
+      "review": {
+        "verdict": "approve",
+        "findings": []
+      }
+    }
+  ],
+  "final": "approved"
+}

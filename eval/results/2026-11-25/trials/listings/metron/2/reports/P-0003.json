@@ -1,0 +1,30 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0003",
+  "packet_digest": "sha256:8dcd430f51cd72cded0cb39e9f038c3415298973f8f27cb3523da1ea2d08d6df",
+  "role": "verifier",
+  "author": {
+    "id": "verifier-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "verifications": [
+      {
+        "finding": "F-0001",
+        "result": "confirmed",
+        "evidence": "parse_amount now returns Decimal (listings/prices.py:67,95). Verified the finding's exact reproduction cases: int(parse_amount('19.99','EUR')*100)=1999, '0.29'->29, '0.57'->57, '£17.99' GBP->1799, '19,99 €'->1999, '1.299,00'->129900, '¥1,500' JPY->1500. Ran an exhaustive sweep over every integer price 0..100000 and every major.minor string combination (minor in 0,1,29,50,57,99) for all 9 currencies in CURRENCY_EXPONENTS; zero errors. All three ingestion paths (store.upsert_listing, bulk.import_records, updates.apply_update) compute int(parse_amount(...)*minor_unit_factor(...)); with Decimal the multiplication is exact. Full test suite: 42 tests pass.",
+        "scope": "proportionate",
+        "scope_evidence": "Commit 7739b09 changes only listings/prices.py (adds `from decimal import Decimal`, changes return type annotation and the two return sites to construct Decimal instead of float) and tests/test_prices.py (updates existing assertions to compare against Decimal values and adds test_exact_minor_units_for_prices_that_float_truncates covering the finding's reproduction prices). No other file is touched. The return-type change is the minimum necessary to remove the float-precision mechanism; the test updates are required because the old assertions compared against float literals. Nothing extraneous."
+      },
+      {
+        "finding": "F-0002",
+        "result": "confirmed",
+        "evidence": "store.py:124-132 now uses INSERT ... ON CONFLICT (backend, external_id) DO UPDATE SET ... instead of INSERT OR REPLACE. The row is updated in place, so the ON DELETE CASCADE on price_history never fires. listing_id is set from previous['id'] when the listing already exists (store.py:147), because cursor.lastrowid is 0 after an UPDATE. Verified by inserting a listing at 100 EUR, rescraping at 200 EUR and 150 EUR: price_history returns three entries [10000, 20000, 15000] in order, listing id is preserved (1), current price_minor is 15000. The new regression test test_rescrape_preserves_price_history covers this exact sequence. Full test suite: 42 tests pass.",
+        "scope": "proportionate",
+        "scope_evidence": "Commit b7f9179 changes only listings/store.py (replaces INSERT OR REPLACE with INSERT ... ON CONFLICT DO UPDATE, removes the now-unused listing_id parameter from the VALUES tuple, and fixes the listing_id assignment to use previous['id'] on UPDATE) and tests/test_store.py (adds test_rescrape_preserves_price_history). The SQL change is the minimum necessary to stop the CASCADE from firing; the listing_id fix is required because cursor.lastrowid returns 0 after an UPDATE, without which subsequent price_history inserts would reference the wrong listing. The test covers the failure mode. Nothing extraneous."
+      }
+    ]
+  }
+}

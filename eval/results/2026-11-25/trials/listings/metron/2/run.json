@@ -1,0 +1,72 @@
+{
+  "case": "listings",
+  "arm": "metron",
+  "trial": "2",
+  "started": "2026-11-25T21:39:06Z",
+  "ended": "2026-11-25T21:58:23Z",
+  "seconds": 1157,
+  "end_state": "approved",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "check",
+      "role": "operator",
+      "seconds": 2,
+      "exit": 0,
+      "model": "",
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "n": 2,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 243,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 356002,
+      "output_tokens": 13488
+    },
+    {
+      "n": 3,
+      "kind": "fix",
+      "role": "implementer",
+      "seconds": 322,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 1029265,
+      "output_tokens": 15549
+    },
+    {
+      "n": 4,
+      "kind": "verify",
+      "role": "verifier",
+      "seconds": 126,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 326796,
+      "output_tokens": 5941
+    },
+    {
+      "n": 5,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 132,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 194056,
+      "output_tokens": 7205
+    },
+    {
+      "n": 6,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 328,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 514035,
+      "output_tokens": 17822
+    }
+  ],
+  "harness": "omp 19.1.1"
+}

@@ -1,0 +1,42 @@
+{
+  "case": "listings",
+  "arm": "bounded",
+  "trial": "3",
+  "started": "2026-11-25T22:26:19Z",
+  "ended": "2026-11-25T22:37:23Z",
+  "seconds": 664,
+  "end_state": "approved",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 122,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 293686,
+      "output_tokens": 5956
+    },
+    {
+      "n": 2,
+      "kind": "fix",
+      "role": "fixer",
+      "seconds": 122,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 387107,
+      "output_tokens": 4891
+    },
+    {
+      "n": 3,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 420,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 477328,
+      "output_tokens": 24124
+    }
+  ],
+  "harness": "omp 19.1.1"
+}

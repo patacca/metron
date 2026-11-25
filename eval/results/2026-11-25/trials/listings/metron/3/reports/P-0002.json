@@ -1,0 +1,32 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0002",
+  "packet_digest": "sha256:c70fd5234dfa013ebb12623571512cdcfcc734fa8ee5e74bcbf101a23a0c1bd1",
+  "role": "implementer",
+  "author": {
+    "id": "implementer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "fixes": [
+      {
+        "finding": "F-0001",
+        "commits": ["005bc8107348e6da41d2c73a0edf3d13ee1674cf"],
+        "summary": "Added to_minor() in listings/prices.py that parses prices directly to integer minor units using string concatenation instead of float arithmetic. For text input, it extracts the whole and fraction parts, pads the fraction to the currency's exponent, and concatenates them as strings before converting to int. This eliminates the floating-point representation errors that caused ~4.59% of prices to be stored incorrectly (e.g., 19.99 * 100 = 1998.999... truncated to 1998). Updated all three ingestion paths (upsert_listing in store.py, apply_update in updates.py, import_records in bulk.py) to use to_minor() instead of int(parse_amount(...) * minor_unit_factor(...)). The parse_amount() function is retained for backward compatibility.",
+        "components": ["listings/prices.py", "listings/store.py", "listings/updates.py", "listings/bulk.py"],
+        "root_cause": "The code used float arithmetic (parse_amount returning float, then multiplying by 100 and truncating with int()) to convert prices to minor units. Floating-point representation errors cause values like 19.99 to be stored as 1998.9999999999998, which int() truncates to 1998 instead of the correct 1999. The fix bypasses float entirely by parsing the string representation directly into integer minor units.",
+        "tests": "Added test_to_minor_exact_arithmetic in tests/test_prices.py that verifies the specific failing cases (19.99, 0.29, 0.57, 17.99) and exhaustively tests all EUR prices from 0.00 to 999.99 (100,000 values). All tests pass."
+      },
+      {
+        "finding": "F-0002",
+        "commits": ["005bc8107348e6da41d2c73a0edf3d13ee1674cf"],
+        "summary": "Replaced INSERT OR REPLACE with INSERT ... ON CONFLICT (backend, external_id) DO UPDATE in upsert_listing (listings/store.py). The old approach deleted the existing row and inserted a new one with the same id, which triggered the ON DELETE CASCADE foreign key on price_history and wiped all historical price entries. The new approach updates the row in place, preserving the id and keeping price_history intact. The first_seen_at is explicitly preserved using 'first_seen_at = listings.first_seen_at' in the UPDATE clause.",
+        "components": ["listings/store.py"],
+        "root_cause": "INSERT OR REPLACE is implemented as DELETE + INSERT in SQLite. When a listing was re-scraped (the expected usage pattern), the DELETE triggered the ON DELETE CASCADE constraint on price_history.listing_id, silently deleting all historical price entries. The code then inserted only the current price, losing the entire price trend. The fix uses INSERT ... ON CONFLICT DO UPDATE, which updates the existing row without deleting it, so the CASCADE is never triggered.",
+        "tests": "Added test_rescrape_preserves_price_history in tests/test_store.py that performs three upserts with changing prices and verifies that price_history contains all three entries with correct prices and timestamps. The test fails before the fix (only 1 entry) and passes after (3 entries). All 42 tests pass."
+      }
+    ]
+  }
+}

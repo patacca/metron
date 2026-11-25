@@ -1,0 +1,72 @@
+{
+  "case": "listings-unverifiable",
+  "arm": "metron",
+  "trial": "1",
+  "started": "2026-11-25T21:58:26Z",
+  "ended": "2026-11-25T22:22:59Z",
+  "seconds": 1473,
+  "end_state": "governance:evidence-gap",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "check",
+      "role": "operator",
+      "seconds": 1,
+      "exit": 0,
+      "model": "",
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "n": 2,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 305,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 660060,
+      "output_tokens": 16548
+    },
+    {
+      "n": 3,
+      "kind": "fix",
+      "role": "implementer",
+      "seconds": 163,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 677228,
+      "output_tokens": 6503
+    },
+    {
+      "n": 4,
+      "kind": "verify",
+      "role": "verifier",
+      "seconds": 186,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 424535,
+      "output_tokens": 8890
+    },
+    {
+      "n": 5,
+      "kind": "verify",
+      "role": "verifier",
+      "seconds": 148,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 305948,
+      "output_tokens": 7467
+    },
+    {
+      "n": 6,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 666,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 1972325,
+      "output_tokens": 35965
+    }
+  ],
+  "harness": "omp 19.1.1"
+}

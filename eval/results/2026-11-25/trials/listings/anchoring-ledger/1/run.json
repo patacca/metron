@@ -1,0 +1,22 @@
+{
+  "case": "listings",
+  "arm": "anchoring-ledger",
+  "trial": "1",
+  "started": "2026-11-25T22:29:58Z",
+  "ended": "2026-11-25T22:34:02Z",
+  "seconds": 244,
+  "end_state": "reviewed:RED",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 234,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 637041,
+      "output_tokens": 11811
+    }
+  ],
+  "harness": "omp 19.1.1"
+}

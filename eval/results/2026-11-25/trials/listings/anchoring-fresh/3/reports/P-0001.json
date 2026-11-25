@@ -1,0 +1,166 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:28ee67e0720770279e2aedfbadcb6ec015b5ce81328f5b9fb3e2a11221618617",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Price parsing correctly handles all formats specified in the operating envelope (19.99, 19,99 €, £17.99, ¥1,500, 1.299,00, etc.) and stores them as exact integer minor units. However, upsert_listing loses price history when rescraping a listing with a different price due to INSERT OR REPLACE triggering CASCADE DELETE on price_history rows."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active correctly returns listings ordered by price, filters by status/category/currency, applies query terms case-insensitively including non-ASCII characters, and respects the limit parameter. Tests confirm correct behavior."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "The store holds public listing data. ACC-1 accepts the risk that the database file is not encrypted at rest, relying on workstation full-disk encryption. No additional security concerns identified within the operating envelope."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "CRITICAL DEFECT: upsert_listing uses INSERT OR REPLACE which deletes the old listing row when a listing already exists. The price_history table has ON DELETE CASCADE on listing_id, so all previous price observations are cascade-deleted. This violates REQ-2: price history is lost on every rescrape with a price change. import_records and apply_update use INSERT ON CONFLICT DO UPDATE and UPDATE respectively, which preserve history correctly."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid input is properly rejected with descriptive errors. Transactions ensure atomicity: a batch with one invalid record stores nothing. ValueError is raised for unknown backend/currency/status, unreadable prices, and times without UTC offset. LookupError is raised for unknown listings in apply_update."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "Transactions are properly managed with BEGIN/COMMIT/ROLLBACK. The transaction() context manager ensures all writes in a block succeed or none do. Foreign keys are enabled. WAL mode allows concurrent reads during writes."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale confirms that with 50,000 listings, cheapest_active returns in under 250ms with and without query terms. The query uses appropriate indexes on (category, status) and (listing_id, observed_at)."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "No material inefficiencies identified. The schema uses appropriate indexes. Queries are well-structured. Bulk import caches minor_unit_factor per currency. Price parsing uses Decimal for exact arithmetic."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "The operating envelope limits the store to 50,000 listings and 500,000 price history rows. The schema and queries are designed for this scale. WAL mode supports concurrent reads. Single-writer constraint is documented and enforced by the operating envelope."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "The package uses only the Python standard library. Schema creation and upgrades are handled exclusively by numbered migrations in schema.py. No module imports outside the standard library. No other code issues DDL."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Code is well-documented with clear docstrings. Module responsibilities are separated (prices, normalize, store, bulk, updates, dedup, schema). Naming is consistent. The migration system is append-only and versioned."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No significant technical debt identified. The code is straightforward and avoids unnecessary abstraction. The migration system allows schema evolution without breaking changes."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "The implementation is appropriately simple for the requirements. No premature optimization or speculative abstraction. The price parsing logic handles the required formats without over-engineering."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "The test suite runs offline, writes only to temporary directories, and all 40 tests pass. Tests cover the main functionality but do not catch the price history loss bug in upsert_listing."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns listings per backend and status and price history row count. import_records and import_jsonl return counts of inserted/updated listings and price changes. Errors name the position and reason for rejected records."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Schema migrations preserve data when upgrading from earlier versions. test_older_database_is_upgraded_in_place confirms this. The migration system refuses databases with newer schema versions."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "The store can be opened, created, and migrated automatically. WAL mode allows concurrent reads. The operating envelope documents the single-writer constraint. No deployment or monitoring concerns within the scope."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "Resource consumption is proportionate to the objectives. SQLite is appropriate for the scale. No unnecessary dependencies. The implementation is efficient for the operating envelope."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "parse_amount correctly handles all price formats in the operating envelope: '19.99', '19,99 €', '£17.99', '¥1,500', '1.299,00', '1,299.00', '£1,299.99', '1 299 kr', 'CHF 1'299.90', '49,99 zł'. All are converted to exact integer minor units (1999 EUR, 1799 GBP, 1500 JPY, etc.). All three ingestion paths (upsert_listing, apply_update, import_records) use parse_amount and minor_unit_factor to store prices. Tests in test_prices.py confirm correct parsing."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "upsert_listing uses INSERT OR REPLACE (store.py:122-141), which deletes the old listing row when a (backend, external_id) already exists. The price_history table has ON DELETE CASCADE on listing_id (schema.py:41). When the old listing is deleted, all its price_history rows are cascade-deleted. Reproduction: store a listing at price 649€, rescrape at 599€, check price_history - only the 599€ entry remains, the 649€ entry was lost. This happens on every rescrape with a price change. import_records uses INSERT ON CONFLICT DO UPDATE which preserves history. apply_update uses UPDATE which preserves history."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "cheapest_active (store.py:197-225) returns listings ordered by price_minor, filtered by category, status='active', and currency. Query terms are applied via instr(search_text, ?) > 0 for each term. search_terms normalizes the query with NFKC and casefold. Tests in test_query.py confirm: ordering by price with ties broken by id, filtering by status/category/currency, limit parameter, and case-insensitive query terms including non-ASCII letters (kühlschrank, BOSCH Kühl)."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "All modules in listings/ import only from the Python standard library (verified by inspection: sqlite3, os, re, math, json, unicodedata, datetime, collections.abc, contextlib, difflib). Schema creation and upgrades are handled exclusively by the numbered migrations in schema.py (MIGRATIONS tuple with versions 1-4). No other code issues DDL. test_schema.py confirms migrations upgrade older databases in place without data loss."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "Test suite runs with 'python3 -m unittest discover -s tests -q', exits with status 0, all 40 tests pass. Tests use tempfile.TemporaryDirectory for database files. No network access. Working tree remains clean after tests."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "stats() (store.py:227-239) returns listings per backend and status and price_history_rows count. import_records (bulk.py:50) returns counts dict with inserted, updated, price_changes. import_jsonl returns the same. Errors name the position: 'record {position}: {error}' for import_records (bulk.py:125), '{path}, line {number}: {reason}' for import_jsonl (bulk.py:148,152)."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "Invalid input is rejected with descriptive errors. test_bulk.py:test_one_invalid_record_rejects_the_batch confirms a batch with one invalid record stores nothing. test_store.py:test_invalid_listing_is_refused confirms ValueError for unknown backend/currency/status/unreadable price. test_updates.py:test_refused_update_changes_nothing confirms LookupError for unknown listing and ValueError for invalid values, with no changes to the database. All ingestion paths use transactions that rollback on error."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_query.py:EnvelopeScaleTest.test_cheapest_active_at_envelope_scale creates 50,000 listings all in the same category and currency, then measures cheapest_active with limit=20. The test runs the query 5 times and takes the fastest, asserting it is under 0.250 seconds. The test passes for queries with None, 'modell 12', and 'größe s' as query terms."
+      }
+    ],
+    "findings": [
+      {
+        "key": "F-upsert-loses-price-history",
+        "tier": "T0",
+        "domain": "data-integrity",
+        "title": "upsert_listing loses price history on rescrape due to INSERT OR REPLACE with CASCADE DELETE",
+        "components": ["listings/store.py:122-141", "listings/schema.py:41"],
+        "description": "upsert_listing uses INSERT OR REPLACE to store a listing. When a listing with the same (backend, external_id) already exists, INSERT OR REPLACE deletes the old row and inserts a new one. The price_history table has a foreign key on listing_id with ON DELETE CASCADE (schema.py:41). When the old listing row is deleted, all its price_history rows are cascade-deleted. This means every time a scraper rescrapes a listing with a different price, the previous price observations are lost. The new price is appended to price_history, but the history now contains only the new price, not the full history of price changes.",
+        "evidence": "Reproduction: Open a store, upsert_listing a listing at price 649€ at time T0. Upsert the same listing at price 599€ at time T1. Call price_history('kleinanzeigen', '1'). Result: only one entry with price_minor=59900 at T1. The entry for 64900 at T0 was deleted. Direct inspection of the price_history table shows only one row with listing_id=1 after the rescrape, confirming the old rows were cascade-deleted when INSERT OR REPLACE deleted the old listing row. The listing_id is reused (autoincrement), but the old price_history rows pointing to it are gone.",
+        "impact": "Inside the operating envelope, scrapers rescrape listings regularly. Every rescrape with a price change loses the previous price history. This violates the requirement that price_history returns the first price followed by every later change. Buyers relying on price history to track price drops will see incomplete history. The defect affects all listings ingested via upsert_listing, which is the primary ingestion path for live scrapes.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "This is a critical data loss defect that violates a mandatory requirement (REQ-2) and realizes an unacceptable risk (RISK-1: stored listings or their price history are lost or silently altered during normal operation). The defect occurs during normal operation (rescraping) and causes irreversible data loss. It must be resolved before the controlled-validation stage because the validation will collect price history data that will be lost, making the validation results unreliable.",
+        "verification": "Fix upsert_listing to use INSERT ... ON CONFLICT (backend, external_id) DO UPDATE instead of INSERT OR REPLACE, preserving the existing row's id and avoiding the CASCADE DELETE. Alternatively, disable CASCADE DELETE and handle history cleanup explicitly. Verify by: (1) upsert a listing at price 649€ at T0, (2) upsert the same listing at price 599€ at T1, (3) call price_history and assert it returns two entries: 64900 at T0 and 59900 at T1. Run the existing test suite to ensure no regressions."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "The report opens one T0 blocking finding (F-upsert-loses-price-history) that violates REQ-2 (data integrity) and realizes RISK-1 (stored listings or their price history are lost or silently altered). upsert_listing uses INSERT OR REPLACE which deletes the old listing row when a listing already exists. The price_history table has ON DELETE CASCADE on listing_id, so all previous price observations are cascade-deleted. This causes price history to be lost on every rescrape with a price change. The defect is demonstrated by reproduction: store a listing at 649€, rescrape at 599€, check price_history - only the 599€ entry remains. This violates the requirement that price_history returns the first price followed by every later change. The defect must be resolved before the controlled-validation stage because the validation will collect price history data that will be lost, making the validation results unreliable."
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "case": "listings",
+  "arm": "metron",
+  "trial": "1",
+  "started": "2026-11-25T21:39:06Z",
+  "ended": "2026-11-25T21:48:12Z",
+  "seconds": 546,
+  "end_state": "approved",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "check",
+      "role": "operator",
+      "seconds": 2,
+      "exit": 0,
+      "model": "",
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "n": 2,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 185,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 476889,
+      "output_tokens": 9534
+    },
+    {
+      "n": 3,
+      "kind": "fix",
+      "role": "implementer",
+      "seconds": 105,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 379304,
+      "output_tokens": 3952
+    },
+    {
+      "n": 4,
+      "kind": "verify",
+      "role": "verifier",
+      "seconds": 74,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 164703,
+      "output_tokens": 3281
+    },
+    {
+      "n": 5,
+      "kind": "review",
+      "role": "reviewer",
+      "seconds": 177,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 607118,
+      "output_tokens": 7738
+    }
+  ],
+  "harness": "omp 19.1.1"
+}

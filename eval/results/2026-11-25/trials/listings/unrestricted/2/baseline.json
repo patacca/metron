@@ -1,0 +1,32 @@
+{
+  "arm": "unrestricted",
+  "rounds": [
+    {
+      "review": {
+        "ready": true,
+        "summary": "Two critical bugs were found and fixed. The float-to-int conversion used int() which truncated values like 19.99*100 to 1998 instead of 1999, affecting all three ingestion paths. The upsert_listing method used INSERT OR REPLACE which deleted the old row and cascaded to price_history, losing all price history on every re-scrape. Both bugs violated acceptance requirements (REQ-1 for price accuracy, REQ-2 for history preservation, and RISK-1/RISK-2). After fixes, all 40 tests pass.",
+        "findings": [
+          {
+            "title": "Float precision error in price conversion",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py",
+              "listings/bulk.py",
+              "listings/updates.py"
+            ],
+            "description": "All three ingestion paths converted float amounts to minor units using int(amount * factor), which truncates instead of rounding. For example, 19.99 * 100 = 1998.9999... becomes 1998 instead of 1999. This violates REQ-1 (exact price storage) and RISK-2 (buyer shown wrong price). Fixed by using round() in all three locations."
+          },
+          {
+            "title": "INSERT OR REPLACE deletes price history",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py"
+            ],
+            "description": "upsert_listing used INSERT OR REPLACE, which deletes the old row before inserting the new one. Since price_history has ON DELETE CASCADE referencing listings(id), every re-scrape deleted all price history for that listing. This violates REQ-2 (price history never lost) and RISK-1 (history lost during normal operation). Fixed by using separate INSERT for new listings and UPDATE for existing ones, preserving the row id and its price history."
+          }
+        ]
+      }
+    }
+  ],
+  "final": "approved"
+}

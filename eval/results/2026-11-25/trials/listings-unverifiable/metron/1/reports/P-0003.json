@@ -1,0 +1,31 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0003",
+  "packet_digest": "sha256:76ec868ac7fad2f5a97d010be149cd3371a055b6b5bbc21a7222102545976f52",
+  "role": "verifier",
+  "author": {
+    "id": "verifier-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "verifications": [
+      {
+        "finding": "F-0001",
+        "result": "confirmed",
+        "evidence": "Reproduced the finding's test on the candidate commit 13fa871: open_store on a fresh DB, then three upsert_listing calls on the same (kleinanzeigen, '1') key with prices '100 €'/'90 €'/'80 €' at t0/t1/t2. price_history('kleinanzeigen', '1') returns 3 rows with price_minor 10000/9000/8000 at t0/t1/t2 in order. The listing's id (1) and first_seen_at (2026-01-01T12:00:00.000000Z) are unchanged. Code inspection of listings/store.py:120-163 confirms the fix: when previous is not None, the code issues UPDATE listings SET ... WHERE id = ? instead of INSERT OR REPLACE, so the listing row is never deleted and the ON DELETE CASCADE on price_history.listing_id never fires. The price_history INSERT still fires correctly when (price_minor, currency) changes. All 40 existing tests pass (python3 -m unittest discover -s tests -q, exit 0).",
+        "scope": "proportionate",
+        "scope_evidence": "The single commit 13fa871 changes only listings/store.py (upsert_listing method). The change replaces the single INSERT OR REPLACE statement with a conditional: INSERT INTO listings (without the id column, for new listings) when previous is None, or UPDATE listings SET ... WHERE id = ? (for existing listings). This is the minimal change that removes the DELETE+INSERT mechanism that cascaded into price_history. No unrelated refactoring, no new features, no test deletions or assertion changes. The price_history INSERT and the (price_minor, currency) change guard are preserved verbatim. Everything the commit changes serves the fix."
+      },
+      {
+        "finding": "F-0002",
+        "result": "confirmed",
+        "evidence": "Ran the finding's exact verification cases through all three ingestion paths on the candidate commit 13fa871: (a) upsert_listing, (b) import_records, (c) apply_update, each with prices '19,99 €' EUR→1999, '17.99' GBP→1799, '49,99 zł' PLN→4999, '0.99' EUR→99, '99.99' EUR→9999, '1299.99' EUR→129999. All 18 assertions pass: stored price_minor equals expected in every case. Code inspection confirms round(parse_amount(...) * factor) replaces int(...) in listings/store.py:112 (upsert_listing), listings/bulk.py:77 (import_records), and listings/updates.py:60 (apply_update). round() correctly handles IEEE 754 representation errors where the product is slightly below the true integer (e.g., 19.99 * 100 = 1998.9999999999998 rounds to 1999). All 40 existing tests pass.",
+        "scope": "proportionate",
+        "scope_evidence": "The single commit 13fa871 changes exactly three lines, one per ingestion path: int(...) → round(...) for the price_minor calculation in listings/store.py:112, listings/bulk.py:77, and listings/updates.py:60. This is the minimal change that removes the truncation mechanism. No unrelated refactoring, no new features, no test deletions or assertion changes. The parse_amount function and minor_unit_factor are unchanged. Everything the commit changes serves the fix."
+      }
+    ],
+    "notes": "Both fixes are in the same commit 13fa871, which is titled 'fix: preserve price history on re-upsert and correct IEEE 754 rounding'. The commit changes only the three files named by the two findings (listings/store.py, listings/bulk.py, listings/updates.py) and makes no other changes. No regressions observed: the F-0001 fix preserves the price_history INSERT logic and the (price_minor, currency) change guard; the F-0002 fix does not alter parse_amount or the validation logic. All 40 existing tests pass on the candidate."
+  }
+}

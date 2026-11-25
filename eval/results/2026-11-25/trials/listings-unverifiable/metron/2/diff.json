@@ -1,0 +1,28 @@
+{
+  "seed": "9edc05761851cf97503d692a212480721b533eac",
+  "head": "692784cded683540a9b72c89e9b0477779fe71e8",
+  "files": [
+    {
+      "path": "listings/prices.py",
+      "added": 13,
+      "deleted": 4
+    },
+    {
+      "path": "listings/store.py",
+      "added": 40,
+      "deleted": 21
+    },
+    {
+      "path": "tests/test_prices.py",
+      "added": 26,
+      "deleted": 0
+    },
+    {
+      "path": "tests/test_store.py",
+      "added": 18,
+      "deleted": 0
+    }
+  ],
+  "added": 97,
+  "deleted": 25
+}

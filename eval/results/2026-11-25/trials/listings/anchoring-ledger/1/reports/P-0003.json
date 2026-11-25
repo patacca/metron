@@ -1,0 +1,28 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0003",
+  "packet_digest": "sha256:798c7d2c37b34f6da87f0c732ed7a5f97892909fdf16511cc65068241e6e0623",
+  "role": "verifier",
+  "author": {
+    "id": "scripted-verifier",
+    "kind": "agent"
+  },
+  "body": {
+    "verifications": [
+      {
+        "finding": "F-0001",
+        "result": "confirmed",
+        "evidence": "Re-ran the finding's reproduction on the fixed candidate: after upserts at 100 €, 90 € and 90 € again the history is 100.00, 90.00; a watcher update to 85 € appends 85.00; get_listing keeps the original id and first_seen_at; delete_listing still removes the listing and its history. The fixture suite passes.",
+        "scope": "proportionate",
+        "scope_evidence": "One commit; in listings/store.py it changes only upsert_listing's write, which is what the finding needs."
+      },
+      {
+        "finding": "F-0002",
+        "result": "confirmed",
+        "evidence": "'19,99 €', 19.99, '£17.99', '4,35 €' and '8.20' are stored as 1999, 1999, 1799, 435 and 820 through upsert_listing, apply_update and import_records; '1,10 €', '2.20' and 0.55 remain exact.",
+        "scope": "proportionate",
+        "scope_evidence": "One commit; in listings/prices.py it changes only parse_amount's return type, the root cause, and no call site."
+      }
+    ]
+  }
+}

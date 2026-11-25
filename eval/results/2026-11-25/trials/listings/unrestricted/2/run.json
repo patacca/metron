@@ -1,0 +1,22 @@
+{
+  "case": "listings",
+  "arm": "unrestricted",
+  "trial": "2",
+  "started": "2026-11-25T22:05:21Z",
+  "ended": "2026-11-25T22:10:57Z",
+  "seconds": 336,
+  "end_state": "approved",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "unrestricted",
+      "role": "agent",
+      "seconds": 336,
+      "exit": 0,
+      "model": "qwen3.7-plus",
+      "input_tokens": 978212,
+      "output_tokens": 17070
+    }
+  ],
+  "harness": "omp 19.1.1"
+}

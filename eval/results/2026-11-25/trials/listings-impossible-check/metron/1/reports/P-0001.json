@@ -1,0 +1,25 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:230fc805707b5585c12051fd6cc0b21f22afb913e2be73e769527c5c27049d40",
+  "role": "auditor",
+  "author": {
+    "id": "auditor-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "resolutions": [
+      {
+        "escalation": "E-0001",
+        "analysis": "The three failed steps are all the same check: REQ-10's command `test -s data/real_listings.jsonl` exits 1 because the file does not exist. The working tree has no `data/` directory at all; `ls data/` fails. REQ-5 (the test suite) passes on every run, so the candidate's code is not the cause. The contract itself explains why the file cannot exist yet. REQ-10's criterion is 'data/real_listings.jsonl holds the labelled pairs', and CAL-1 — which governs the deduplication thresholds REQ-10 is meant to evaluate — states explicitly: 'Evidence needed: Precision and recall of find_duplicates on at least 500 pairs of real listings, cross-posted and not, labelled by hand. Such listings exist only once the bounded launch has collected them. Reassess when: At the end of controlled validation, before the contract targets the pilot stage.' The bounded launch is the very activity this stage authorizes; the labelled sample can only be produced during and after that launch, not before it starts. REQ-10's check therefore asks for evidence the project cannot produce at this point in the lifecycle. No fix to the candidate can make `data/real_listings.jsonl` exist without fabricating the labelled real-listing sample, which would be dishonest and would not satisfy the intent of REQ-10 or CAL-1. The loop is not failing to converge on a real defect; it is being held closed by a check whose precondition is impossible to meet at this stage. This is the 'evidence a requirement needs cannot exist at this stage' case the brief names, and it is also a contract obstacle: the check command and the reassessment timing in CAL-1 are in tension.",
+        "conclusion": "The non-convergence is caused by the contract, not by the candidate. REQ-10's check cannot pass until the bounded launch has produced real listings and they have been labelled by hand, which CAL-1 schedules for the end of controlled validation. The loop cannot converge on this candidate under the current checks. Governance must decide whether to defer REQ-10's check until the end of controlled validation (or make it conditional on the file existing) so the gate can evaluate the requirements that are verifiable now. Until governance decides, further review/fix/verification cycles would waste work against an immovable check failure."
+      }
+    ],
+    "contract_recommendations": [
+      "Defer REQ-10's check until the end of controlled validation, or replace the check command with one that passes when the labelled sample has not yet been collected (for example, `test ! -e data/real_listings.jsonl || test -s data/real_listings.jsonl`) and record the check as not-yet-applicable until the bounded launch has produced real listings. Align the reassessment timing with CAL-1, which already states that the deduplication thresholds are reassessed at the end of controlled validation, before the contract targets the pilot stage. Reason: CAL-1 states that the evidence REQ-10 needs (500+ hand-labelled pairs of real listings) exists only once the bounded launch has collected them, and that reassessment happens at the end of controlled validation. The current check command runs at every step and fails because the file cannot exist yet, closing the gate on a candidate that otherwise satisfies every verifiable requirement. Deferring the check removes the tension between the check command and CAL-1's reassessment schedule without lowering the standard: REQ-10 is still enforced, just at the point in the lifecycle where its evidence can exist."
+    ],
+    "suspend": "REQ-10's check cannot pass until the bounded launch has produced real listings and they have been labelled by hand, which CAL-1 schedules for the end of controlled validation. The gate is closed on an immovable check failure, not on any defect in the candidate, and further review/fix/verification cycles cannot change the outcome. Governance must decide whether to defer REQ-10's check, make it conditional on the file existing, or resume the campaign on some other basis before the loop can make progress."
+  }
+}

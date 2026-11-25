@@ -1,0 +1,23 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0003",
+  "packet_digest": "sha256:9f201f66d9b7c5aa6e2edb870f5810b4f57d36de58c17b443996e5982cf77830",
+  "role": "verifier",
+  "author": {
+    "id": "verifier-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "verifications": [
+      {
+        "finding": "F-0001",
+        "result": "confirmed",
+        "evidence": "Ran the exact verification command from the finding: python3 -c \"from listings.prices import parse_amount, minor_unit_factor; assert int(round(parse_amount('19,99 €', 'EUR') * minor_unit_factor('EUR'))) == 1999; assert int(round(parse_amount('£17.99', 'GBP') * minor_unit_factor('GBP'))) == 1799; assert int(round(parse_amount('¥1,500', 'JPY') * minor_unit_factor('JPY'))) == 1500\" — all three assertions pass. Confirmed the fix is applied at all three required locations: listings/store.py:112, listings/updates.py:60, listings/bulk.py:77 (grep -n 'int(round(' shows the pattern in each). Tested 15 additional edge cases including the fractions named in the finding (0.29, 0.57, 0.58, 1.13, 1.14), boundary values (0, 100000), and various formats from the operating envelope (1.299,00 / 49,99 zł / CHF 1'299.90 / 1 299 kr) — all produce the exact expected minor-unit integer. Full test suite passes: 40 tests, exit 0.",
+        "scope": "proportionate",
+        "scope_evidence": "The diff is exactly three lines, one per ingestion path, each changing int(...) to int(round(...)). No other code, test, schema, or configuration is touched. Every changed line directly removes the truncation mechanism the finding describes. Nothing unrelated was added, removed, or refactored."
+      }
+    ]
+  }
+}

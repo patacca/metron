@@ -1,0 +1,32 @@
+{
+  "arm": "unrestricted",
+  "rounds": [
+    {
+      "review": {
+        "ready": true,
+        "summary": "Fixed two critical data integrity bugs that violated acceptance requirements. The database layer is now ready for launch.",
+        "findings": [
+          {
+            "title": "Float precision loss in price parsing",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py",
+              "listings/bulk.py",
+              "listings/updates.py"
+            ],
+            "description": "Price parsing used int() to convert floating-point amounts to minor units, causing truncation errors. For example, '19,99 €' parsed as 19.99 * 100 = 1998.999... which truncated to 1998 instead of 1999. This violated REQ-1 (functional correctness) and RISK-2 (buyer shown wrong price). Fixed by using round() instead of int() in all three ingestion paths."
+          },
+          {
+            "title": "Price history silently deleted on listing update",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py"
+            ],
+            "description": "upsert_listing used INSERT OR REPLACE to update existing listings, which deletes the old row and inserts a new one with a new ID. Since price_history has ON DELETE CASCADE referencing listings(id), this silently deleted all price history for the listing. This violated REQ-2 (data integrity) and RISK-1 (price history lost). Fixed by using separate INSERT for new listings and UPDATE for existing ones, preserving the row ID and price history."
+          }
+        ]
+      }
+    }
+  ],
+  "final": "approved"
+}

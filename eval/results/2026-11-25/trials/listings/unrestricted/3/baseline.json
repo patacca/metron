@@ -1,0 +1,32 @@
+{
+  "arm": "unrestricted",
+  "rounds": [
+    {
+      "review": {
+        "ready": true,
+        "summary": "Fixed two blocker bugs: floating-point truncation in price conversion (int() instead of round()) caused prices like '19.99 EUR' to be stored as 1998 instead of 1999 minor units; INSERT OR REPLACE in upsert_listing triggered ON DELETE CASCADE on price_history, silently losing price history on every rescrape. Both fixes verified by the existing test suite and manual checks against the acceptance criteria.",
+        "findings": [
+          {
+            "title": "Floating-point truncation in price conversion",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py",
+              "listings/updates.py",
+              "listings/bulk.py"
+            ],
+            "description": "int(parse_amount(...) * minor_unit_factor(...)) truncated due to IEEE 754: 19.99 * 100 = 1998.9999... -> 1998. REQ-1 requires exact minor-unit storage. Fixed by using round() in all three ingestion paths (upsert_listing, apply_update, import_records)."
+          },
+          {
+            "title": "INSERT OR REPLACE cascades delete of price history",
+            "severity": "blocker",
+            "files": [
+              "listings/store.py"
+            ],
+            "description": "upsert_listing used INSERT OR REPLACE which deletes the existing row before inserting. With ON DELETE CASCADE on price_history.listing_id, every rescrape silently dropped all prior price history entries. REQ-2 requires price history is never lost. Fixed by splitting into explicit INSERT (new listing) and UPDATE (existing listing) paths."
+          }
+        ]
+      }
+    }
+  ],
+  "final": "approved"
+}

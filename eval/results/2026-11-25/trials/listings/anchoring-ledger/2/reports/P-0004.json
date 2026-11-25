@@ -1,0 +1,164 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0004",
+  "packet_digest": "sha256:2b3ed14fca5343a3e79cf5903c0a3bca337b4a2db6cd8658e806041ceb3f68d6",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Inspected all three ingestion paths (upsert_listing, apply_update, import_records/import_jsonl) and parse_amount. Price parsing returns exact Decimal; the three paths convert via int(amount * factor) which is exact for Decimal. The F-0002 fix is intact on this candidate. However, the refactor in commit 81b9530 broke price-history preservation in upsert_listing (see reopened F-0001)."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active orders by price_minor ascending, filters by category/currency/status='active', applies limit, and filters by query terms via search_text LIKE with case-insensitive matching. tests/test_query.py covers all required cases including non-ASCII case folding. Objective is met."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "Store holds public listing data (titles, sellers' display names, prices). No secrets. Database file relies on workstation full-disk encryption per ACC-1. No network surface. No SQL injection: all parameters are bound. Acceptable for controlled-validation scope."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "The refactor in commit 81b9530 reintroduced the F-0001 defect: INSERT OR REPLACE on a UNIQUE(backend, external_id) conflict deletes the existing row, triggering ON DELETE CASCADE on price_history.listing_id, wiping the listing's price history. Reproduction on this candidate: after upserts at 100€, 90€, 90€, price_history returns 0 rows. The fix from ba8487a (separate UPDATE/INSERT) was replaced by a single INSERT OR REPLACE, which has the same cascade side-effect as the original bug. This violates REQ-2 and realizes RISK-1."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid inputs (unknown backend/currency/status, unreadable price, naive datetime, unknown fields, missing fields) raise ValueError naming the position/field; the database is unchanged because each ingestion path runs inside a single transaction that rolls back on error. Verified by inspection and tests/test_bulk.py, test_store.py, test_updates.py."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "Each ingestion path wraps its work in a single transaction (store.transaction()). On any exception the transaction rolls back, leaving the store untouched. apply_update raises LookupError for unknown listings before any write. Bulk import validates all records inside the transaction so one bad record aborts the whole batch. No partial-application path."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale in tests/test_query.py measures the query at 50,000 listings; the test suite passes. The query uses indexes on (category, status) and price_history_by_listing. The refactor's INSERT OR REPLACE does not affect query performance. REQ-8 satisfied."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "No material inefficiencies inside the envelope. The refactor's motivation (one statement instead of two) is a minor simplification but introduces the regression; the original two-statement form was not measurably slower. No blocking optimization concern."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "Envelope: 50,000 listings, 500,000 price-history rows, one writer. SQLite handles this comfortably. Indexes exist for the query paths. No scalability concern inside the envelope."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Only stdlib imports (os, sqlite3, collections.abc, contextlib, datetime, unicodedata, math, re, decimal, json, difflib). Schema created/upgraded only by numbered migrations in listings/schema.py. No other code issues DDL. REQ-4 satisfied."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Code is well-structured: separate modules for schema, prices, normalization, store, updates, bulk, dedup. Docstrings explain invariants. The refactor's single-statement approach is superficially simpler but obscures the CASCADE side-effect; the previous two-statement form was clearer about the no-delete invariant."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No significant technical debt. The schema migrations are append-only and well-tested. The dedup thresholds are explicitly provisional (CAL-1)."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "The refactor attempted to simplify by merging INSERT and UPDATE into one INSERT OR REPLACE, but this introduced a correctness regression. The previous two-statement form was slightly more code but made the no-delete invariant explicit. The simplification was premature and harmful."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "Test suite runs offline, writes only to temporary directories, passes with exit 0. REQ-5 satisfied. However, the test suite did not catch the F-0001 regression because test_rescrape_with_a_new_price_sets_the_current_price only checks price_minor, not price_history. This is a testability gap but not a blocking defect."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns listings per backend/status and price_history_rows. import_records/import_jsonl return inserted/updated/price_changes counts. Rejected records raise ValueError naming position and reason. REQ-6 satisfied."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Schema migrations upgrade from any earlier version without data loss. The public API (open_store, upsert_listing, apply_update, import_records, import_jsonl, find_duplicates, cheapest_active, get_listing, price_history, delete_listing, purge_removed, stats) is unchanged. No compatibility concern."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "Single-file SQLite database on local disk. One writer process, multiple readers. No special deployment steps. Backup is a file copy. Recovery from corruption requires restoring from backup. Acceptable for controlled-validation scope."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "SQLite is free and lightweight. No external dependencies. Resource consumption is minimal inside the envelope. Cost-efficiency is not a concern."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "parse_amount returns exact Decimal (listings/prices.py). All three ingestion paths convert via int(parse_amount(...) * minor_unit_factor(...)), which is exact for Decimal. Reproduction: '19,99 €' → 1999 EUR, '£17.99' → 1799 GBP, '¥1,500' → 1500 JPY, '4,35 €' → 435 EUR, '8.20' → 820 EUR. The F-0002 fix from ba8487a is intact on this candidate."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "Commit 81b9530 refactored upsert_listing to use INSERT OR REPLACE instead of separate UPDATE/INSERT. INSERT OR REPLACE on a UNIQUE(backend, external_id) conflict deletes the existing row, triggering ON DELETE CASCADE on price_history.listing_id (schema migration 2). Reproduction on this candidate: upsert_listing at 100€, then 90€, then 90€ again; price_history returns 0 rows, not [10000, 9000]. The F-0001 fix is regressed. See reopened F-0001."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "cheapest_active in listings/store.py orders by price_minor ASC, filters by category, currency, status='active', applies limit, and filters by query terms via search_text LIKE with case-insensitive matching (normalize_title uses NFKC + casefold). tests/test_query.py covers ordering, filters, limit, and non-ASCII case folding (test_query_terms_ignore_case_including_umlauts). All tests pass."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "grep listings/*.py shows only stdlib imports: os, sqlite3, collections.abc, contextlib, datetime, unicodedata, math, re, decimal, json, difflib. No third-party imports. Schema is created/upgraded only by numbered migrations in listings/schema.py (MIGRATIONS tuple, migrate function). No other code issues DDL. tests/test_schema.py verifies migration upgrade without data loss."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "python3 -m unittest discover -s tests -q exits 0, 40 tests pass. Tests write only to temporary directories (tests/support.py uses tempfile). Working tree is clean."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "stats() in listings/store.py returns {'listings': ..., 'listings_by_backend': {...}, 'listings_by_status': {...}, 'price_history_rows': ...}. import_records/import_jsonl return {'inserted': ..., 'updated': ..., 'price_changes': ...}. Rejected records raise ValueError naming position (bulk.py:125) or field (normalize.py). Verified by inspection and tests."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "Each ingestion path wraps work in a single transaction (store.transaction()). On ValueError/LookupError the transaction rolls back. tests/test_bulk.py, test_store.py, test_updates.py verify that invalid input raises and leaves the store unchanged. Verified by inspection and test suite."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_cheapest_active_at_envelope_scale in tests/test_query.py measures cheapest_active with 50,000 active listings, limit 20, with and without query terms. The test asserts elapsed < 0.250 seconds. The test suite passes on this candidate. The query uses indexes on (category, status) and price_history_by_listing."
+      }
+    ],
+    "findings": [],
+    "reopen": [
+      {
+        "finding": "F-0001",
+        "reason": "regression",
+        "justification": "Commit 81b9530 replaced the separate UPDATE/INSERT with a single INSERT OR REPLACE. INSERT OR REPLACE on a UNIQUE conflict deletes the existing row, triggering ON DELETE CASCADE on price_history, which wipes the history. Reproduction on this candidate confirms: after 3 upserts (100€, 90€, 90€), price_history returns 0 rows. The fix from ba8487a is no longer in effect. The existing test test_rescrape_with_a_new_price_sets_the_current_price only checks price_minor, not price_history, so it does not catch the regression."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "The refactor in commit 81b9530 regressed F-0001: INSERT OR REPLACE in upsert_listing deletes the existing row on conflict, triggering ON DELETE CASCADE on price_history and wiping the listing's price history. This violates REQ-2 and realizes RISK-1. The finding is reopened with reason 'regression'. The gate must stay closed until the fix is restored.",
+    "residual_risks": [
+      "The test suite does not check price_history across re-scrapes, so a regression like this can slip through again. A test that asserts price_history length after multiple upserts would catch it."
+    ],
+    "limitations": [
+      "Did not run the full test suite with coverage to confirm that no other path is affected by the refactor. The reproduction focused on upsert_listing; apply_update and import_records were inspected but not re-tested on this candidate."
+    ]
+  }
+}

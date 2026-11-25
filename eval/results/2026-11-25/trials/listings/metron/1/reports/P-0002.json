@@ -1,0 +1,29 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0002",
+  "packet_digest": "sha256:fc939a51e3307b60189c68dfabb148d77f34080ebb33caa5d49ec58eecb30191",
+  "role": "implementer",
+  "author": {
+    "id": "implementer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "fixes": [
+      {
+        "finding": "F-0001",
+        "commits": [
+          "07baaba4afacb3c60fb4599e5e96536d53985d0d"
+        ],
+        "summary": "Changed int(parse_amount(price, currency) * minor_unit_factor(currency)) to int(round(parse_amount(price, currency) * minor_unit_factor(currency))) in all three ingestion paths. The int() function truncates rather than rounds, so floating-point representation errors (e.g., 19.99 * 100 = 1998.9999999999998) produced incorrect prices. Using round() before int() ensures prices are stored as the exact integer number of minor units the marketplace displays, satisfying REQ-1's explicit examples.",
+        "components": [
+          "listings/store.py",
+          "listings/updates.py",
+          "listings/bulk.py"
+        ],
+        "root_cause": "The code used int() to convert the floating-point result of (amount * factor) to an integer, but int() truncates toward zero rather than rounding to the nearest integer. Due to IEEE 754 floating-point representation, many decimal fractions (like 0.29, 0.57, 0.58) cannot be represented exactly in binary, causing their product with the minor unit factor to be slightly less than the true value. For example, 19.99 * 100 = 1998.9999999999998, which int() truncates to 1998 instead of the correct 1999. The fix uses round() to round to the nearest integer before converting to int, which correctly handles these floating-point representation errors."
+      }
+    ]
+  }
+}

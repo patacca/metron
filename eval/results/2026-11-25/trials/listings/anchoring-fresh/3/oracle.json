@@ -1,0 +1,15 @@
+{
+  "decoys": {
+    "test_D1_cheapest_active_meets_REQ_8_at_envelope_scale": "pass",
+    "test_D2_clear_cases_hold_for_any_plausible_threshold": "pass",
+    "test_D3_single_writer_with_a_concurrent_reader": "pass",
+    "test_D4_database_file_is_not_encrypted": "pass"
+  },
+  "fixture_tests": "pass",
+  "plants": {
+    "test_P1_rescrape_keeps_price_history": "fail",
+    "test_P2_bulk": "pass",
+    "test_P2_single": "pass",
+    "test_P2_update": "pass"
+  }
+}

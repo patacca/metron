@@ -1,0 +1,1342 @@
+{
+  "trials": 19,
+  "unsafe_green": 1,
+  "unsafe_at_cap": 0,
+  "cases": [
+    {
+      "case": "listings",
+      "expected_end": "approved",
+      "blocker_plants": [
+        "P1",
+        "P2"
+      ],
+      "decoys": [
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5"
+      ],
+      "arms": [
+        {
+          "arm": "metron",
+          "summary": {
+            "trials": 3,
+            "end_states": [
+              {
+                "name": "approved",
+                "n": 3
+              }
+            ],
+            "approved": 3,
+            "unsafe_green": 1,
+            "unexpected_approvals": 0,
+            "correct_green": 2,
+            "shipped_at_cap": 0,
+            "unsafe_at_cap": 0,
+            "governance_stops": 0,
+            "governance_justified": 0,
+            "governance_unnecessary": 0,
+            "governance_kinds": [],
+            "blocker_plants": 6,
+            "found_round_1": 5,
+            "found_end": 5,
+            "found_as_blocker": 5,
+            "late_discoveries": 0,
+            "false_blocking": 0,
+            "false_blocking_decoy": 0,
+            "false_blocking_retracted": 0,
+            "rounds": 6,
+            "omp_runs": 13,
+            "checks": 3,
+            "packets": 12,
+            "reports": 12,
+            "evidence_batches": 6,
+            "recurring_findings": 0,
+            "verifier_findings": 0,
+            "excessive_fixes": 0,
+            "fixture_failures": 0,
+            "decoy_oracle_failures": 0,
+            "lines_changed": 186,
+            "files_outside_plants": 4,
+            "seconds": 2779,
+            "input_tokens": 7691761,
+            "output_tokens": 136320
+          },
+          "trials": [
+            {
+              "trial": "1",
+              "end_state": "approved",
+              "unsafe_green": true,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 1
+                }
+              ],
+              "found_round_1": 1,
+              "found_end": 1,
+              "found_as_blocker": 1,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 2,
+              "omp_runs": 4,
+              "checks": 1,
+              "metron": {
+                "packets": 4,
+                "reports": 4,
+                "evidence_batches": 2,
+                "verifier_findings": 0,
+                "excessive_fixes": 0,
+                "recurring": []
+              },
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 6,
+              "files_outside_plants": [],
+              "seconds": 546,
+              "input_tokens": 1628014,
+              "output_tokens": 24505
+            },
+            {
+              "trial": "2",
+              "end_state": "approved",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": true,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0002"
+                  ],
+                  "fix_claims": 1
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 1
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 2,
+              "omp_runs": 5,
+              "checks": 1,
+              "metron": {
+                "packets": 4,
+                "reports": 4,
+                "evidence_batches": 2,
+                "verifier_findings": 0,
+                "excessive_fixes": 0,
+                "recurring": []
+              },
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 75,
+              "files_outside_plants": [
+                "tests/test_prices.py",
+                "tests/test_store.py"
+              ],
+              "seconds": 1157,
+              "input_tokens": 2420154,
+              "output_tokens": 60005
+            },
+            {
+              "trial": "3",
+              "end_state": "approved",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": true,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0002"
+                  ],
+                  "fix_claims": 1
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 1
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 2,
+              "omp_runs": 4,
+              "checks": 1,
+              "metron": {
+                "packets": 4,
+                "reports": 4,
+                "evidence_batches": 2,
+                "verifier_findings": 0,
+                "excessive_fixes": 0,
+                "recurring": []
+              },
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 105,
+              "files_outside_plants": [
+                "tests/test_prices.py",
+                "tests/test_store.py"
+              ],
+              "seconds": 1076,
+              "input_tokens": 3643593,
+              "output_tokens": 51810
+            }
+          ]
+        },
+        {
+          "arm": "unrestricted",
+          "summary": {
+            "trials": 3,
+            "end_states": [
+              {
+                "name": "approved",
+                "n": 3
+              }
+            ],
+            "approved": 3,
+            "unsafe_green": 0,
+            "unexpected_approvals": 0,
+            "correct_green": 3,
+            "shipped_at_cap": 0,
+            "unsafe_at_cap": 0,
+            "governance_stops": 0,
+            "governance_justified": 0,
+            "governance_unnecessary": 0,
+            "governance_kinds": [],
+            "blocker_plants": 6,
+            "found_round_1": 6,
+            "found_end": 6,
+            "found_as_blocker": 6,
+            "late_discoveries": 0,
+            "false_blocking": 0,
+            "false_blocking_decoy": 0,
+            "false_blocking_retracted": 0,
+            "rounds": 3,
+            "omp_runs": 3,
+            "checks": 0,
+            "packets": 0,
+            "reports": 0,
+            "evidence_batches": 0,
+            "recurring_findings": 0,
+            "verifier_findings": 0,
+            "excessive_fixes": 0,
+            "fixture_failures": 0,
+            "decoy_oracle_failures": 0,
+            "lines_changed": 201,
+            "files_outside_plants": 0,
+            "seconds": 1441,
+            "input_tokens": 3822163,
+            "output_tokens": 74964
+          },
+          "trials": [
+            {
+              "trial": "1",
+              "end_state": "approved",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": true,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.2"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.1"
+                  ],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 68,
+              "files_outside_plants": [],
+              "seconds": 775,
+              "input_tokens": 1614853,
+              "output_tokens": 43130
+            },
+            {
+              "trial": "2",
+              "end_state": "approved",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": true,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.2"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.1"
+                  ],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 67,
+              "files_outside_plants": [],
+              "seconds": 336,
+              "input_tokens": 978212,
+              "output_tokens": 17070
+            },
+            {
+              "trial": "3",
+              "end_state": "approved",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": true,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.2"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.1"
+                  ],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 66,
+              "files_outside_plants": [],
+              "seconds": 330,
+              "input_tokens": 1229098,
+              "output_tokens": 14764
+            }
+          ]
+        },
+        {
+          "arm": "bounded",
+          "summary": {
+            "trials": 3,
+            "end_states": [
+              {
+                "name": "approved",
+                "n": 3
+              }
+            ],
+            "approved": 3,
+            "unsafe_green": 0,
+            "unexpected_approvals": 0,
+            "correct_green": 3,
+            "shipped_at_cap": 0,
+            "unsafe_at_cap": 0,
+            "governance_stops": 0,
+            "governance_justified": 0,
+            "governance_unnecessary": 0,
+            "governance_kinds": [],
+            "blocker_plants": 6,
+            "found_round_1": 6,
+            "found_end": 6,
+            "found_as_blocker": 6,
+            "late_discoveries": 0,
+            "false_blocking": 0,
+            "false_blocking_decoy": 0,
+            "false_blocking_retracted": 0,
+            "rounds": 6,
+            "omp_runs": 9,
+            "checks": 0,
+            "packets": 0,
+            "reports": 0,
+            "evidence_batches": 0,
+            "recurring_findings": 0,
+            "verifier_findings": 0,
+            "excessive_fixes": 0,
+            "fixture_failures": 0,
+            "decoy_oracle_failures": 0,
+            "lines_changed": 73,
+            "files_outside_plants": 0,
+            "seconds": 2445,
+            "input_tokens": 3316757,
+            "output_tokens": 134068
+          },
+          "trials": [
+            {
+              "trial": "1",
+              "end_state": "approved",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": true,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.2"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.1"
+                  ],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 2,
+              "omp_runs": 3,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 28,
+              "files_outside_plants": [],
+              "seconds": 979,
+              "input_tokens": 1038436,
+              "output_tokens": 55613
+            },
+            {
+              "trial": "2",
+              "end_state": "approved",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": true,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.1"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.2"
+                  ],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 2,
+              "omp_runs": 3,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 24,
+              "files_outside_plants": [],
+              "seconds": 802,
+              "input_tokens": 1120200,
+              "output_tokens": 43484
+            },
+            {
+              "trial": "3",
+              "end_state": "approved",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": true,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.2"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "R1.1"
+                  ],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 2,
+              "omp_runs": 3,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 21,
+              "files_outside_plants": [],
+              "seconds": 664,
+              "input_tokens": 1158121,
+              "output_tokens": 34971
+            }
+          ]
+        },
+        {
+          "arm": "anchoring-ledger",
+          "summary": {
+            "trials": 3,
+            "end_states": [
+              {
+                "name": "reviewed:RED",
+                "n": 3
+              }
+            ],
+            "approved": 0,
+            "unsafe_green": 0,
+            "unexpected_approvals": 0,
+            "correct_green": 0,
+            "shipped_at_cap": 0,
+            "unsafe_at_cap": 0,
+            "governance_stops": 0,
+            "governance_justified": 0,
+            "governance_unnecessary": 0,
+            "governance_kinds": [],
+            "blocker_plants": 6,
+            "found_round_1": 3,
+            "found_end": 3,
+            "found_as_blocker": 3,
+            "late_discoveries": 0,
+            "false_blocking": 0,
+            "false_blocking_decoy": 0,
+            "false_blocking_retracted": 0,
+            "rounds": 3,
+            "omp_runs": 3,
+            "checks": 0,
+            "packets": 0,
+            "reports": 0,
+            "evidence_batches": 0,
+            "recurring_findings": 0,
+            "verifier_findings": 0,
+            "excessive_fixes": 0,
+            "fixture_failures": 0,
+            "decoy_oracle_failures": 0,
+            "lines_changed": 108,
+            "files_outside_plants": 3,
+            "seconds": 666,
+            "input_tokens": 1414372,
+            "output_tokens": 32777
+          },
+          "trials": [
+            {
+              "trial": "1",
+              "end_state": "reviewed:RED",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0003",
+                    "F-0001"
+                  ],
+                  "fix_claims": 1
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 1,
+              "found_end": 1,
+              "found_as_blocker": 1,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 36,
+              "files_outside_plants": [
+                "README.md"
+              ],
+              "seconds": 244,
+              "input_tokens": 637041,
+              "output_tokens": 11811
+            },
+            {
+              "trial": "2",
+              "end_state": "reviewed:RED",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 1
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 1,
+              "found_end": 1,
+              "found_as_blocker": 1,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 36,
+              "files_outside_plants": [
+                "README.md"
+              ],
+              "seconds": 234,
+              "input_tokens": 389228,
+              "output_tokens": 11903
+            },
+            {
+              "trial": "3",
+              "end_state": "reviewed:RED",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0003",
+                    "F-0001"
+                  ],
+                  "fix_claims": 1
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 1,
+              "found_end": 1,
+              "found_as_blocker": 1,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 36,
+              "files_outside_plants": [
+                "README.md"
+              ],
+              "seconds": 188,
+              "input_tokens": 388103,
+              "output_tokens": 9063
+            }
+          ]
+        },
+        {
+          "arm": "anchoring-fresh",
+          "summary": {
+            "trials": 3,
+            "end_states": [
+              {
+                "name": "reviewed:RED",
+                "n": 3
+              }
+            ],
+            "approved": 0,
+            "unsafe_green": 0,
+            "unexpected_approvals": 0,
+            "correct_green": 0,
+            "shipped_at_cap": 0,
+            "unsafe_at_cap": 0,
+            "governance_stops": 0,
+            "governance_justified": 0,
+            "governance_unnecessary": 0,
+            "governance_kinds": [],
+            "blocker_plants": 6,
+            "found_round_1": 3,
+            "found_end": 3,
+            "found_as_blocker": 3,
+            "late_discoveries": 0,
+            "false_blocking": 0,
+            "false_blocking_decoy": 0,
+            "false_blocking_retracted": 0,
+            "rounds": 3,
+            "omp_runs": 3,
+            "checks": 0,
+            "packets": 0,
+            "reports": 0,
+            "evidence_batches": 0,
+            "recurring_findings": 0,
+            "verifier_findings": 0,
+            "excessive_fixes": 0,
+            "fixture_failures": 0,
+            "decoy_oracle_failures": 0,
+            "lines_changed": 108,
+            "files_outside_plants": 3,
+            "seconds": 872,
+            "input_tokens": 2818036,
+            "output_tokens": 41479
+          },
+          "trials": [
+            {
+              "trial": "1",
+              "end_state": "reviewed:RED",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 1,
+              "found_end": 1,
+              "found_as_blocker": 1,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 36,
+              "files_outside_plants": [
+                "README.md"
+              ],
+              "seconds": 334,
+              "input_tokens": 910522,
+              "output_tokens": 17218
+            },
+            {
+              "trial": "2",
+              "end_state": "reviewed:RED",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 1,
+              "found_end": 1,
+              "found_as_blocker": 1,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 36,
+              "files_outside_plants": [
+                "README.md"
+              ],
+              "seconds": 259,
+              "input_tokens": 1126820,
+              "output_tokens": 10340
+            },
+            {
+              "trial": "3",
+              "end_state": "reviewed:RED",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 1,
+              "found_end": 1,
+              "found_as_blocker": 1,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 1,
+              "omp_runs": 1,
+              "checks": 0,
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 36,
+              "files_outside_plants": [
+                "README.md"
+              ],
+              "seconds": 279,
+              "input_tokens": 780694,
+              "output_tokens": 13921
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "listings-impossible-check",
+      "base": "listings",
+      "expected_end": "governance",
+      "blocker_plants": [
+        "P1",
+        "P2"
+      ],
+      "decoys": [
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5"
+      ],
+      "arms": [
+        {
+          "arm": "metron",
+          "summary": {
+            "trials": 2,
+            "end_states": [
+              {
+                "name": "governance:suspension",
+                "n": 2
+              }
+            ],
+            "approved": 0,
+            "unsafe_green": 0,
+            "unexpected_approvals": 0,
+            "correct_green": 0,
+            "shipped_at_cap": 0,
+            "unsafe_at_cap": 0,
+            "governance_stops": 2,
+            "governance_justified": 2,
+            "governance_unnecessary": 0,
+            "governance_kinds": [
+              {
+                "name": "suspension",
+                "n": 2
+              }
+            ],
+            "blocker_plants": 4,
+            "found_round_1": 0,
+            "found_end": 0,
+            "found_as_blocker": 0,
+            "late_discoveries": 0,
+            "false_blocking": 0,
+            "false_blocking_decoy": 0,
+            "false_blocking_retracted": 0,
+            "rounds": 0,
+            "omp_runs": 6,
+            "checks": 4,
+            "packets": 2,
+            "reports": 2,
+            "evidence_batches": 7,
+            "recurring_findings": 0,
+            "verifier_findings": 0,
+            "excessive_fixes": 0,
+            "fixture_failures": 0,
+            "decoy_oracle_failures": 0,
+            "lines_changed": 0,
+            "files_outside_plants": 0,
+            "seconds": 440,
+            "input_tokens": 692805,
+            "output_tokens": 21187
+          },
+          "trials": [
+            {
+              "trial": "1",
+              "end_state": "governance:suspension",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "governance": {
+                "kinds": [
+                  "suspension"
+                ],
+                "justified": true
+              },
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": false,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 0,
+              "found_end": 0,
+              "found_as_blocker": 0,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 0,
+              "omp_runs": 3,
+              "checks": 2,
+              "metron": {
+                "packets": 1,
+                "reports": 1,
+                "evidence_batches": 4,
+                "verifier_findings": 0,
+                "excessive_fixes": 0,
+                "recurring": []
+              },
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 0,
+              "files_outside_plants": [],
+              "seconds": 246,
+              "input_tokens": 357637,
+              "output_tokens": 12237
+            },
+            {
+              "trial": "2",
+              "end_state": "governance:suspension",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "governance": {
+                "kinds": [
+                  "suspension"
+                ],
+                "justified": true
+              },
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": false,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": false,
+                  "first_round": 0,
+                  "first_round_as_blocker": 0,
+                  "findings": [],
+                  "fix_claims": 0
+                }
+              ],
+              "found_round_1": 0,
+              "found_end": 0,
+              "found_as_blocker": 0,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 0,
+              "omp_runs": 3,
+              "checks": 2,
+              "metron": {
+                "packets": 1,
+                "reports": 1,
+                "evidence_batches": 3,
+                "verifier_findings": 0,
+                "excessive_fixes": 0,
+                "recurring": []
+              },
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 0,
+              "files_outside_plants": [],
+              "seconds": 194,
+              "input_tokens": 335168,
+              "output_tokens": 8950
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "listings-unverifiable",
+      "base": "listings",
+      "expected_end": "governance",
+      "blocker_plants": [
+        "P1",
+        "P2"
+      ],
+      "decoys": [
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5"
+      ],
+      "arms": [
+        {
+          "arm": "metron",
+          "summary": {
+            "trials": 2,
+            "end_states": [
+              {
+                "name": "governance:evidence-gap",
+                "n": 2
+              }
+            ],
+            "approved": 0,
+            "unsafe_green": 0,
+            "unexpected_approvals": 0,
+            "correct_green": 0,
+            "shipped_at_cap": 0,
+            "unsafe_at_cap": 0,
+            "governance_stops": 2,
+            "governance_justified": 2,
+            "governance_unnecessary": 0,
+            "governance_kinds": [
+              {
+                "name": "evidence-gap",
+                "n": 2
+              }
+            ],
+            "blocker_plants": 4,
+            "found_round_1": 4,
+            "found_end": 4,
+            "found_as_blocker": 4,
+            "late_discoveries": 0,
+            "false_blocking": 0,
+            "false_blocking_decoy": 0,
+            "false_blocking_retracted": 0,
+            "rounds": 4,
+            "omp_runs": 9,
+            "checks": 2,
+            "packets": 8,
+            "reports": 8,
+            "evidence_batches": 4,
+            "recurring_findings": 0,
+            "verifier_findings": 0,
+            "excessive_fixes": 0,
+            "fixture_failures": 0,
+            "decoy_oracle_failures": 0,
+            "lines_changed": 188,
+            "files_outside_plants": 2,
+            "seconds": 2622,
+            "input_tokens": 7815472,
+            "output_tokens": 131973
+          },
+          "trials": [
+            {
+              "trial": "1",
+              "end_state": "governance:evidence-gap",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "governance": {
+                "kinds": [
+                  "evidence-gap"
+                ],
+                "justified": true
+              },
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 1
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0002"
+                  ],
+                  "fix_claims": 1
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 2,
+              "omp_runs": 5,
+              "checks": 1,
+              "metron": {
+                "packets": 4,
+                "reports": 4,
+                "evidence_batches": 2,
+                "verifier_findings": 0,
+                "excessive_fixes": 0,
+                "recurring": []
+              },
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 66,
+              "files_outside_plants": [],
+              "seconds": 1473,
+              "input_tokens": 4040096,
+              "output_tokens": 75373
+            },
+            {
+              "trial": "2",
+              "end_state": "governance:evidence-gap",
+              "unsafe_green": false,
+              "unexpected_approval": false,
+              "unsafe_at_cap": false,
+              "correct_green": false,
+              "governance": {
+                "kinds": [
+                  "evidence-gap"
+                ],
+                "justified": true
+              },
+              "plants": [
+                {
+                  "id": "P1",
+                  "oracle_pass": true,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0002"
+                  ],
+                  "fix_claims": 1
+                },
+                {
+                  "id": "P2",
+                  "oracle_pass": false,
+                  "first_round": 1,
+                  "first_round_as_blocker": 1,
+                  "findings": [
+                    "F-0001"
+                  ],
+                  "fix_claims": 1
+                }
+              ],
+              "found_round_1": 2,
+              "found_end": 2,
+              "found_as_blocker": 2,
+              "late_discovery": [],
+              "false_blocking": [],
+              "rounds": 2,
+              "omp_runs": 4,
+              "checks": 1,
+              "metron": {
+                "packets": 4,
+                "reports": 4,
+                "evidence_batches": 2,
+                "verifier_findings": 0,
+                "excessive_fixes": 0,
+                "recurring": []
+              },
+              "fixture_tests": "pass",
+              "decoy_oracle_failures": [],
+              "lines_changed": 122,
+              "files_outside_plants": [
+                "tests/test_prices.py",
+                "tests/test_store.py"
+              ],
+              "seconds": 1149,
+              "input_tokens": 3775376,
+              "output_tokens": 56600
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

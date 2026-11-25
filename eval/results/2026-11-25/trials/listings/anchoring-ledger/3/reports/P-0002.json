@@ -1,0 +1,34 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0002",
+  "packet_digest": "sha256:047e72d464130e9399b3e5a8f3be634d032ef9eda9cdf0657af0786cc9091cd7",
+  "role": "implementer",
+  "author": {
+    "id": "scripted-implementer",
+    "kind": "agent"
+  },
+  "body": {
+    "fixes": [
+      {
+        "finding": "F-0001",
+        "commits": [
+          "e59b1a12c7b5335756e7772efccf9624b9aa9b7c"
+        ],
+        "summary": "upsert_listing updates a known listing in place with UPDATE ... WHERE id = ? and inserts a new one with INSERT, so no row is deleted and the cascade never runs.",
+        "components": [
+          "listings/store.py"
+        ]
+      },
+      {
+        "finding": "F-0002",
+        "commits": [
+          "e59b1a12c7b5335756e7772efccf9624b9aa9b7c"
+        ],
+        "summary": "parse_amount returns an exact Decimal, reading a float price by its shortest decimal representation, so int(amount * factor) at the three call sites is exact.",
+        "components": [
+          "listings/prices.py"
+        ]
+      }
+    ]
+  }
+}

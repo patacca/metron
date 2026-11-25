@@ -1,0 +1,75 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0004",
+  "packet_digest": "sha256:963a53f2426986fd8dbd675423efb7c539651850bd59a640791d6814420d7405",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {"domain": "functional-correctness", "status": "assessed", "summary": "Inspected prices.py, store.py, updates.py, bulk.py, normalize.py. parse_amount returns Decimal; all three ingestion paths convert with int(amount * factor). Verified on the envelope's example amounts ('19,99 €'->1999, '£17.99'->1799, '¥1,500'->1500, '4,35 €'->435, '8.20'->820) and float inputs (19.99->1999, 0.55->55). REQ-1 satisfied."},
+      {"domain": "objective-alignment", "status": "assessed", "summary": "cheapest_active filters by category, status='active', currency, applies query terms via instr(search_text, ?) on NFKC-casefolded text, orders by price_minor then id, and limits. tests/test_query.py covers ordering, filters, limit, non-ASCII case folding. REQ-3 satisfied."},
+      {"domain": "security-privacy", "status": "assessed", "summary": "No network, no auth, no secrets. Database is on full-disk encrypted workstation (ACC-1 accepted). Inputs validated; no SQL injection (all parameterized). No concern inside envelope."},
+      {"domain": "data-integrity", "status": "assessed", "summary": "REGRESSION of F-0001. Commit eca23b1 changed upsert_listing to use INSERT OR REPLACE with the previous row's id, which SQLite implements as DELETE + INSERT. With PRAGMA foreign_keys = ON and price_history.listing_id ON DELETE CASCADE, the delete cascades and removes all price_history rows for that listing. Reproduced: upsert 100€ at t0, 90€ at t0+1h, 90€ at t0+2h -> price_history returns [] (only the 90€ row should remain after the second upsert; the third should leave it unchanged). After 100€ -> 90€ -> 90€ the history is empty; after 100€ -> 90€ -> 80€ the history is just [8000], losing both 10000 and 9000. REQ-2 violated."},
+      {"domain": "stability", "status": "assessed", "summary": "Invalid inputs raise ValueError naming the field; transactions roll back on error. tests/test_bulk.py, test_store.py, test_updates.py cover atomicity. REQ-7 satisfied."},
+      {"domain": "reliability", "status": "assessed", "summary": "Single-writer model; transaction() uses BEGIN/COMMIT with ROLLBACK on any BaseException. WAL mode for reader concurrency. No unhandled failure paths inside envelope."},
+      {"domain": "performance", "status": "assessed", "summary": "test_cheapest_active_at_envelope_scale inserts 50,000 listings and measures cheapest_active with limit=20 under 250ms with and without query terms. Indexes on (category, status) and price_history (listing_id, observed_at) support the query. REQ-8 satisfied."},
+      {"domain": "optimization", "status": "assessed", "summary": "No material avoidable inefficiency. The cheapest_active query uses covering indexes; the single-statement INSERT OR REPLACE is marginally faster than the prior UPDATE+INSERT split but reintroduces the cascade bug."},
+      {"domain": "scalability", "status": "assessed", "summary": "Envelope is 50,000 listings / 500,000 history rows; schema, indexes and query plan handle it within the response budget as measured by the scale test."},
+      {"domain": "architecture", "status": "assessed", "summary": "Only stdlib imports (sqlite3, json, os, re, math, decimal, difflib, unicodedata, datetime, collections.abc, contextlib). Schema created/upgraded only by numbered migrations in schema.py. No DDL elsewhere. REQ-4 satisfied."},
+      {"domain": "maintainability", "status": "assessed", "summary": "Clear module boundaries; docstrings on public APIs; migrations append-only. The new INSERT OR REPLACE statement is slightly harder to reason about than the prior UPDATE/INSERT split because of the cascade side-effect, but code is still readable."},
+      {"domain": "technical-debt", "status": "assessed", "summary": "No new debt introduced beyond the regression."},
+      {"domain": "simplicity", "status": "assessed", "summary": "The single-statement refactor reduces code but at the cost of correctness (cascade). The prior two-statement form was simple enough; the new form is not a net simplification because it requires the reader to reason about REPLACE's delete semantics."},
+      {"domain": "testability", "status": "assessed", "summary": "python3 -m unittest discover -s tests -q exits 0; 40 tests pass. Tests write to temp dirs; no network. REQ-5 satisfied."},
+      {"domain": "observability", "status": "assessed", "summary": "stats() returns listings per backend/status and price_history row count; import_records/import_jsonl return inserted/updated/price_changes counts; invalid records raise ValueError with position and reason. REQ-6 satisfied."},
+      {"domain": "compatibility", "status": "assessed", "summary": "Schema migrations are append-only; test_schema.py covers upgrade from earlier versions. Public API unchanged."},
+      {"domain": "operational-readiness", "status": "assessed", "summary": "Single-file SQLite with WAL; open_store handles creation and migration. No deployment complexity."},
+      {"domain": "cost-efficiency", "status": "assessed", "summary": "SQLite is appropriate for the envelope; no external dependencies; resource use is proportional."}
+    ],
+    "requirements": [
+      {"requirement": "REQ-1", "status": "satisfied", "evidence": "parse_amount returns Decimal (prices.py); int(Decimal * factor) is exact. Verified on envelope examples: '19,99 €'->1999, '£17.99'->1799, '¥1,500'->1500, '4,35 €'->435, '8.20'->820, 19.99->1999, 0.55->55 through all three ingestion paths."},
+      {"requirement": "REQ-2", "status": "violated", "evidence": "Commit eca23b1 changed upsert_listing to INSERT OR REPLACE with the previous row's id. SQLite implements REPLACE as DELETE + INSERT; with PRAGMA foreign_keys = ON and price_history ON DELETE CASCADE, the delete cascades and removes all price_history rows. Reproduction on this candidate: upsert_listing('kleinanzeigen','1', price='100 €', ...) at t0; same at t0+1h with price='90 €'; same at t0+2h with price='90 €'. price_history returns [] instead of [{10000, t0}, {9000, t0+1h}]. The existing test suite does not catch this because test_rescrape_with_a_new_price_sets_the_current_price only checks the current price_minor, not the history."},
+      {"requirement": "REQ-3", "status": "satisfied", "evidence": "cheapest_active filters by category/status='active'/currency, applies query terms via instr on NFKC-casefolded search_text, orders by price_minor then id, limits. tests/test_query.py covers ordering, filters, limit, non-ASCII case folding (kühlschrank, BOSCH Kühl); all pass."},
+      {"requirement": "REQ-4", "status": "satisfied", "evidence": "grep 'import' listings/ shows only stdlib modules (sqlite3, json, os, re, math, decimal, difflib, unicodedata, datetime, collections.abc, contextlib). Schema DDL only in schema.py migrations 1-4; test_schema.py covers upgrade path."},
+      {"requirement": "REQ-5", "status": "satisfied", "evidence": "python3 -m unittest discover -s tests -q -> exit 0, 40 tests pass. Tests use tempfile; no network."},
+      {"requirement": "REQ-6", "status": "satisfied", "evidence": "stats() returns {listings, by_backend, price_history_rows}; import_records returns {inserted, updated, price_changes}; import_jsonl wraps it with line numbers. Invalid records raise ValueError with position and reason (tests/test_bulk.py)."},
+      {"requirement": "REQ-7", "status": "satisfied", "evidence": "Invalid backend/currency/status/price/naive-time raise ValueError; unknown listing in apply_update raises LookupError; batch with one invalid record stores nothing (transaction rollback). tests/test_store.py, test_updates.py, test_bulk.py cover these."},
+      {"requirement": "REQ-8", "status": "satisfied", "evidence": "test_cheapest_active_at_envelope_scale inserts 50,000 listings, measures cheapest_active with limit=20 under 250ms with and without query terms; passes."}
+    ],
+    "findings": [
+      {
+        "key": "regression-upsert-replace-cascades-price-history",
+        "tier": "T0",
+        "domain": "data-integrity",
+        "title": "upsert_listing uses INSERT OR REPLACE, which cascades and deletes the listing's price history on every re-scrape",
+        "components": ["listings/store.py"],
+        "description": "Commit eca23b1 replaced the UPDATE/INSERT split in ListingStore.upsert_listing with a single INSERT OR REPLACE INTO listings that passes the previous row's id when the listing is known. SQLite implements REPLACE as: delete the conflicting row, then insert the new one. open_store sets PRAGMA foreign_keys = ON, and migration 2 declares price_history.listing_id REFERENCES listings(id) ON DELETE CASCADE. The delete therefore cascades and removes every price_history row of the listing before the new row is inserted. The code then appends a history row only when the price changed, so after a re-scrape with an unchanged price (the common case) the history is empty, and after a re-scrape with a changed price the history is just the new price. The previous fix for F-0001 (UPDATE for known listings, INSERT for new ones) is undone.",
+        "evidence": "Reproduction on this candidate (commit eca23b1), fresh database:\n\n  from listings import open_store\n  from datetime import datetime, timezone, timedelta\n  t0 = datetime(2026,1,1,tzinfo=timezone.utc)\n  with open_store('t.db') as s:\n      s.upsert_listing('kleinanzeigen','1', title='x', price='100 €', currency='EUR', url='u', category='bikes', seen_at=t0)\n      s.upsert_listing('kleinanzeigen','1', title='x', price='90 €', currency='EUR', url='u', category='bikes', seen_at=t0+timedelta(hours=1))\n      s.upsert_listing('kleinanzeigen','1', title='x', price='90 €', currency='EUR', url='u', category='bikes', seen_at=t0+timedelta(hours=2))\n      print(s.price_history('kleinanzeigen','1'))  # []\n\nExpected after the three calls: [{10000, t0}, {9000, t0+1h}]. Got: [].\n\nAlso: 100€ -> 90€ -> 80€ yields history [{8000, t0+2h}] only, losing both 10000 and 9000.\n\nThe existing test suite does not catch this: test_rescrape_with_a_new_price_sets_the_current_price only asserts get_listing()['price_minor'], not price_history.",
+        "impact": "Every re-scrape of a known listing (the most frequent operation) silently and irreversibly destroys its price history. Inside the envelope (one ingestion process, 17 backends, up to 50,000 listings over 14 days), buyers in the validation will see listings with no price-drop signal, which is the feature the search agents are meant to provide. The loss is irreversible once the launch has run.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "REQ-2 requires that no price history entry is lost except by an explicit delete. This loses it on the documented ingestion path, inside the envelope, on every re-scrape. The bounded launch would accumulate 14 days of scrapes that silently erase the very data the validation is meant to evaluate. Resolving it after the launch would mean discarding the collected data and re-running.",
+        "verification": "After a first upsert at 100€, a re-scrape at 90€ and a third re-scrape at 90€ again, price_history returns [{10000, t0}, {9000, t0+1h}]; a further re-scrape at 80€ appends {8000, t0+2h}; get_listing keeps the original id and first_seen_at; delete_listing still removes the listing and its history; apply_update and import_records paths still append history correctly."
+      }
+    ],
+    "reopen": [
+      {
+        "finding": "F-0001",
+        "reason": "regression",
+        "justification": "Commit eca23b1 ('refactor(store): write new and known listings with one statement') replaced the UPDATE/INSERT split that had resolved F-0001 with a single INSERT OR REPLACE that passes the previous row's id. SQLite implements REPLACE as DELETE + INSERT; with foreign_keys = ON and price_history ON DELETE CASCADE, the delete cascades and removes all price_history rows. Reproduction on this candidate confirms the history is empty after a re-scrape with unchanged price, and contains only the latest price after a re-scrape with changed price. The verifier's confirmation on e59b1a1 is no longer valid for this candidate because the code it verified has been replaced."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "One T0 finding reopens F-0001: the refactor in commit eca23b1 reintroduces the price-history loss on every re-scrape by using INSERT OR REPLACE, which cascades through the ON DELETE CASCADE foreign key. REQ-2 is violated. The gate must stay closed until upsert_listing is changed to a form that does not delete the existing row (the prior UPDATE/INSERT split, or an INSERT ... ON CONFLICT DO UPDATE that leaves the row in place).",
+    "residual_risks": [
+      "The existing test suite does not assert that price_history is preserved across re-scrapes with unchanged or changed prices; a future refactor could reintroduce this regression without failing any test."
+    ],
+    "limitations": [
+      "Review performed on the candidate commit eca23b1 only; commits between the verified fix e59b1a1 and this candidate were inspected via git diff and found to contain only the refactor described."
+    ]
+  }
+}

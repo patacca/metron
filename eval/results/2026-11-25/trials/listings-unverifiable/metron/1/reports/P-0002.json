@@ -1,0 +1,32 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0002",
+  "packet_digest": "sha256:3e33e458626763a2e93e61d5dfb8eeb4bc10c322602f345c1abd63dfc4c78b9f",
+  "role": "implementer",
+  "author": {
+    "id": "implementer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "fixes": [
+      {
+        "finding": "F-0001",
+        "commits": ["13fa8711a0b55cd6cbda5a2d4490c691725c12ce"],
+        "summary": "Replaced INSERT OR REPLACE with conditional INSERT/UPDATE in upsert_listing. When a listing already exists, the code now issues an UPDATE instead of a REPLACE, so the listing row is never deleted and the ON DELETE CASCADE on price_history.listing_id never fires. The price history is preserved across re-upserts.",
+        "components": ["listings/store.py"],
+        "root_cause": "INSERT OR REPLACE implements REPLACE as DELETE + INSERT. The price_history table declares listing_id REFERENCES listings(id) ON DELETE CASCADE, so when the listing row is deleted, all its price_history rows are cascaded away. The fix uses separate INSERT (for new listings) and UPDATE (for existing listings) statements, so the listing row is never deleted on re-upsert, and the CASCADE never triggers.",
+        "tests": "Verified with a reproduction: upsert_listing three times with different prices and seen_at timestamps, then assert price_history returns three rows with the correct prices in order. Also verified that the listing's id and first_seen_at remain unchanged. All 40 existing tests pass."
+      },
+      {
+        "finding": "F-0002",
+        "commits": ["13fa8711a0b55cd6cbda5a2d4490c691725c12ce"],
+        "summary": "Changed int() to round() for the price_minor calculation in all three ingestion paths: upsert_listing (store.py), import_records (bulk.py), and apply_update (updates.py). round() correctly rounds to the nearest integer, handling IEEE 754 representation errors where the product is slightly below the true integer (e.g., 19.99 * 100 = 1998.9999999999998 rounds to 1999).",
+        "components": ["listings/store.py", "listings/bulk.py", "listings/updates.py"],
+        "root_cause": "parse_amount returns a Python float. When the decimal representation is not exactly representable in IEEE 754 (most decimal fractions), the multiplication by the minor unit factor produces a value slightly below the true integer. int() truncates toward zero, yielding the wrong value (e.g., int(1998.9999999999998) = 1998). round() rounds to the nearest integer, producing the correct value (round(1998.9999999999998) = 1999).",
+        "tests": "Verified with the exact test cases from the finding: '19,99 €' EUR → 1999, '17.99' GBP → 1799, '49,99 zł' PLN → 4999, '0.99' EUR → 99, '99.99' EUR → 9999, '1299.99' EUR → 129999. All pass. All 40 existing tests pass."
+      }
+    ]
+  }
+}

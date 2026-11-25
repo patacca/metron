@@ -1,0 +1,30 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0003",
+  "packet_digest": "sha256:8c3e408e2c414b4a1055aad34906e36eb964d80ca64a84b5c09ba06176ff7bf4",
+  "role": "verifier",
+  "author": {
+    "id": "verifier-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "verifications": [
+      {
+        "finding": "F-0001",
+        "result": "confirmed",
+        "evidence": "Verified all representative prices from the finding ('19.99', '0.29', '1.15', '37.37', '71.71', '74.74', '1299.00', '¥1,500') across all three ingestion paths. parse_amount now returns Decimal instead of float. For string inputs, Decimal('19.99') * 100 == 1999 exactly. For int/float JSON inputs, Decimal(int) and Decimal.from_float are used; from_float is exact for the IEEE-754 value, and the envelope guarantees JSON numbers carry no more decimals than the currency's exponent. Tested upsert_listing, apply_update, and import_records: all store exact minor units (1999, 29, 115, 3737, 7171, 7474, 129900, 1500) and price_history entries match. Full test suite passes (42 tests).",
+        "scope": "proportionate",
+        "scope_evidence": "Commit cc2c0bb changes only listings/prices.py (parse_amount return type from float to Decimal, with Decimal construction for int/float/str inputs) and tests/test_prices.py (adds test_decimal_conversion_preserves_exact_minor_units). The change is minimal and targets the root cause: using an inexact binary type for a quantity that must be exact in base 10. All three ingestion paths call parse_amount, so the single change fixes all paths. No unrelated refactoring, features, or abstractions added."
+      },
+      {
+        "finding": "F-0002",
+        "result": "confirmed",
+        "evidence": "Reproduced the finding's scenario: three upsert_listing calls for the same (backend, external_id) with prices 10.00, 20.00, 30.00 EUR at different times. Result: listing ID is stable (1, 1, 1) across all three upserts; price_history returns 3 entries in order (1000, 2000, 3000) with correct observed_at timestamps; current price is 3000; first_seen_at is stable. The fix replaces INSERT OR REPLACE with a conditional INSERT (new listing) or UPDATE (existing listing), preserving row identity and preventing the ON DELETE CASCADE from firing. Full test suite passes (42 tests).",
+        "scope": "proportionate",
+        "scope_evidence": "Commit 692784c changes only listings/store.py (upsert_listing logic: SELECT to check existence, then INSERT for new or UPDATE for existing, instead of INSERT OR REPLACE) and tests/test_store.py (adds test_rescrape_preserves_price_history). The change is minimal and targets the root cause: INSERT OR REPLACE deletes the row on conflict, firing the cascade. The new code preserves row identity by updating in place. No unrelated refactoring, features, or abstractions added."
+      }
+    ]
+  }
+}

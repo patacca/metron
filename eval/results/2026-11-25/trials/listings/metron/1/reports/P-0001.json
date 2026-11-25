@@ -1,0 +1,170 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:93cddde6ab50792ff3d5d056b6eeb869e14859c9157ad4019cf77923aced3b38",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Tested price parsing against the contract's explicit examples. Found a critical bug: int(float * factor) truncates instead of rounding, causing '19,99 \u20ac' to store as 1998 EUR instead of 1999 EUR, and '\u00a317.99' as 1798 GBP instead of 1799 GBP. This violates REQ-1."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active correctly returns cheapest active listings by category/currency, filters by query terms case-insensitively, and respects limits. Tests in test_query.py cover ordering, filters, and non-ASCII query terms. Satisfies REQ-3."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "Database file is unencrypted (ACC-1), but workstation uses full-disk encryption per operating envelope. No sensitive data beyond public listings. No security defects found within scope."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "Listings are preserved across upserts (id and first_seen_at retained). Price history appends only on price changes. Transactions ensure atomicity. delete_listing and purge_removed are the only deletion paths. Satisfies REQ-2."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid input raises ValueError with descriptive messages. Transactions roll back on error. Tests confirm batches with one invalid record store nothing. Satisfies REQ-7."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "Single-writer model per operating envelope. Transactions use BEGIN IMMEDIATE for migrations and explicit BEGIN/COMMIT/ROLLBACK for operations. Connection timeout is 10s. No reliability defects found."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale measures <250ms with 50k listings, all in one category/currency, with and without query terms. Test passes. Satisfies REQ-8."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "Query uses indexes on (category, status) and (listing_id, observed_at). No material inefficiencies found within operating envelope."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "Operating envelope limits to 50k listings and 500k price rows. Schema and queries handle this scale as demonstrated by test_cheapest_active_at_envelope_scale."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Only standard library imports (json, os, sqlite3, re, math, unicodedata, datetime, collections.abc, contextlib, difflib). Schema created and upgraded only by numbered migrations in schema.py. Satisfies REQ-4."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Code is well-organized into modules by responsibility (prices, normalize, schema, store, updates, bulk, dedup). Docstrings explain behavior. No maintainability defects."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No technical debt defects found. Code is straightforward without unnecessary abstraction."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "No unnecessary complexity. Each module has a clear single responsibility."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "Tests run offline, write only to temp directories, and pass with exit 0. Working tree clean after test run. Satisfies REQ-5."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns listings per backend/status and price_history_rows count. import_records and import_jsonl return inserted/updated/price_changes counts. Errors name position and reason. Satisfies REQ-6."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Schema migrations preserve data across upgrades. test_older_database_is_upgraded_in_place confirms this. No compatibility defects."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "Store opens/creates/upgrades automatically. Migrations are transactional. No operational defects within scope."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "Single SQLite file on local disk. No external dependencies. Resource usage is minimal and proportionate to objectives."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "violated",
+        "evidence": "Tested the contract's explicit examples: parse_amount('19,99 \u20ac', 'EUR') * 100 = 1998.9999999999998, int() truncates to 1998 instead of 1999. Similarly, '\u00a317.99' stores as 1798 GBP instead of 1799 GBP. The bug is in store.py:112, updates.py:60, and bulk.py:77 where int(parse_amount(...) * minor_unit_factor(...)) truncates. The fix is to use round() instead of int(). This affects all three ingestion paths: upsert_listing, apply_update, and import_records."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "satisfied",
+        "evidence": "Inspected upsert_listing (store.py:86-150): uses INSERT OR REPLACE but preserves id and first_seen_at from previous row. Price history appends only when (price_minor, currency) changes (line 144). get_listing returns id and first_seen_at correctly. price_history returns entries ordered by observed_at, id. Tests in test_store.py and test_updates.py confirm behavior."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "cheapest_active (store.py:199-227) filters by category, status='active', currency, applies query terms via instr(search_text, ?), orders by price_minor, id, and applies limit. Tests in test_query.py cover ordering, filters, limit, and non-ASCII query terms (umlauts). All tests pass."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "Inspected all imports in listings/: only standard library modules (json, os, sqlite3, re, math, unicodedata, datetime, collections.abc, contextlib, difflib). Schema migrations are numbered 1-4 in schema.py, each in its own transaction. test_schema.py confirms upgrades preserve data."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "Ran 'python3 -m unittest discover -s tests -q': exit 0, 40 tests passed in 1.213s. Tests use tempfile.TemporaryDirectory. Working tree clean after test run (git status shows nothing to commit)."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "stats() (store.py:229-241) returns listings total, by_backend (per backend/status counts), and price_history_rows. import_records (bulk.py:31-126) returns dict with inserted, updated, price_changes. import_jsonl (bulk.py:129-154) reports line numbers in errors. Tests confirm behavior."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "upsert_listing validates via listing_key, require_text, check_status, parse_amount, utc_timestamp, raising ValueError for invalid input. apply_update raises LookupError for unknown listing, ValueError for invalid values. import_records wraps errors as ValueError with position. Transactions (store.transaction context manager) roll back on error. Tests in test_store.py, test_updates.py, test_bulk.py confirm atomicity."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_cheapest_active_at_envelope_scale (test_query.py:60-86) creates 50k listings, all in one category/currency, measures cheapest_active with limit=20, with and without query terms. Asserts fastest of 5 runs < 0.250s. Test passes."
+      }
+    ],
+    "findings": [
+      {
+        "key": "float-precision-truncation",
+        "tier": "T1",
+        "domain": "functional-correctness",
+        "title": "Price parsing truncates instead of rounding, violating contract examples",
+        "components": [
+          "listings/store.py:112",
+          "listings/updates.py:60",
+          "listings/bulk.py:77"
+        ],
+        "description": "The code computes price_minor as int(parse_amount(price, currency) * minor_unit_factor(currency)). Due to floating-point representation, 19.99 * 100 = 1998.9999999999998, and int() truncates to 1998 instead of the correct 1999. This affects all three ingestion paths: upsert_listing, apply_update, and import_records.",
+        "evidence": "Ran: python3 -c \"from listings.prices import parse_amount, minor_unit_factor; print(int(parse_amount('19,99 \u20ac', 'EUR') * minor_unit_factor('EUR')))\" \u2192 1998. Expected 1999 per contract. Similarly, '\u00a317.99' \u2192 1798 instead of 1799. The bug occurs for any price where the fractional part has a binary representation slightly less than the decimal value (e.g., 0.29, 0.57, 0.58, 1.13, 1.14).",
+        "impact": "Every price with certain fractional values (approximately 1 in 100 for random prices) is stored as 1 minor unit less than the marketplace displays. This directly violates the contract's explicit examples and RISK-2 (buyer shown wrong price). Inside the operating envelope (50k listings), approximately 500 listings will have incorrect prices.",
+        "requirement": "REQ-1",
+        "risk": "RISK-2",
+        "blocking_rationale": "The contract's criterion for REQ-1 explicitly states: '19,99 \u20ac' and 19.99 are 1999 EUR, '\u00a317.99' is 1799 GBP. The current implementation fails these examples. This is a fundamental correctness defect that violates the core purpose of the store: to preserve prices exactly as the marketplace displays them. It must be fixed before controlled validation, as the validation will compare stored prices against marketplace displays.",
+        "verification": "After fix, run: python3 -c \"from listings.prices import parse_amount, minor_unit_factor; assert int(round(parse_amount('19,99 \u20ac', 'EUR') * minor_unit_factor('EUR'))) == 1999; assert int(round(parse_amount('\u00a317.99', 'GBP') * minor_unit_factor('GBP'))) == 1799; assert int(round(parse_amount('\u00a51,500', 'JPY') * minor_unit_factor('JPY'))) == 1500\". All assertions must pass. Also verify that the fix (using round() instead of int()) is applied in store.py:112, updates.py:60, and bulk.py:77."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "REQ-1 is violated by a critical float-precision bug that causes the contract's explicit examples to fail. The finding 'float-precision-truncation' (T0) cites REQ-1 and RISK-2. The bug affects all three ingestion paths and will cause approximately 1% of prices to be stored incorrectly, directly violating the core requirement that prices are stored as the exact integer number of minor units. This must be fixed before controlled validation."
+  }
+}

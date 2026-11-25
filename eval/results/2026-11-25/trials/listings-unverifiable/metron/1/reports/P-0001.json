@@ -1,0 +1,193 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:380ca3bcd276af8994ade8e9de0028665d5d6c18ebbd86c21c30e1a5b8ee7bc0",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Inspected prices.py, store.py, bulk.py, updates.py and the three ingestion paths. Found a float-to-int truncation bug in the price→price_minor conversion that affects every path and produces wrong minor-unit values for common prices such as '19,99 €' (stored as 1998 instead of 1999). Deduplication logic is plausible but cannot be measured against real listings."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active filters by category, status='active', currency, applies case-insensitive query terms via instr on the NFKC-casefolded search_text, orders by price_minor then id, and honours limit. REQ-3 is satisfied."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "The store holds public listing data; ACC-1 accepts the lack of file-level encryption. No credentials, tokens or network surface. Single-writer constraint documented. Within the envelope, no additional protection is required."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "Found a critical integrity defect: upsert_listing uses INSERT OR REPLACE which, on conflict, deletes the existing row and inserts a new one. Because price_history.listing_id references listings(id) ON DELETE CASCADE, every re-upsert silently destroys the listing's entire prior price history. Demonstrated: three upserts of the same listing leave only the most recent price row in price_history. REQ-2 is violated and RISK-1 is realized."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid inputs are rejected with descriptive errors; batches are atomic (transaction rolls back on first failure). utc_timestamp refuses naive datetimes. check_status, listing_key, require_text all raise ValueError with the offending value. REQ-7 satisfied."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "Single-writer model is enforced by the operating envelope; the connection uses WAL mode and a 10-second busy timeout. Migration uses BEGIN IMMEDIATE with a version re-check to handle concurrent openers. Transaction helper rolls back on any exception, including commit failure."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale inserts 50,000 listings and asserts the query returns in under 250 ms with and without query terms; the index on (category, status) supports the filter. REQ-8 satisfied by the test and by inspection of the query plan."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "No material inefficiencies inside the envelope. The cheapest_active query uses a covering index for the filter and a LIMIT, and the instr-based term filter runs against the pre-normalized search_text column."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "Envelope caps at 50,000 listings and 500,000 price rows; the schema, indices and query shapes handle this comfortably. No scalability concern inside the envelope."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Only stdlib imports (sqlite3, json, re, math, unicodedata, difflib, datetime, os, collections.abc, contextlib). Schema is created and upgraded exclusively by numbered migrations in listings/schema.py; no other module issues DDL. REQ-4 satisfied."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "Modules are small, well-named, and documented. Ingestion paths share normalization helpers. Migrations are append-only with a version guard. Code is straightforward to read and modify."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No significant technical debt. The schema has evolved through four migrations cleanly. The price parsing returns float rather than Decimal, which is the root cause of F-1 but is a correctness bug rather than debt per se."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "No speculative abstraction. Each module does one job. The price regex, the normalization, the store, the bulk importer and the dedup are all proportional to the problem."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "Test suite runs offline, writes only to tempfile directories, passes with exit 0. REQ-5 satisfied."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns listings per backend/status and total price_history rows. import_records/import_jsonl return inserted/updated/price_changes counts. Errors name the record position and reason. REQ-6 satisfied."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "Migrations upgrade older databases in place without data loss (test_older_database_is_upgraded_in_place). Newer schema versions are refused with a clear error. Backwards-compatible column additions via ALTER TABLE."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "open_store creates/upgrades the database, sets WAL mode and foreign keys. The operator can run the test suite for a health check. stats() provides store-level visibility. Rollback is possible by replacing the SQLite file."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "Single SQLite file, stdlib only, no external services. Resource consumption is minimal and proportionate to the project's objectives."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "violated",
+        "evidence": "parse_amount returns a float; the ingestion paths compute price_minor as int(parse_amount(price, currency) * minor_unit_factor(currency)). For '19,99 €' EUR: parse_amount returns 19.99; 19.99 * 100 = 1998.9999999999998 in IEEE 754; int(...) truncates to 1998. Reproduced: parse_amount('19,99 €', 'EUR') * 100 = 1998.9999999999998; int(...) = 1998. Same failure for '17.99' GBP → 1798 instead of 1799. The bug affects upsert_listing (store.py:112), import_records (bulk.py:77) and apply_update (updates.py:60). The test suite does not exercise this path: test_new_listing_is_stored uses '1.299,00 €' which is an integer amount, and test_new_records_are_inserted uses '1.299,00' and 12.5 (12.5 * 100 = 1250.0 exactly)."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "upsert_listing (store.py:123-142) uses INSERT OR REPLACE INTO listings. When the (backend, external_id) row already exists, SQLite deletes the old row and inserts a new one. price_history.listing_id REFERENCES listings(id) ON DELETE CASCADE (schema.py:41), so the DELETE cascades and removes every price_history row for that listing. Reproduced on a fresh database: insert listing '1' at t0 with price 100 €; re-upsert at t1 with price 90 €; re-upsert at t2 with price 80 €. After the third upsert, price_history contains only one row (price_minor=8000, observed_at=t2); the original price (10000 at t0) and the intermediate price (9000 at t1) are gone. The listing's id is preserved (SQLite reuses the explicit id passed in), but the price history is silently destroyed on every re-upsert where the price or currency changed. apply_update and import_records use plain UPDATE / ON CONFLICT DO UPDATE, so they do not have this bug; only upsert_listing does."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "cheapest_active builds SQL with WHERE category = ? AND status = 'active' AND currency = ?, appends instr(search_text, ?) > 0 for each query term, orders by price_minor, id, and applies LIMIT. search_terms normalizes via NFKC + casefold, so non-ASCII letters (ü, ö, etc.) match regardless of case. tests/test_query.py covers ordering, filters, limit, and non-ASCII query terms; all pass."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "grep of listings/ shows only stdlib imports: sqlite3, json, os, re, math, unicodedata, difflib, datetime, collections.abc, contextlib, __future__. No third-party imports. Schema migrations are defined in listings/schema.py as MIGRATIONS; migrate() is the only function that issues DDL; it is called only from open_store. tests/test_schema.py verifies that a v1 database is upgraded in place without data loss."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "python3 -m unittest discover -s tests -q exits 0 with 'Ran 40 tests in ~1.0s, OK'. All tests use tempfile.TemporaryDirectory via support.StoreTestCase. No network access, no writes outside temp dirs."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "stats() returns {'listings': total, 'by_backend': {backend: {status: count}}, 'price_history_rows': count}. import_records returns {'inserted', 'updated', 'price_changes'}. import_jsonl delegates to import_records. Errors include the record position (bulk.py:125 'record {position}: {error}') or JSONL line number (bulk.py:148, 152). Verified by running stats() on a populated store."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "test_one_invalid_record_rejects_the_batch verifies that a batch with one bad record leaves the store empty. test_invalid_listing_is_refused and test_refused_update_changes_nothing verify that ValueError/LookupError leave the database unchanged. The transaction() context manager rolls back on any exception. utc_timestamp refuses naive datetimes. check_status, listing_key, require_text raise ValueError with the offending value."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_cheapest_active_at_envelope_scale inserts 50,000 listings all in the same category and currency, then measures cheapest_active with limit=20 for query=None, 'modell 12', and 'größe s'. The test asserts the fastest of 5 runs is under 0.250s. The query uses the listings_by_category index on (category, status) and a LIMIT, so the plan is efficient. Test passes."
+      },
+      {
+        "requirement": "REQ-9",
+        "status": "unverified",
+        "evidence": "The criterion requires labelling at least 500 pairs of real cross-posted listings by hand and measuring precision. Real cross-posted listings do not exist yet; the bounded launch that would collect them has not run. The dedup logic (SIMILARITY_THRESHOLD=0.82, PRICE_TOLERANCE_PERCENT=15) is plausible and covered by unit tests on synthetic data, but the contract explicitly requires measurement on real labelled data (CAL-1). I cannot establish whether the 95% precision threshold is met."
+      }
+    ],
+    "findings": [
+      {
+        "key": "F-price-history-lost-on-upsert",
+        "tier": "T0",
+        "domain": "data-integrity",
+        "title": "upsert_listing destroys the listing's price history on every re-upsert via INSERT OR REPLACE CASCADE",
+        "components": ["listings/store.py:123-142", "listings/schema.py:41"],
+        "description": "upsert_listing uses INSERT OR REPLACE INTO listings. When a row with the same (backend, external_id) already exists, SQLite implements REPLACE as DELETE + INSERT. The price_history table declares listing_id REFERENCES listings(id) ON DELETE CASCADE, so the DELETE cascades and removes every price_history row for that listing. The new row gets the same id (passed explicitly), but all prior price observations are gone. The bug fires on every re-upsert of an existing listing, regardless of whether the price changed, because REPLACE always deletes the old row. apply_update and import_records use UPDATE / ON CONFLICT DO UPDATE and are not affected, but upsert_listing is one of the three mandatory ingestion paths.",
+        "evidence": "Reproduced on a fresh database: (1) upsert_listing('kleinanzeigen', '1', price='100 €', seen_at=t0) → id=1, price_history has 1 row (10000 at t0). (2) upsert_listing same key, price='90 €', seen_at=t1 → id=1, price_history has 1 row (9000 at t1); the t0 row is gone. (3) upsert_listing same key, price='80 €', seen_at=t2 → id=1, price_history has 1 row (8000 at t2); the t0 and t1 rows are gone. Raw SELECT * FROM price_history confirms only the latest row survives. Also verified with a minimal SQLite reproduction: INSERT OR REPLACE on a parent row with ON DELETE CASCADE child rows deletes all child rows.",
+        "impact": "Every scraper re-scrape of an existing listing silently destroys its price history. Under the operating envelope, scrapers run continuously; a listing observed daily for 14 days will have only its latest price in history, not the 14 observations the contract requires. Buyers relying on price trends see no history. The store's stated purpose — 'the full history of its price' — is not delivered for any listing that has been re-scraped.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "The defect violates a critical invariant (price history is never lost except by explicit delete) and realizes an unacceptable risk (RISK-1). It affects every listing that is re-scraped, which is the normal operating pattern. The bounded launch will collect data for 14 days; if this ships, the validation dataset will have no usable price history for any listing observed more than once, undermining the entire purpose of the stage.",
+        "verification": "Insert a listing via upsert_listing, then re-upsert it twice with different prices and different seen_at timestamps. Assert that price_history returns three rows: the original price at t0, the second price at t1, and the third price at t2, in that order. Also assert that the listing's id and first_seen_at are unchanged. A fix that uses INSERT ... ON CONFLICT(backend, external_id) DO UPDATE (like import_records does) instead of INSERT OR REPLACE will pass this test."
+      },
+      {
+        "key": "F-price-minor-truncation",
+        "tier": "T0",
+        "domain": "functional-correctness",
+        "title": "int(parse_amount * minor_unit_factor) truncates IEEE 754 rounding errors, storing wrong price_minor for common prices",
+        "components": ["listings/prices.py:66-94", "listings/store.py:112", "listings/bulk.py:77", "listings/updates.py:60"],
+        "description": "parse_amount returns a Python float. The ingestion paths compute price_minor as int(parse_amount(price, currency) * minor_unit_factor(currency)). For prices whose decimal representation is not exactly representable in IEEE 754, the multiplication produces a value slightly below the true integer, and int() truncates toward zero. Example: '19,99 €' → parse_amount returns 19.99; 19.99 * 100 = 1998.9999999999998 (IEEE 754); int(...) = 1998, not 1999. The bug affects all three ingestion paths: upsert_listing, import_records, and apply_update.",
+        "evidence": "Reproduced in Python: parse_amount('19,99 €', 'EUR') = 19.99; 19.99 * 100 = 1998.9999999999998; int(1998.9999999999998) = 1998. Same for '17.99' GBP → 1798 instead of 1799. The test suite does not catch this because it uses prices like '1.299,00 €' (integer amount) and 12.5 (12.5 * 100 = 1250.0 exactly). Prices ending in .99, .49, .95, etc. — the most common retail prices — are affected.",
+        "impact": "Buyers see prices that differ from what the marketplace displays. A listing shown as '19,99 €' on the marketplace is stored as 1998 minor units and displayed as '19.98 EUR'. Under the operating envelope, prices range from 0 to 100,000 in the listing's currency; any price whose fractional part is not exactly representable in binary (most decimal fractions) is stored incorrectly. This realizes RISK-2 and violates REQ-1.",
+        "requirement": "REQ-1",
+        "risk": "RISK-2",
+        "blocking_rationale": "The defect violates a mandatory requirement (REQ-1: exact integer minor units) and realizes an unacceptable risk (RISK-2: buyer shown wrong price). It affects the most common retail price patterns (.99, .49, .95). The bounded launch will ingest listings from 17 marketplaces; if this ships, a significant fraction of stored prices will be wrong by 1 minor unit, undermining buyer trust and the validation's purpose.",
+        "verification": "For each of these prices, assert that the stored price_minor equals the expected value: '19,99 €' EUR → 1999, '17.99' GBP → 1799, '49,99 zł' PLN → 4999, '0.99' EUR → 99, '99.99' EUR → 9999, '1299.99' EUR → 129999. A fix that uses round() instead of int(), or that parses directly to an integer via string manipulation or Decimal, will pass this test."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "Two T0 findings block the gate. F-price-history-lost-on-upsert violates REQ-2 and realizes RISK-1: upsert_listing silently destroys price history on every re-upsert via INSERT OR REPLACE CASCADE. F-price-minor-truncation violates REQ-1 and realizes RISK-2: the float-to-int conversion stores wrong price_minor for common retail prices like '19,99 €'. Both defects affect the core purpose of the store (preserving price history, storing exact prices) and will manifest immediately under the bounded launch. REQ-9 is unverified because real labelled data does not exist yet, but the verdict is RED regardless due to the two blockers.",
+    "residual_risks": [
+      "REQ-9 (deduplication precision) cannot be verified until the bounded launch collects real cross-posted listings; the 95% precision threshold is unproven.",
+      "The price parsing regex accepts some ambiguous formats (e.g., '1.299' could be 1299 or 1.299 depending on locale); the operating envelope disambiguates by context, but edge cases may arise in production."
+    ],
+    "limitations": [
+      "REQ-9 could not be verified: the criterion requires 500 labelled pairs of real cross-posted listings, which do not exist before the bounded launch.",
+      "Performance was not measured on the operator's actual workstation; the test suite's envelope-scale test is a proxy."
+    ]
+  }
+}

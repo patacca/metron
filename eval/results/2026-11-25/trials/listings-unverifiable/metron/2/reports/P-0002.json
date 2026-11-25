@@ -1,0 +1,42 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0002",
+  "packet_digest": "sha256:fcb3c07da82c4322fee1db814b2ae1d08a8a4341a342b420e495e57f46c8b3e2",
+  "role": "implementer",
+  "author": {
+    "id": "implementer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "fixes": [
+      {
+        "finding": "F-0001",
+        "commits": [
+          "cc2c0bb4d9fdbeef7721e87b1085864d38fe0b58"
+        ],
+        "summary": "Changed parse_amount in listings/prices.py to return decimal.Decimal instead of float. Decimal('19.99') * 100 == 1999 exactly, whereas float('19.99') * 100 == 1998.999... which int() truncates to 1998. The three ingestion paths (upsert_listing, apply_update, import_records) all call parse_amount and then int(amount * minor_unit_factor(currency)), so they all now produce exact minor units. For int/float JSON inputs, int goes through Decimal(int) and float through Decimal.from_float; from_float is exact for the IEEE-754 value the JSON parser produced, and the envelope guarantees the JSON number carries no more decimals than the currency's exponent, so the Decimal representation matches the marketplace's amount.",
+        "components": [
+          "listings/prices.py",
+          "tests/test_prices.py"
+        ],
+        "root_cause": "parse_amount used float for the parsed amount and the callers multiplied by an integer factor and truncated with int(). Many decimal fractions (e.g. 0.99, 0.29, 0.15) have no exact binary float representation, so the product is slightly below the true integer and int() truncates downward. The root cause is using an inexact binary type for a quantity that must be exact in base 10. The fix replaces float with Decimal, which represents base-10 fractions exactly.",
+        "tests": "Added test_decimal_conversion_preserves_exact_minor_units in tests/test_prices.py covering the exact prices named in the finding ('19.99', '0.29', '1.15', '37.37', '71.71', '74.74', '1299.00', '¥1,500') and asserting the exact minor units 1999, 29, 115, 3737, 7171, 7474, 129900, 1500. Verified: before the fix the test fails (1998, 28, 114, ...); after the fix it passes. Full suite: 42 tests pass."
+      },
+      {
+        "finding": "F-0002",
+        "commits": [
+          "692784cded683540a9b72c89e9b0477779fe71e8"
+        ],
+        "summary": "Replaced INSERT OR REPLACE in upsert_listing with a conditional INSERT (new listing) or UPDATE (existing listing). INSERT OR REPLACE deletes the old row before inserting the new one, which fires the ON DELETE CASCADE on price_history.listing_id and wipes all prior price entries. The new code reuses the existing listing's id and first_seen_at and issues an UPDATE that leaves the row (and its history rows) intact. import_records already used INSERT ... ON CONFLICT DO UPDATE for the same reason and is unchanged.",
+        "components": [
+          "listings/store.py",
+          "tests/test_store.py"
+        ],
+        "root_cause": "INSERT OR REPLACE is semantically DELETE + INSERT on conflict. With PRAGMA foreign_keys = ON and price_history.listing_id REFERENCES listings(id) ON DELETE CASCADE, the implicit delete cascades into price_history and removes every prior entry. The earlier code then inserted a single new history row, so only the latest price survived. The root cause is using a statement whose conflict resolution deletes the row while a child table depends on row identity for its history. The fix preserves row identity by updating the existing row in place instead of replacing it.",
+        "tests": "Added test_rescrape_preserves_price_history in tests/test_store.py: three upserts of the same (backend, external_id) with prices 10.00, 20.00, 30.00 EUR at different times. Asserts the listing id is stable across all three upserts and that price_history returns three entries in order (1000, 2000, 3000). Verified: before the fix the history length is 1 (only the last price); after the fix it is 3. Full suite: 42 tests pass."
+      }
+    ]
+  }
+}

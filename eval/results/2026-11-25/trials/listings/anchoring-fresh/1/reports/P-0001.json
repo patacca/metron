@@ -1,0 +1,166 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:2631de12b5abe8c690d06ad1d0e600d8b1dbc6f07234e63e5d456d248f9e1171",
+  "role": "reviewer",
+  "author": {
+    "id": "reviewer-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Price parsing in prices.py correctly handles all formats in the operating envelope: decimal points and commas, thousands grouping with '.', ',', space, no-break space, and apostrophe, currency symbols and codes before or after the amount, and JPY with no minor units. Verified the four REQ-1 examples: '19,99 €' and 19.99 → 1999 EUR, '£17.99' → 1799 GBP, '¥1,500' → 1500 JPY. All three ingestion paths (upsert_listing, apply_update, import_records) use parse_amount and minor_unit_factor consistently."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active in store.py returns active listings of a category and currency, ordered by price_minor then id, with optional query filtering using instr(search_text, term) > 0 for each normalized term. test_query.py covers ordering, status/category/currency filters, limit, and case-insensitive query terms including non-ASCII (umlauts). The envelope-scale test with 50,000 listings passes under 250ms."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "The store holds public listing data (titles, prices, seller display names, URLs). ACC-1 accepts that the database file is not encrypted at rest, relying on workstation full-disk encryption during controlled validation. No credentials, tokens, or sensitive personal data are stored. The operating envelope states one ingestion process on the operator's workstation, so the attack surface is limited."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "CRITICAL DEFECT: upsert_listing uses INSERT OR REPLACE on the (backend, external_id) UNIQUE constraint (store.py lines 122-141). SQLite's INSERT OR REPLACE deletes the existing row and inserts a new one. The price_history table has FOREIGN KEY ... ON DELETE CASCADE referencing listings(id) (schema.py lines 39-45), and PRAGMA foreign_keys = ON is set (store.py line 41). This causes all price_history rows to be silently deleted on every rescrape. Empirically verified: after initial insert, 1 price_history row; after price change via upsert_listing, still 1 row (the old one is gone); after rescrape with same price, 0 rows. This violates REQ-2 and realizes RISK-1. The existing tests do not catch this because they do not verify price_history is preserved across rescrapes."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid input is rejected with ValueError naming the field and reason. Transactions ensure atomicity: a batch with one invalid record stores nothing (bulk.py wraps import_records in store.transaction(), which rolls back on exception). upsert_listing and apply_update validate backend, currency, status, price, and timestamp before writing. apply_update raises LookupError for unknown listings. test_store.py, test_bulk.py, and test_updates.py verify these behaviors."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "The store uses WAL journal mode for concurrent reads during writes (store.py line 42). Transactions are explicit with BEGIN/COMMIT/ROLLBACK (store.py lines 69-84). Foreign keys are enforced. The operating envelope states one writer process, so there is no contention. Recovery after crash relies on SQLite's WAL, which is standard and reliable."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "test_cheapest_active_at_envelope_scale creates 50,000 listings all in the same category and currency (worst case) and measures cheapest_active with limit=20, with and without query terms. The test passes with fastest < 0.250s over 5 runs. The query uses indexes on (category, status) and (listing_id, observed_at). The instr() function for query matching is not indexed but is acceptable at this scale."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "No material inefficiencies observed. The schema uses appropriate indexes. Queries are straightforward. The price parsing uses Decimal for exact arithmetic, which is necessary to avoid float rounding errors. The normalize_title function uses NFKC normalization and casefold, which is standard. No unnecessary allocations or redundant computation."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "The operating envelope limits the store to 50,000 listings and 500,000 price history rows. The schema and queries are designed for this scale. The envelope-scale test demonstrates that cheapest_active performs within the 250ms budget at this size. SQLite can handle this volume on a single workstation without issue."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "The package uses only Python standard library modules (verified by inspecting all imports in listings/). The schema is created and upgraded only by numbered migrations in schema.py (migrations 1-4). No other code issues DDL. The migrations are append-only and each runs in its own transaction with the version bump. open_store calls migrate on connection. test_schema.py verifies that older databases are upgraded in place without data loss."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "The code is well-organized into modules by responsibility: prices.py for parsing, normalize.py for validation and normalization, store.py for the store and queries, bulk.py for imports, updates.py for watcher updates, dedup.py for deduplication, schema.py for migrations. Functions have clear docstrings. The test suite is comprehensive and well-structured. The code is easy to understand and modify."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "No significant technical debt observed. The code is clean and follows Python best practices. The schema migrations are well-structured. The only issue is the critical data-integrity defect in upsert_listing, which is a bug, not debt."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "The implementation is appropriately simple. No unnecessary abstraction or premature optimization. The price parsing handles the required formats without over-engineering. The store API is straightforward. The query logic is clear. The code does what it needs to do and nothing more."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "The test suite runs offline, writes only to temporary directories, and passes (python3 -m unittest discover -s tests -q exits 0). The tests are well-organized and cover the main functionality. However, the tests do not catch the critical data-integrity defect in upsert_listing because they do not verify that price_history is preserved across rescrapes."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() returns the number of listings per backend and status and the number of price history rows (store.py lines 227-239). import_records and import_jsonl return counts of inserted, updated, and price_changes (bulk.py lines 50, 109, 112, 120). Rejected records raise ValueError with position and reason (bulk.py line 125). The operator can tell what the store holds and what an import did."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "The schema migrations preserve data when upgrading from earlier versions (test_schema.py verifies this). The API is stable. The price parsing handles all the formats in the operating envelope. No breaking changes observed."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "The store can be deployed by calling open_store on a path. The schema is created automatically. Migrations run on open. The WAL journal mode allows concurrent reads. The operating envelope states one writer process, so there is no contention. Recovery after crash relies on SQLite's WAL. The operator can monitor the store via stats() and can import dumps via import_jsonl."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "assessed",
+        "summary": "The store uses SQLite, which is lightweight and requires no separate server process. The resource consumption is minimal: one database file, one writer process, multiple reader processes. The operating envelope limits the store to 50,000 listings, which is small. The cost is proportionate to the project's objectives."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "satisfied",
+        "evidence": "Verified the four REQ-1 examples by calling parse_amount and minor_unit_factor: '19,99 €' EUR → 1999, '19.99' EUR → 1999, '£17.99' GBP → 1799, '¥1,500' JPY → 1500. All three ingestion paths (upsert_listing, apply_update, import_records) use parse_amount and minor_unit_factor consistently. The price parsing logic in prices.py handles all formats in the operating envelope: decimal points and commas, thousands grouping, currency symbols and codes, and JPY with no minor units."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "upsert_listing uses INSERT OR REPLACE on the (backend, external_id) UNIQUE constraint (store.py lines 122-141). SQLite's INSERT OR REPLACE deletes the existing row and inserts a new one. The price_history table has FOREIGN KEY ... ON DELETE CASCADE referencing listings(id) (schema.py lines 39-45), and PRAGMA foreign_keys = ON is set (store.py line 41). This causes all price_history rows to be silently deleted on every rescrape. Empirically verified: after initial insert with price 100 EUR, 1 price_history row; after price change to 90 EUR via upsert_listing, still 1 row (the old one is gone, only the new one remains); after rescrape with same price 90 EUR, 0 rows (all history lost). REQ-2 states: 'an entry of its price history is never lost or altered, except by an explicit delete.' This is violated."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "cheapest_active in store.py returns active listings of a category and currency, ordered by price_minor then id, with optional query filtering using instr(search_text, term) > 0 for each normalized term. test_query.py covers ordering by price (test_cheapest_first_with_ties_in_insertion_order), status/category/currency filters (test_only_active_listings_of_the_category_and_currency), limit (test_limit), and query terms with non-ASCII letters in either case (test_query_terms_ignore_case_including_umlauts). All tests pass."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "Verified all imports in listings/ modules: only Python standard library modules are imported (sqlite3, os, re, math, decimal, json, unicodedata, datetime, collections.abc, contextlib, difflib). No external dependencies. The schema is created and upgraded only by numbered migrations in schema.py (migrations 1-4). No other code issues DDL. test_schema.py verifies that older databases are upgraded in place without data loss."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "Ran python3 -m unittest discover -s tests -q: 40 tests passed in 1.107s, exit status 0. The tests write only to temporary directories (tests/support.py uses tempfile.TemporaryDirectory). The working tree is clean (git status shows nothing to commit)."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "stats() in store.py returns {'listings': total, 'by_backend': {backend: {status: count}}, 'price_history_rows': count}. import_records and import_jsonl in bulk.py return {'inserted': count, 'updated': count, 'price_changes': count}. Rejected records raise ValueError with position and reason (bulk.py line 125: f'record {position}: {error}'). import_jsonl raises ValueError with line number for malformed lines (bulk.py lines 148, 152)."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "Invalid input is rejected with ValueError naming the field and reason. A batch with one invalid record stores nothing: import_records wraps the loop in store.transaction(), which rolls back on exception (store.py lines 69-84). test_bulk.py test_one_invalid_record_rejects_the_batch verifies that various invalid records raise ValueError and leave the store empty. upsert_listing validates backend, currency, status, price, and timestamp before writing (test_store.py test_invalid_listing_is_refused). apply_update raises LookupError for unknown listings and ValueError for invalid values (test_updates.py test_refused_update_changes_nothing)."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_cheapest_active_at_envelope_scale in test_query.py creates 50,000 listings all in the same category and currency (worst case) and measures cheapest_active with limit=20, with and without query terms (None, 'modell 12', 'größe s'). The test runs 5 iterations and takes the fastest, asserting fastest < 0.250s. The test passes. The query uses indexes on (category, status) and (listing_id, observed_at)."
+      }
+    ],
+    "findings": [
+      {
+        "key": "price-history-lost-on-rescrape",
+        "tier": "T0",
+        "domain": "data-integrity",
+        "title": "upsert_listing silently deletes all price history on every rescrape due to INSERT OR REPLACE with ON DELETE CASCADE",
+        "components": ["listings/store.py:122-141", "listings/schema.py:39-45"],
+        "description": "upsert_listing uses INSERT OR REPLACE INTO listings on the (backend, external_id) UNIQUE constraint. SQLite's INSERT OR REPLACE deletes the existing row and inserts a new one when there is a conflict. The price_history table has FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE, and PRAGMA foreign_keys = ON is set in open_store. This causes all price_history rows for the listing to be silently deleted on every rescrape, whether or not the price changed. The new listing row gets a new id (or the same id if SQLite reuses it), but the old price_history rows are gone. This violates REQ-2, which states that price history entries are never lost except by explicit delete.",
+        "evidence": "Empirically verified with a test script: (1) Insert listing with price 100 EUR → 1 price_history row. (2) Upsert same listing with price 90 EUR → still 1 price_history row (the old one is gone, only the new one remains). (3) Upsert same listing with same price 90 EUR → 0 price_history rows (all history lost). The mechanism: INSERT OR REPLACE deletes the old listing row, CASCADE DELETE removes all price_history rows, then a new listing row is inserted. The existing tests do not catch this because test_rescrape_refreshes_the_listing and test_rescrape_with_a_new_price_sets_the_current_price do not verify price_history is preserved.",
+        "impact": "Every rescrape via upsert_listing (the primary ingestion path for live scrapes) loses all price history for that listing. In the operating envelope, with 17 backends scraping continuously for 14 days, listings will be rescraped many times. The price history, which is essential for tracking price changes over time, will be silently lost. This makes the store unreliable for its intended purpose: showing buyers the price history of listings. The data loss is irreversible and violates the core data-integrity requirement.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "This is a critical data-integrity defect that violates a mandatory requirement and realizes an unacceptable risk. The price history is lost during normal operation (every rescrape), not in edge cases. The loss is silent and irreversible. This must be resolved before the controlled-validation stage, because the validation involves 20 buyers who will rely on the price history to make decisions. If the history is lost, the validation results are invalid.",
+        "verification": "To verify a fix: (1) Insert a listing with price 100 EUR. (2) Upsert the same listing with price 90 EUR. (3) Call price_history and verify it returns 2 entries: the first with price_minor 10000, the second with price_minor 9000. (4) Upsert the same listing with the same price 90 EUR (title change only). (5) Call price_history and verify it still returns 2 entries (no new entry, but the old ones are preserved). The fix should use INSERT ... ON CONFLICT DO UPDATE instead of INSERT OR REPLACE, or disable CASCADE DELETE and manage price_history explicitly, or use a different approach that preserves the listing row id across updates."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "The report opens one blocking T0 finding: price-history-lost-on-rescrape. This finding cites REQ-2 (data-integrity) and RISK-1 (price history lost during normal operation). The finding demonstrates that upsert_listing, the primary ingestion path, silently deletes all price history on every rescrape due to INSERT OR REPLACE with ON DELETE CASCADE. This violates REQ-2, which states that price history entries are never lost except by explicit delete. The violation is demonstrated empirically and is not an edge case: it occurs on every rescrape, which is the normal operation of the store. The controlled-validation stage involves 20 buyers who will rely on the price history, so this must be resolved before the gate opens."
+  }
+}

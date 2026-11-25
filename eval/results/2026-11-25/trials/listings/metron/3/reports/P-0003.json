@@ -1,0 +1,30 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0003",
+  "packet_digest": "sha256:7d1389f5be908557fdfd5273fd702c0a12a9363a48baa0cde449b4de3ac7edbf",
+  "role": "verifier",
+  "author": {
+    "id": "verifier-1",
+    "kind": "agent",
+    "model": "qwen3.7-plus",
+    "harness": "omp 19.1.1"
+  },
+  "body": {
+    "verifications": [
+      {
+        "finding": "F-0001",
+        "result": "confirmed",
+        "evidence": "to_minor() in listings/prices.py parses text directly to integer minor units via string concatenation (whole + fraction padded to currency exponent), bypassing float entirely. Verified the specific failing cases from the finding: to_minor('19.99','EUR')==1999, to_minor('0.29','EUR')==29, to_minor('0.57','EUR')==57, to_minor('17.99','GBP')==1799. Exhaustive test of all 100,000 EUR prices from 0.00 to 999.99 all produce correct minor-unit values. Additional text formats verified: '1.299,00' EUR→129900, 'CHF 1\\'299.90'→129990, '49,99 zł' PLN→4999, '¥1,500' JPY→1500. All three ingestion paths (store.py:112 upsert_listing, updates.py:59 apply_update, bulk.py:75 import_records) now call to_minor() instead of int(parse_amount(...)*minor_unit_factor(...)). The full test suite (42 tests) passes.",
+        "scope": "proportionate",
+        "scope_evidence": "The commit adds to_minor() to listings/prices.py (the fix mechanism), updates the three ingestion call sites in store.py, updates.py, bulk.py (where the float truncation occurred), and adds test_to_minor_exact_arithmetic in tests/test_prices.py covering the failing cases and exhaustive EUR range. parse_amount() is retained for backward compatibility but no longer used by ingestion paths — this is necessary because removing it would be a broader API change the finding does not require. All changes serve the fix: eliminating float arithmetic in the price-to-minor-unit conversion."
+      },
+      {
+        "finding": "F-0002",
+        "result": "confirmed",
+        "evidence": "upsert_listing in listings/store.py now uses INSERT ... ON CONFLICT (backend, external_id) DO UPDATE instead of INSERT OR REPLACE. The UPDATE clause explicitly preserves first_seen_at via 'first_seen_at = listings.first_seen_at'. Verified by running 3 consecutive upserts on the same listing with changing prices (250.00, 225.00, 200.00 EUR): price_history contains all 3 entries with correct prices [25000, 22500, 20000] and correct observed_at timestamps. The listing's first_seen_at is preserved from the first upsert, last_seen_at updates to the most recent, and price_minor reflects the current price. The ON DELETE CASCADE on price_history.listing_id is no longer triggered because the listing row is updated in place, not deleted. test_rescrape_preserves_price_history in tests/test_store.py covers this scenario. All 42 tests pass.",
+        "scope": "proportionate",
+        "scope_evidence": "The commit changes only the SQL statement in upsert_listing (listings/store.py) from INSERT OR REPLACE to INSERT ... ON CONFLICT DO UPDATE, adds explicit preservation of first_seen_at in the UPDATE clause, and adjusts the logic to retrieve listing_id from the previous row lookup rather than cursor.lastrowid (since ON CONFLICT doesn't change the row id). The test test_rescrape_preserves_price_history verifies the fix. All changes are necessary and directly address the finding: preventing the CASCADE delete of price_history on rescrape."
+      }
+    ]
+  }
+}

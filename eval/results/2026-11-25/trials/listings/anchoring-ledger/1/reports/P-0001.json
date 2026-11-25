@@ -1,0 +1,186 @@
+{
+  "schema": "metron.report/v1",
+  "packet": "P-0001",
+  "packet_digest": "sha256:5d3995e2cf25f73dfae5f8aa14970c3711ba200e1aa1896668ae88827d76b3f2",
+  "role": "reviewer",
+  "author": {
+    "id": "scripted-reviewer",
+    "kind": "agent"
+  },
+  "body": {
+    "coverage": [
+      {
+        "domain": "functional-correctness",
+        "status": "assessed",
+        "summary": "Price parsing and the three ingestion paths, against REQ-1 and REQ-3: prices come out one minor unit short (finding on P2)."
+      },
+      {
+        "domain": "objective-alignment",
+        "status": "assessed",
+        "summary": "cheapest_active, the store and the dedup helper against the objectives and REQ-3."
+      },
+      {
+        "domain": "security-privacy",
+        "status": "assessed",
+        "summary": "The database file is not encrypted; ACC-1 accepts this for controlled validation and the envelope states full-disk encryption."
+      },
+      {
+        "domain": "data-integrity",
+        "status": "assessed",
+        "summary": "Listings and price history against REQ-2 and RISK-1: a re-scrape deletes the price history (finding on P1)."
+      },
+      {
+        "domain": "stability",
+        "status": "assessed",
+        "summary": "Invalid input is rejected without changes, against REQ-7; batches are one transaction."
+      },
+      {
+        "domain": "reliability",
+        "status": "assessed",
+        "summary": "One writer process, per the envelope; deferred transactions fail only with several writers, which the envelope excludes."
+      },
+      {
+        "domain": "performance",
+        "status": "assessed",
+        "summary": "cheapest_active at 50,000 listings, against REQ-8: about 15 ms against 250 ms."
+      },
+      {
+        "domain": "optimization",
+        "status": "assessed",
+        "summary": "The (category, status) index sorts with a temporary B-tree but meets REQ-8 with a wide margin; nothing to block."
+      },
+      {
+        "domain": "scalability",
+        "status": "assessed",
+        "summary": "The envelope's maximum of 50,000 listings is what the performance test builds."
+      },
+      {
+        "domain": "architecture",
+        "status": "assessed",
+        "summary": "Standard library only and migrations in schema.py, against REQ-4."
+      },
+      {
+        "domain": "maintainability",
+        "status": "assessed",
+        "summary": "import_records is long but linear and tested; a preference, not a defect."
+      },
+      {
+        "domain": "technical-debt",
+        "status": "assessed",
+        "summary": "The conversion to minor units is repeated at three call sites; covered by the finding on P2."
+      },
+      {
+        "domain": "simplicity",
+        "status": "assessed",
+        "summary": "Modules are small and direct."
+      },
+      {
+        "domain": "testability",
+        "status": "assessed",
+        "summary": "The suite runs offline and passes, against REQ-5; it misses the re-scrape history and the truncated prices."
+      },
+      {
+        "domain": "observability",
+        "status": "assessed",
+        "summary": "stats() and the import counts and errors, against REQ-6."
+      },
+      {
+        "domain": "compatibility",
+        "status": "assessed",
+        "summary": "CPython 3.10 or later with its SQLite, per the envelope."
+      },
+      {
+        "domain": "operational-readiness",
+        "status": "assessed",
+        "summary": "One ingestion process on the operator's workstation, per the launch the contract authorizes."
+      },
+      {
+        "domain": "cost-efficiency",
+        "status": "not-applicable",
+        "summary": "No cost requirement applies at this stage."
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": "REQ-1",
+        "status": "violated",
+        "evidence": "'19,99 €' is stored as 1998 through upsert_listing, and the same through apply_update and import_records (finding on P2)."
+      },
+      {
+        "requirement": "REQ-2",
+        "status": "violated",
+        "evidence": "A re-scrape through upsert_listing deletes the listing's price history (finding on P1)."
+      },
+      {
+        "requirement": "REQ-3",
+        "status": "satisfied",
+        "evidence": "tests/test_query.py covers ordering, the filters, the limit and non-ASCII query terms, and passes."
+      },
+      {
+        "requirement": "REQ-4",
+        "status": "satisfied",
+        "evidence": "listings/ imports only the standard library; DDL is only in the numbered migrations; tests/test_schema.py upgrades older databases."
+      },
+      {
+        "requirement": "REQ-5",
+        "status": "satisfied",
+        "evidence": "metron check recorded the suite passing on this candidate, leaving the tree clean."
+      },
+      {
+        "requirement": "REQ-6",
+        "status": "satisfied",
+        "evidence": "stats() and the import results report the counts; a rejected record or line names its position."
+      },
+      {
+        "requirement": "REQ-7",
+        "status": "satisfied",
+        "evidence": "Invalid records and calls raise without changing the database, as tests/test_bulk.py, test_store.py and test_updates.py show."
+      },
+      {
+        "requirement": "REQ-8",
+        "status": "satisfied",
+        "evidence": "test_cheapest_active_at_envelope_scale passes; about 15 ms with and without query terms, against 250 ms."
+      }
+    ],
+    "findings": [
+      {
+        "key": "upsert-replace-deletes-price-history",
+        "tier": "T0",
+        "domain": "data-integrity",
+        "title": "Every re-scrape deletes the listing's price history",
+        "components": [
+          "listings/store.py",
+          "listings/schema.py"
+        ],
+        "description": "ListingStore.upsert_listing writes a listing that already exists with INSERT OR REPLACE INTO listings. For an existing row, REPLACE resolves the conflict by deleting the existing row and inserting a new one. open_store sets PRAGMA foreign_keys = ON and migration 2 declares price_history.listing_id REFERENCES listings (id) ON DELETE CASCADE, so SQLite runs the cascade for that delete and removes every price_history row of the listing. The code then appends a history row only if the price changed: after a re-scrape with a changed price the history is just the new price, and after a re-scrape with an unchanged price, the common case, it is empty. No error, no warning. The method carries the previous id and first_seen_at into the REPLACE, so the id stays stable, which is what the existing tests check.",
+        "evidence": "Reproduction through the public API, on a new store: upsert_listing('kleinanzeigen', '1', price='100 €', currency='EUR', ...) at t0, then the same listing with price='90 €' at t0 + 1 h: price_history returns only the 9000 entry, the 10000 entry is gone. A third upsert with price='90 €' at t0 + 2 h: price_history returns [].",
+        "impact": "Every re-scrape of a known listing, the most frequent operation of the system, silently and irreversibly destroys its price history, which the search agents use to spot price drops.",
+        "requirement": "REQ-2",
+        "risk": "RISK-1",
+        "blocking_rationale": "REQ-2 requires that no price history entry is lost except by an explicit delete. This loses it on the documented ingestion path, inside the operating envelope (one writer, the README's first example), and the loss cannot be undone once the launch has run.",
+        "verification": "After a first upsert, re-scrapes with changed and unchanged prices and a watcher update, price_history returns the first price followed by every later change, get_listing keeps the original id and first_seen_at, and delete_listing still removes the listing together with its history."
+      },
+      {
+        "key": "float-truncation-minor-units",
+        "tier": "T1",
+        "domain": "functional-correctness",
+        "title": "Prices are stored one minor unit short on all three ingestion paths",
+        "components": [
+          "listings/prices.py",
+          "listings/store.py",
+          "listings/updates.py",
+          "listings/bulk.py"
+        ],
+        "description": "parse_amount returns the amount as a binary float (float(price) for numbers, float of the whole and fraction for text). Each ingestion path converts it with its own copy of int(amount * factor): upsert_listing in store.py, apply_update in updates.py and import_records in bulk.py. float('19.99') is 19.98999999999999843..., times 100 is 1998.9999999999998, and int() truncates it to 1998. About 4.6% of the amounts from 0.00 to 999.99 come out one minor unit short, always down, common retail prices among them: 19.99, 69.99, 17.99, 4.35, 8.20.",
+        "evidence": "upsert_listing('kleinanzeigen', '1', title='x', price='19,99 €', currency='EUR', ...) followed by get_listing(...)['price_minor'] gives 1998, not 1999. The same amounts come out short through apply_update and import_records.",
+        "impact": "Buyers are sent prices one minor unit below what the marketplace shows (19.98 € for an item priced 19.99 €), and a real change of one minor unit can vanish from the history.",
+        "requirement": "REQ-1",
+        "risk": "RISK-2",
+        "blocking_rationale": "REQ-1 requires the exact number of minor units on all three paths, with '19,99 €' as its criterion's own example. The formats and amounts that fail are inside the operating envelope, and the buyers enrolled in the validation would see wrong prices.",
+        "verification": "'19,99 €', 19.99, '£17.99', '4,35 €' and '8.20' stored through upsert_listing, apply_update and import_records give price_minor 1999, 1999, 1799, 435 and 820, and amounts that land just above the integer in floating point ('1,10 €', '2.20', 0.55) are still exact."
+      }
+    ],
+    "verdict": "RED",
+    "justification": "Two blocking findings: re-scrapes delete the price history, violating REQ-2 and realizing RISK-1, and prices are stored one minor unit short, violating REQ-1 and realizing RISK-2."
+  }
+}

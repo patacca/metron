@@ -1,0 +1,23 @@
+{
+  "seed": "c5c2a6ba1c7b20f0ffdcc620ae8eaaf4bb3f8e2e",
+  "head": "81442f76ea0447198c7f0872d00274849e9a5926",
+  "files": [
+    {
+      "path": "README.md",
+      "added": 1,
+      "deleted": 1
+    },
+    {
+      "path": "listings/prices.py",
+      "added": 9,
+      "deleted": 3
+    },
+    {
+      "path": "listings/store.py",
+      "added": 10,
+      "deleted": 12
+    }
+  ],
+  "added": 20,
+  "deleted": 16
+}
