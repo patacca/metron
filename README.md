@@ -71,6 +71,11 @@ G = C ∧ B ∧ E ∧ I ∧ V
 
 ## Quickstart
 
+The [quick-start guide](docs/quickstart.md) walks a small repository through
+a complete loop, with the real output of every command. The
+[cheat sheet](docs/cheatsheet.md) has the commands, the steps and the report
+fields on one page. The short version follows.
+
 Build the binary (Go and [`just`](https://just.systems) required):
 
 ```
@@ -138,6 +143,9 @@ contract names. It does not claim the code is free of defects or optimal.
 
 ## Documentation
 
+- [Quick start](docs/quickstart.md): one complete loop, step by step.
+- [Cheat sheet](docs/cheatsheet.md): commands, steps, report fields and exit
+  codes on one page.
 - [Architecture](docs/architecture.md): the normative design.
 - [Trust model](docs/trust-model.md): what Metron does and does not guarantee.
 - [Decisions](docs/decisions/): why it is built the way it is.
