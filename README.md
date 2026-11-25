@@ -39,13 +39,20 @@ that must hold. Everything else is fixed by the protocol.
 
 Metron then runs a loop in which it always names exactly one next step:
 
+![The Metron review loop. A pinned contract and its mandatory checks lead to an independent review. RED goes to batch correction and independent verification, then back to the checks as a new candidate. INDETERMINATE goes to governance. GREEN goes to the deterministic gate and the next authorized stage. Non-blocking findings go to the improvement backlog.](docs/assets/review-loop.png)
+
+The contract's automated checks run first, so a review never starts on a
+candidate that fails them. Then:
+
 1. A **reviewer** examines the candidate commit, read-only, across 18 review
    domains, and reports findings in five tiers. Only `T0` and `T1` block, and
    only when tied to a requirement or an unacceptable risk in the contract.
 2. An **implementer** fixes the blocking findings as a batch, or disputes one.
 3. A **verifier** confirms or rejects each fix.
 4. The reviewer reviews the new candidate. When nothing blocks and every
-   requirement is satisfied with evidence, the verdict is GREEN.
+   requirement is satisfied with evidence, the verdict is GREEN. When nothing
+   blocks but a requirement could not be verified, it is INDETERMINATE, and
+   governance supplies the missing evidence or amends the contract.
 5. If the loop stops converging (three rounds without GREEN, the same
    component fixed again and again, a disputed finding), an **auditor** is
    brought in, and a finding whose fix keeps failing needs a root-cause
@@ -67,7 +74,21 @@ G = C ∧ B ∧ E ∧ I ∧ V
 | I | the candidate, the contract and the ledger are the ones that were reviewed |
 | V | an independent reviewer issued GREEN for this candidate |
 
-![Execution modes](docs/assets/modes.png)
+### Who runs the roles
+
+Metron names each step and checks its result, but it never carries a step
+out. Something else has to hand the packet to a person or an agent and bring
+the report back. There are three ways to arrange that, and they differ only
+in how much of that hand-off is automated: all three go through the same
+commands, so the rules and the gate are identical in each.
+
+![The three execution modes. A, standalone: you pass packets and reports yourself. B, integrated: an agent harness or CI job calls Metron and starts an agent for each role. C, fully automated: a workflow engine runs the whole loop unattended.](docs/assets/modes.png)
+
+Mode A is what works today. Modes B and C rely on tools that Metron does not
+include and never requires: an agent client such as acpx, which starts an
+agent and passes it a prompt, and a workflow engine such as Dagu. Both
+integrations are planned as optional add-ons; the
+[decision records](docs/decisions/) say why and how far they have got.
 
 ## Quickstart
 
