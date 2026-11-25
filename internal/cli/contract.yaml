@@ -1,0 +1,134 @@
+# Metron acceptance contract.
+#
+# This file is the only project-specific input to a review. Governance (the
+# repository owner) writes it; implementers, reviewers, verifiers and auditors
+# work within it and never change it. A review measures the candidate against
+# what is written here: anything that is not written here cannot block the
+# gate.
+#
+# Every empty value below is a decision governance has to make. Run
+# `metron contract` to list what is still missing or wrong, and
+# `metron contract pin -m "<reason>"` to authorize the result. Comments and
+# formatting can change freely afterwards; a change of meaning must be pinned
+# again before work continues, and pinning voids the open packet.
+#
+# Strict YAML: a single document, no anchors, aliases, merge keys or tags, and
+# only strings, integers and booleans. Quote empty strings ("") and any value
+# that YAML would otherwise read as a number, a date or null.
+
+# The format of this file. Leave it as it is.
+schema: metron.contract/v1
+
+project:
+  # A short name for what is under review.
+  name: ""
+  # What the project is for, one outcome per entry. Reviewers judge the
+  # objective-alignment domain against these. A good objective names an
+  # outcome for someone, such as "Import bank statements in CSV and OFX into
+  # the ledger without manual editing".
+  objectives:
+    - ""
+  # Optional: what the project deliberately does not do, so that nobody
+  # holds it to that standard. Example: "Multi-currency accounts".
+  non_objectives: []
+
+# The lifecycle stage a GREEN gate authorizes entry to: prototype,
+# controlled-validation, pilot, production or continuous-improvement. Each
+# stage adds review domains that the requirements below must cover, and
+# coverage is cumulative (`metron protocol` lists them). Pinning a different
+# stage later restarts the count of consecutive failed rounds.
+stage: prototype
+
+# The concrete activity a GREEN gate permits, precise enough that anyone can
+# tell whether something falls inside it. Example: "A demonstration to the
+# finance team on synthetic statements".
+authorizes: ""
+
+# What is under review, one statement per entry: components, interfaces,
+# behaviours. Example: "The CSV and OFX importers under importers/".
+scope:
+  - ""
+
+# The conditions and load the candidate is expected to handle, one statement
+# per entry. A finding about behaviour outside the envelope cannot block.
+# Example: "Statements of up to 10,000 lines, imported by one user at a time".
+operating_envelope:
+  - ""
+
+# What must hold before the gate opens. A requirement is a property of the
+# system, not a task: "Importing the same statement twice creates no
+# duplicate entries", not "Add deduplication". The prototype stage must cover
+# functional-correctness, objective-alignment and architecture, so there is
+# one entry for each below; add more as needed.
+#
+#   id         REQ- followed by digits, unique in this file.
+#   domain     One of the 18 review domains that `metron protocol` lists.
+#   statement  What must hold.
+#   criterion  How anyone decides that it holds: a check someone else could
+#              perform and agree with, such as "The tests under tests/import
+#              pass and include a statement imported twice". Avoid criteria
+#              nobody can check, such as "it works well".
+#   command    Optional. A shell command that `metron check` runs from the
+#              repository root, such as "go test ./...". It passes when it
+#              exits with status 0. The gate needs a passing result on the
+#              exact candidate and for the exact command text, and the
+#              command must leave the working tree clean.
+#   from       Optional. The first stage at which the requirement applies,
+#              prototype when absent. A requirement from a later stage is
+#              written down now and starts blocking once the contract
+#              targets that stage.
+requirements:
+  - id: REQ-1
+    domain: functional-correctness
+    statement: ""
+    criterion: ""
+  - id: REQ-2
+    domain: objective-alignment
+    statement: ""
+    criterion: ""
+  - id: REQ-3
+    domain: architecture
+    statement: ""
+    criterion: ""
+
+risks:
+  # Outcomes that must not happen at this stage, RISK- followed by digits. A
+  # blocking finding must cite an applicable requirement or one of these;
+  # anything else is reported to governance as a contract gap. Example:
+  # "A statement is imported in part without any error being shown".
+  unacceptable:
+    - id: RISK-1
+      statement: ""
+  # Optional: residual risks governance has accepted, ACC- followed by
+  # digits. A finding about an accepted risk never blocks. Example:
+  #   - id: ACC-1
+  #     statement: "An interrupted import has to be restarted from scratch"
+  accepted: []
+
+# Optional: review domains waived for this stage, each with a rationale. A
+# waived domain needs no requirement, and no applicable requirement may be in
+# it. Example:
+#   - domain: architecture
+#     rationale: "A single 200-line script; there is no structure to assess yet"
+not_applicable: []
+
+# Optional: provisional parameters that cannot be settled without evidence
+# the project does not have yet, CAL- followed by digits. A question that
+# only such evidence can settle is a calibration finding, which never blocks.
+# Example:
+#   - id: CAL-1
+#     parameter: "Imports are committed in batches of 500 lines"
+#     evidence_needed: "Import timings on a month of real statements"
+#     reassess_when: "Before the pilot stage"
+calibrations: []
+
+# Optional: the thresholds of the convergence safeguards, the only tunable
+# values. Without this member the defaults apply, as if it read:
+#   convergence:
+#     root_cause_after: 2         # rejected fixes and reopenings of a finding
+#                                 # before its next fix needs a root cause
+#     convergence_audit_after: 3  # consecutive rounds without GREEN before a
+#                                 # convergence analysis
+#     process_audit_after: 5      # consecutive rounds without GREEN before an
+#                                 # independent process audit, and at each
+#                                 # multiple

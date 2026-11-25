@@ -1,0 +1,5 @@
+Next step:    fix (owner: implementer)
+Reason:       blocking findings F-0001 are open: fix or dispute each
+Findings:     F-0001
+Run:          metron packet
+Then:         give the packet to the implementer (--format prompt renders it for reading) and submit the report with metron ingest <report-file>

@@ -1,0 +1,9 @@
+Gate: OPEN for stage prototype
+Authorizes: An internal demonstration
+Candidate: commit b0f8a9a189c3e9166c40691fa3a1231b9a0068e2, sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104
+
+[ok]   C  Every applicable requirement is satisfied in the reviewer report of the latest round
+[ok]   B  No unresolved T0 or T1 finding and no open escalation
+[ok]   E  Every applicable requirement with a command has a passing result for this candidate and this command text
+[ok]   I  The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version; every stored packet and report file matches the ledger
+[ok]   V  The latest round's verdict is GREEN, for this candidate, under this contract, by an author who never acted as implementer

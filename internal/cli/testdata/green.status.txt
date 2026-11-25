@@ -1,0 +1,15 @@
+Ledger:       .metron/state, 19 events, verified
+Contract:     valid and pinned, sha256:433f1f7a6e70f2d459369446f7ee08b9fb1533f8c27604edbd8d413eaed4d6ed
+Stage:        prototype
+Candidate:    commit b0f8a9a189c3, sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104, tree clean
+Rounds:       1 RED by rev-1, 2 GREEN by rev-1; failed streak 0
+Open packet:  none
+Findings:     0 open, 0 claimed, 1 resolved, 0 withdrawn; blocking: none; backlog: none
+Escalations:  none
+Checks:       REQ-1 passed (exit 0)
+Stored files: ok
+Gate:         OPEN
+
+Next step:    none, the gate is open
+Reason:       the gate is open
+Run:          metron gate

@@ -1,0 +1,5 @@
+{
+  "schema": "metron.findings/v1",
+  "filter": "all",
+  "findings": []
+}

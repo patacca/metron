@@ -1,0 +1,10 @@
+{
+  "schema": "metron.next/v1",
+  "step": "run-checks",
+  "owner": "implementer",
+  "reason": "REQ-1 has no recorded result on this candidate: make the checks pass on a committed candidate and record them",
+  "requirements": [
+    "REQ-1"
+  ],
+  "command": "metron check"
+}

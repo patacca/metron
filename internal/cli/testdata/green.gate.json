@@ -1,0 +1,37 @@
+{
+  "schema": "metron.gate/v1",
+  "open": true,
+  "stage": "prototype",
+  "authorizes": "An internal demonstration",
+  "candidate": {
+    "commit": "b0f8a9a189c3e9166c40691fa3a1231b9a0068e2",
+    "digest": "sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104"
+  },
+  "conditions": [
+    {
+      "name": "C",
+      "description": "Every applicable requirement is satisfied in the reviewer report of the latest round",
+      "satisfied": true
+    },
+    {
+      "name": "B",
+      "description": "No unresolved T0 or T1 finding and no open escalation",
+      "satisfied": true
+    },
+    {
+      "name": "E",
+      "description": "Every applicable requirement with a command has a passing result for this candidate and this command text",
+      "satisfied": true
+    },
+    {
+      "name": "I",
+      "description": "The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version; every stored packet and report file matches the ledger",
+      "satisfied": true
+    },
+    {
+      "name": "V",
+      "description": "The latest round's verdict is GREEN, for this candidate, under this contract, by an author who never acted as implementer",
+      "satisfied": true
+    }
+  ]
+}

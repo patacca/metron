@@ -1,0 +1,244 @@
+package cli
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"os/exec"
+	"strings"
+
+	"github.com/patacca/metron/internal/canon"
+	"github.com/patacca/metron/internal/core"
+)
+
+var cmdCheck = &command{
+	name:     "check",
+	synopsis: "check [--json]",
+	summary:  "Run the requirements' check commands and record the results",
+	about: `Check runs the command of every applicable requirement that has one, through
+the platform shell (sh -c, or cmd /c on Windows) from the repository root, and
+captures its combined output. A check passes when it exits with status 0.
+
+The commands run without the lock. Then check takes the lock and records the
+results against the candidate, provided the candidate, the working tree and
+the contract are the ones it started with. A check that leaves the working
+tree dirty is reported as such and nothing is recorded: checks must not
+change the candidate they check.
+
+It prints one line per requirement and the end of the output of each failing
+check, and exits 0 only if every check passed and the results were recorded.
+With --json it prints a metron.check/v1 document.`,
+	run: runCheck,
+}
+
+// tailLines is how much of a failing check's output is shown.
+const tailLines = 20
+
+type checkResult struct {
+	Requirement  string `json:"requirement"`
+	Command      string `json:"command"`
+	ExitCode     int    `json:"exit_code"`
+	Passed       bool   `json:"passed"`
+	OutputDigest string `json:"output_digest"`
+	// OutputTail is the end of a failing check's combined output.
+	OutputTail string `json:"output_tail,omitempty"`
+}
+
+type checkDoc struct {
+	Schema    string         `json:"schema"`
+	Candidate core.Candidate `json:"candidate"`
+	Results   []checkResult  `json:"results"`
+	// Passed is true when checks ran and every one passed.
+	Passed bool `json:"passed"`
+	// Recorded is true when the results were recorded in the ledger.
+	Recorded bool `json:"recorded"`
+	// Problem says why nothing was recorded.
+	Problem string     `json:"problem,omitempty"`
+	Next    *actionDoc `json:"next,omitempty"`
+}
+
+func runCheck(c *ctx, args []string) error {
+	fs := c.flags()
+	dir, asJSON := stateFlag(fs), jsonFlag(fs)
+	args, err := c.parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := positional(args, 0, 0); err != nil {
+		return err
+	}
+	s, err := c.open(*dir)
+	if err != nil {
+		return err
+	}
+	before, err := c.gather(s, false)
+	if err != nil {
+		return err
+	}
+	if err := before.writable(); err != nil {
+		return err
+	}
+	if err := before.candidate(); err != nil {
+		return err
+	}
+	d := checkDoc{Schema: "metron.check/v1", Candidate: before.facts.Candidate, Results: []checkResult{}}
+	// Refuse before running anything when the results could not be recorded.
+	if a := core.Next(before.state, before.facts); a.Step == core.StepRepairLedger || a.Step == core.StepPinContract {
+		d.Problem = a.Reason
+	} else if !before.facts.Clean {
+		d.Problem = fmt.Sprintf("the working tree has changes outside .metron/ (%s), so the candidate is not a commit: commit or discard them, then run the checks",
+			strings.Join(before.dirty, ", "))
+	}
+	if d.Problem != "" {
+		d.Next = before.actionDoc(before.next())
+		return c.checked(d, *asJSON, before, nil, false)
+	}
+	d.Passed = true
+	var evidence []core.Evidence
+	for _, r := range before.facts.Contract.Applicable() {
+		if r.Command == "" {
+			continue
+		}
+		code, output, err := runShell(s.repo.Root(), r.Command)
+		if err != nil {
+			return fail(exitEnv, "cannot run the check of %s: %v", r.ID, err)
+		}
+		res := checkResult{Requirement: r.ID, Command: r.Command, ExitCode: code, Passed: code == 0, OutputDigest: canon.Digest(output)}
+		if !res.Passed {
+			res.OutputTail = tail(output, tailLines)
+			d.Passed = false
+		}
+		d.Results = append(d.Results, res)
+		evidence = append(evidence, core.Evidence{Requirement: r.ID, Command: r.Command, Candidate: before.facts.Candidate.Digest,
+			ExitCode: code, Passed: res.Passed, OutputDigest: res.OutputDigest})
+	}
+	if len(evidence) == 0 {
+		d.Problem = "no applicable requirement has a check command: there is nothing to run"
+		d.Passed = false
+		d.Next = before.actionDoc(before.next())
+		return c.checked(d, *asJSON, before, nil, true)
+	}
+
+	wr, after, err := c.lock(s, false)
+	if err != nil {
+		return err
+	}
+	defer wr.Close()
+	d.Problem = changedDuringChecks(before, after)
+	var events []core.Event
+	if d.Problem == "" {
+		drafts, err := core.RecordEvidence(after.state, after.facts, evidence)
+		var r *core.Rejection
+		switch {
+		case errors.As(err, &r):
+			d.Problem = strings.TrimSpace(rejectionText(r))
+		case err != nil:
+			return err
+		default:
+			if events, err = after.commit(wr, drafts); err != nil {
+				return err
+			}
+			d.Recorded = true
+		}
+	}
+	if d.Problem != "" {
+		d.Problem += "; nothing was recorded"
+	}
+	d.Next = after.actionDoc(after.next())
+	return c.checked(d, *asJSON, after, events, d.Passed && d.Recorded)
+}
+
+// changedDuringChecks says what changed between the start of the checks and
+// the moment their results would be recorded, or returns "".
+func changedDuringChecks(before, after *world) string {
+	bp, _ := before.state.Pin()
+	ap, _ := after.state.Pin()
+	switch {
+	case after.facts.Candidate != before.facts.Candidate:
+		return fmt.Sprintf("HEAD moved from commit %s to %s while the checks ran: run them again on the new candidate",
+			short(before.facts.Candidate.Commit), short(after.facts.Candidate.Commit))
+	case !after.facts.Clean:
+		return fmt.Sprintf("the checks left the working tree dirty (%s): a check must not change the candidate, so write its output to an ignored or temporary path, restore the tree, and run the checks again",
+			strings.Join(after.dirty, ", "))
+	case after.facts.ContractDigest != before.facts.ContractDigest || ap.Digest != bp.Digest:
+		return "the contract or its pin changed while the checks ran: run them again"
+	}
+	return ""
+}
+
+// checked prints the outcome of check, which is negative unless ok.
+func (c *ctx) checked(d checkDoc, asJSON bool, w *world, events []core.Event, ok bool) error {
+	var err error
+	if asJSON {
+		err = writeJSON(c.Stdout, d)
+	} else {
+		var b strings.Builder
+		for _, r := range d.Results {
+			status := "passed"
+			if !r.Passed {
+				status = "FAILED"
+			}
+			fmt.Fprintf(&b, "%-8s %s  exit %-3d %s\n", r.Requirement, status, r.ExitCode, r.Command)
+			if r.OutputTail != "" {
+				for _, line := range strings.Split(r.OutputTail, "\n") {
+					fmt.Fprintf(&b, "         | %s\n", line)
+				}
+			}
+		}
+		switch {
+		case d.Recorded:
+			fmt.Fprintf(&b, "Recorded %s for commit %s (candidate %s).\n", plural(len(events), "result"), short(d.Candidate.Commit), d.Candidate.Digest)
+		case d.Problem != "":
+			fmt.Fprintf(&b, "%s.\n", upper(d.Problem))
+		}
+		b.WriteString("\n")
+		writeNext(&b, w, d.Next.Action)
+		_, err = io.WriteString(c.Stdout, b.String())
+	}
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return negative
+	}
+	return nil
+}
+
+// runShell runs a check command through the platform shell in dir and
+// returns its exit status and combined output. An error means the shell could
+// not be run at all.
+func runShell(dir, command string) (int, []byte, error) {
+	cmd := shell(command)
+	cmd.Dir = dir
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	err := cmd.Run()
+	var ee *exec.ExitError
+	switch {
+	case err == nil:
+		return 0, out.Bytes(), nil
+	case errors.As(err, &ee):
+		return ee.ExitCode(), out.Bytes(), nil
+	}
+	return 0, nil, err
+}
+
+// tail returns the last n lines of output, without trailing blank lines.
+func tail(output []byte, n int) string {
+	lines := strings.Split(strings.TrimRight(string(output), "\r\n\t "), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], "\r")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func upper(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}

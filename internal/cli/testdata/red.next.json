@@ -1,0 +1,10 @@
+{
+  "schema": "metron.next/v1",
+  "step": "fix",
+  "owner": "implementer",
+  "reason": "blocking findings F-0001 are open: fix or dispute each",
+  "findings": [
+    "F-0001"
+  ],
+  "command": "metron packet"
+}

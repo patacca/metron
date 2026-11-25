@@ -1,0 +1,6 @@
+{
+  "schema": "metron.next/v1",
+  "step": "none",
+  "reason": "the gate is open",
+  "command": "metron gate"
+}

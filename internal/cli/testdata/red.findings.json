@@ -1,0 +1,38 @@
+{
+  "schema": "metron.findings/v1",
+  "filter": "all",
+  "findings": [
+    {
+      "id": "F-0001",
+      "status": "open",
+      "tier": "T1",
+      "round": 1,
+      "source": "reviewer",
+      "recurrences": 0,
+      "root_cause_required": false,
+      "disputed": false,
+      "finding": {
+        "key": "typo",
+        "tier": "T1",
+        "domain": "objective-alignment",
+        "title": "The greeting is misspelled",
+        "components": [
+          "greeting.txt"
+        ],
+        "description": "greeting.txt reads helo",
+        "evidence": "cat greeting.txt prints helo",
+        "impact": "Readers are not greeted",
+        "requirement": "REQ-2",
+        "blocking_rationale": "The demonstration shows the greeting",
+        "verification": "cat greeting.txt prints hello"
+      },
+      "history": [
+        {
+          "event": "finding.opened",
+          "round": 1,
+          "packet": "P-0001"
+        }
+      ]
+    }
+  ]
+}

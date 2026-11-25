@@ -1,0 +1,5 @@
+Next step:    run-checks (owner: implementer)
+Reason:       REQ-1 has no recorded result on this candidate: make the checks pass on a committed candidate and record them
+Requirements: REQ-1
+Run:          metron check
+Then:         if a check fails, change the code, commit it and run the checks again

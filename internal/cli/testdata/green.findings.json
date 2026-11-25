@@ -1,0 +1,60 @@
+{
+  "schema": "metron.findings/v1",
+  "filter": "all",
+  "findings": [
+    {
+      "id": "F-0001",
+      "status": "resolved",
+      "tier": "T1",
+      "round": 1,
+      "source": "reviewer",
+      "recurrences": 0,
+      "root_cause_required": false,
+      "disputed": false,
+      "fix": {
+        "finding": "F-0001",
+        "commits": [
+          "b0f8a9a189c3e9166c40691fa3a1231b9a0068e2"
+        ],
+        "summary": "spell the greeting correctly",
+        "components": [
+          "greeting.txt"
+        ]
+      },
+      "finding": {
+        "key": "typo",
+        "tier": "T1",
+        "domain": "objective-alignment",
+        "title": "The greeting is misspelled",
+        "components": [
+          "greeting.txt"
+        ],
+        "description": "greeting.txt reads helo",
+        "evidence": "cat greeting.txt prints helo",
+        "impact": "Readers are not greeted",
+        "requirement": "REQ-2",
+        "blocking_rationale": "The demonstration shows the greeting",
+        "verification": "cat greeting.txt prints hello"
+      },
+      "history": [
+        {
+          "event": "finding.opened",
+          "round": 1,
+          "packet": "P-0001"
+        },
+        {
+          "event": "finding.fix-claimed",
+          "round": 1,
+          "packet": "P-0002",
+          "note": "spell the greeting correctly"
+        },
+        {
+          "event": "finding.fix-confirmed",
+          "round": 1,
+          "packet": "P-0003",
+          "note": "cat greeting.txt prints hello"
+        }
+      ]
+    }
+  ]
+}

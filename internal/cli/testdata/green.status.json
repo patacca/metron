@@ -1,0 +1,105 @@
+{
+  "schema": "metron.status/v1",
+  "state_dir": ".metron/state",
+  "ledger": {
+    "exists": true,
+    "events": 19,
+    "verified": true,
+    "protocol": "metron.protocol/v1"
+  },
+  "contract": {
+    "valid": true,
+    "digest": "sha256:433f1f7a6e70f2d459369446f7ee08b9fb1533f8c27604edbd8d413eaed4d6ed",
+    "pinned_digest": "sha256:433f1f7a6e70f2d459369446f7ee08b9fb1533f8c27604edbd8d413eaed4d6ed",
+    "pinned": true
+  },
+  "candidate": {
+    "commit": "b0f8a9a189c3e9166c40691fa3a1231b9a0068e2",
+    "digest": "sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104"
+  },
+  "clean": true,
+  "dirty": [],
+  "stage": "prototype",
+  "rounds": [
+    {
+      "number": 1,
+      "stage": "prototype",
+      "candidate": {
+        "commit": "4184c5a109d83294c4c1d72fda715bd93569c3c2",
+        "digest": "sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898"
+      },
+      "contract": "sha256:433f1f7a6e70f2d459369446f7ee08b9fb1533f8c27604edbd8d413eaed4d6ed",
+      "packet": "P-0001",
+      "verdict": "RED",
+      "reviewer": "rev-1",
+      "requirements": [
+        {
+          "requirement": "REQ-1",
+          "status": "satisfied"
+        },
+        {
+          "requirement": "REQ-2",
+          "status": "violated"
+        },
+        {
+          "requirement": "REQ-3",
+          "status": "satisfied"
+        }
+      ],
+      "voided": false
+    },
+    {
+      "number": 2,
+      "stage": "prototype",
+      "candidate": {
+        "commit": "b0f8a9a189c3e9166c40691fa3a1231b9a0068e2",
+        "digest": "sha256:e47a91ac6cb58780a35927b5343bcb1ca371a8cbfffbb27160c672bfca6b2104"
+      },
+      "contract": "sha256:433f1f7a6e70f2d459369446f7ee08b9fb1533f8c27604edbd8d413eaed4d6ed",
+      "packet": "P-0004",
+      "verdict": "GREEN",
+      "reviewer": "rev-1",
+      "requirements": [
+        {
+          "requirement": "REQ-1",
+          "status": "satisfied"
+        },
+        {
+          "requirement": "REQ-2",
+          "status": "satisfied"
+        },
+        {
+          "requirement": "REQ-3",
+          "status": "satisfied"
+        }
+      ],
+      "voided": false
+    }
+  ],
+  "failed_streak": 0,
+  "open_packet": null,
+  "findings": {
+    "open": 0,
+    "claimed": 0,
+    "resolved": 1,
+    "withdrawn": 0,
+    "blocking": [],
+    "backlog": []
+  },
+  "open_escalations": [],
+  "checks": [
+    {
+      "requirement": "REQ-1",
+      "command": "git ls-files --error-unmatch greeting.txt",
+      "result": "passed",
+      "exit_code": 0
+    }
+  ],
+  "stored_file_problems": [],
+  "gate_open": true,
+  "next": {
+    "step": "none",
+    "reason": "the gate is open",
+    "command": "metron gate"
+  }
+}

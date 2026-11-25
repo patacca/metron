@@ -1,0 +1,14 @@
+Gate: CLOSED for stage prototype
+Authorizes: An internal demonstration
+Candidate: commit 4184c5a109d83294c4c1d72fda715bd93569c3c2, sha256:ee02583d9b269d5c9fc9d25ebd7b9de441a02490a78455ba0159cc2ed3a61898
+
+[FAIL] C  Every applicable requirement is satisfied in the reviewer report of the latest round
+          - REQ-2 is violated in round 1
+[FAIL] B  No unresolved T0 or T1 finding and no open escalation
+          - F-0001 (T1) is open
+[ok]   E  Every applicable requirement with a command has a passing result for this candidate and this command text
+[ok]   I  The candidate is the reviewed one, the tree is clean, the contract is the pinned one, and the ledger verifies under this protocol version; every stored packet and report file matches the ledger
+[FAIL] V  The latest round's verdict is GREEN, for this candidate, under this contract, by an author who never acted as implementer
+          - round 1 ended RED
+
+Run metron next for the next step.
