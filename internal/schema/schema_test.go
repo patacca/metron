@@ -3,6 +3,7 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -128,7 +129,7 @@ func TestDeterministic(t *testing.T) {
 	}
 	for i := 1; i < len(first); i++ {
 		a, b := first[i-1], first[i]
-		if a.Pointer > b.Pointer || (a.Pointer == b.Pointer && a.Message > b.Message) {
+		if less(b, a) {
 			t.Fatalf("problems are not ordered: %v before %v", a, b)
 		}
 	}
@@ -316,7 +317,7 @@ func FuzzValidate(f *testing.F) {
 				if p.Pointer != "" && p.Pointer[0] != '/' {
 					t.Fatalf("%s: pointer %q is not a JSON Pointer", k, p.Pointer)
 				}
-				if i > 0 && (ps[i-1].Pointer > p.Pointer) {
+				if i > 0 && less(p, ps[i-1]) {
 					t.Fatalf("%s: problems out of order", k)
 				}
 			}
@@ -326,4 +327,44 @@ func FuzzValidate(f *testing.F) {
 			}
 		}
 	})
+}
+
+// Pointers are ordered by document position, not as text: item 2 comes before
+// item 10.
+func TestDocumentOrder(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(fixtures(t, Report, "valid")["reviewer-full"], &doc); err != nil {
+		t.Fatal(err)
+	}
+	body := doc["body"].(map[string]any)
+	var coverage []any
+	for i := 0; i < 12; i++ {
+		coverage = append(coverage, map[string]any{"domain": "stability", "status": "skipped", "summary": "s"})
+	}
+	body["coverage"] = coverage
+	body["extra"] = true
+	ps, err := Validate(Report, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/body/coverage/0/status"}
+	for i := 1; i < 12; i++ {
+		want = append(want, fmt.Sprintf("/body/coverage/%d/status", i))
+	}
+	want = append(want, "/body/extra")
+	if got := pointers(ps); !reflect.DeepEqual(got, want) {
+		t.Fatalf("pointers = %q, want %q", got, want)
+	}
+}
+
+func TestComparePointers(t *testing.T) {
+	ordered := []string{"", "/a", "/a/2", "/a/10", "/a/10/x", "/a/b", "/b", "/b/0", "/b/00", "/b/000", "/b/1", "/b/10", "/b/1x", "/b/x"}
+	for i, a := range ordered {
+		for j, b := range ordered {
+			got := comparePointers(a, b)
+			if (i < j && got >= 0) || (i > j && got <= 0) || (i == j && got != 0) {
+				t.Errorf("comparePointers(%q, %q) = %d", a, b, got)
+			}
+		}
+	}
 }

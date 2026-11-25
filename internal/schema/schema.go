@@ -211,12 +211,7 @@ func flatten(e *jsonschema.ValidationError) []Problem {
 		out = append(out, problems(e)...)
 	}
 	walk(e)
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Pointer != out[j].Pointer {
-			return out[i].Pointer < out[j].Pointer
-		}
-		return out[i].Message < out[j].Message
-	})
+	sort.SliceStable(out, func(i, j int) bool { return less(out[i], out[j]) })
 	uniq := out[:0]
 	for i, p := range out {
 		if i == 0 || p != out[i-1] {
@@ -224,6 +219,60 @@ func flatten(e *jsonschema.ValidationError) []Problem {
 		}
 	}
 	return uniq
+}
+
+// less orders problems in document order: pointers are compared segment by
+// segment, two segments numerically when both are array indices (indices come first)
+// and as text otherwise, a parent before its members; equal pointers by message.
+func less(a, b Problem) bool {
+	if c := comparePointers(a.Pointer, b.Pointer); c != 0 {
+		return c < 0
+	}
+	return a.Message < b.Message
+}
+
+func comparePointers(a, b string) int {
+	as, bs := strings.Split(a, "/"), strings.Split(b, "/")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		if c := compareSegments(as[i], bs[i]); c != 0 {
+			return c
+		}
+	}
+	return len(as) - len(bs)
+}
+
+// compareSegments is a total order: array indices first, numerically, then
+// everything else as text. Mixing the two orders on one level would not be
+// transitive.
+func compareSegments(a, b string) int {
+	ia, ib := isIndex(a), isIndex(b)
+	switch {
+	case ia && ib:
+		ta, tb := strings.TrimLeft(a, "0"), strings.TrimLeft(b, "0")
+		if len(ta) != len(tb) {
+			return len(ta) - len(tb)
+		}
+		if c := strings.Compare(ta, tb); c != 0 {
+			return c
+		}
+	case ia:
+		return -1
+	case ib:
+		return 1
+	}
+	return strings.Compare(a, b)
+}
+
+func isIndex(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func pointer(tokens []string) string {
