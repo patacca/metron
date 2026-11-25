@@ -68,13 +68,13 @@ What it does not provide:
   `metron resolve` is therefore cooperative: Metron records the decision but
   cannot tell whether governance made it. An orchestrator that ignores the
   stop rule gets no packet issued while governance owns the next step, and no
-  check recorded while the campaign is suspended, but nothing stops it from
-  running `metron resolve` itself. Binding these decisions to governance's
-  credential belongs to authenticated mode.
+  check run or recorded while the campaign is suspended, but nothing stops it
+  from running `metron resolve` itself. Binding these decisions to
+  governance's credential belongs to authenticated mode.
 - **Withholding history from a reviewer.** A review packet does not name its
-  round, the earlier verdicts or who gave them. A reviewer that can read the
-  repository finds them in the ledger, or with `metron status` and `metron
-  log`.
+  round, the earlier verdicts or who gave them, nor the round of any step of
+  its findings. A reviewer that can read the repository finds them in the
+  ledger, or with `metron status` and `metron log`.
 
 No keys are needed and none are managed.
 

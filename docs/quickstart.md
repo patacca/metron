@@ -320,7 +320,9 @@ $ git add -A && git commit -m "fix: one dash per run of other characters, none a
 
 The packet holds the blocking finding F-0001 and nothing else. The `T2`
 finding is not part of a correction: a correction changes what its blocking
-findings need, and improvements are made in ordinary commits, outside it.
+findings need, and improvements are made in ordinary commits, outside it. A
+correction covers the whole batch, so a later fix packet also lists every
+finding whose fix is already claimed.
 
 The fix squeezes each run of other characters into one dash and trims both
 ends, and `test.sh` gains the two cases the finding names, before its `exit`
@@ -390,8 +392,10 @@ Next step:    verify (owner: verifier)
 
 If a check fails, correct the code in another commit. The fix was claimed on
 the earlier commit, so the claim has lapsed: `metron next` asks for the fix
-again, the new report lists the new commit too, and the checks run on the
-result. Nothing reaches the verifier that no fix accounts for.
+again, the new report claims it with every commit it had before and the new
+one, and then the checks run on the result. Nothing reaches the verifier that
+no fix accounts for, and every fix it sees was claimed on the commit it
+verifies.
 
 ## 7. Verify
 
@@ -544,9 +548,9 @@ An orchestrator runs the step `metron next` names and stops in two cases:
 governance steps, `repair-ledger`, `pin-contract` and `adjudicate`, are
 decisions for the repository's owner, never steps to automate. While
 governance owns the next step, `metron packet` issues nothing, and while the
-campaign is suspended `metron check` records nothing either; both then exit
-with status 1. A campaign stopped there has not been approved: only `metron
-gate` exiting 0 means that.
+campaign is suspended `metron check` runs nothing and records nothing either;
+both then exit with status 1. A campaign stopped there has not been approved:
+only `metron gate` exiting 0 means that.
 
 Two more things an unattended run needs:
 
@@ -582,7 +586,9 @@ retry.
 | `the verdict is GREEN but the content implies RED` | The verdict must follow from the findings and the requirement statuses. | Correct the verdict or the content. |
 | `author "bob" acted as implementer in this ledger and cannot act as verifier` | Role separation. | Have someone else, or another agent, do it under their own `id`. |
 | `commit … changes the candidate since the reviewed commit …, and no fix lists it` | A commit made during the correction belongs to no fix. | List it under the finding it serves. A change that serves no finding does not belong in a correction: take it out of the candidate's history and make it outside the correction. |
-| `Next step: fix` with `claim it again in a report that accounts for every commit since the reviewed one` | The commit changed after the fix was claimed, for example to make a check pass, so the claim has lapsed. | `metron packet`, then claim the fix again, listing the new commits too. |
+| `Next step: fix` with `claim it again in a report that accounts for every commit since the reviewed one` | The commit changed after the fix was claimed, for example to make a check pass, so the claim has lapsed. | `metron packet`, then claim the fix again with every commit it had before and the new ones. |
+| `/body/fixes: the fix of F-0001 was claimed on candidate … and the candidate is now …` | The report is on another commit than the one a claimed fix stands on, for example because an audit upheld a second finding and you committed its fix. A correction is verified as one batch on one commit. | Claim F-0001 again in the same report, next to the new fix. |
+| `commit … belonged to the fix of F-0001 when it was claimed before and is still part of the candidate` | A fix claimed again must keep the commits it was first claimed with. | Add them to its `commits`. |
 | `the fix of F-0001 is confirmed although its scope is excessive` | A fix that changes more than its finding needs cannot be confirmed. | Reject it. The implementer takes out what the finding does not need. |
 | `Next step: adjudicate` | Governance owes a decision: the review was `INDETERMINATE`, the reviewer found a risk the contract does not cover, or the campaign is suspended. | Supply the evidence or amend and pin the contract, then `metron resolve E-0001 -m "<decision>"`. After an `INDETERMINATE` review the commit is then reviewed again. Resolving a suspension resumes the campaign; leaving it open ends it. |
 | `Next step: audit` | The loop is not converging: a disputed finding, three failed steps without `GREEN` (a review that is not `GREEN`, a rejected fix, a failed check), the same files changed fix after fix. | `metron packet` issues the auditor's packet. The bar does not drop. |

@@ -44,6 +44,14 @@ Risks:
 A related gap: `metron check` waited for a check command as long as it ran,
 so a check that hung blocked an unattended campaign and left no record.
 
+An independent review of the corrective work then found four more defects:
+the budget was reset only when the next round opened, so a packet issued
+after an approval counted against the campaign already approved; a GREEN
+round counted as an approval although the gate never opened, for instance
+with a contract gap still open; lapse was tracked by the latest claim only,
+so an earlier claim survived a later one on another candidate; and a claim
+made again could list only the new commits.
+
 ## Decision
 
 [Architecture](../architecture.md) sections 5 to 12 state the rules. This
@@ -79,15 +87,20 @@ against the confirmed fixes of blocking findings.
   its events record a failure. Only a GREEN verdict or governance resuming a
   suspended campaign restarts the streak; a pin, a change of stage, a new
   candidate or a discharged audit does not. Failing checks can make an audit
-  due before any round has a verdict.
+  due before any round has a verdict; its packet names no round.
 - A campaign is the work towards one approval. Its budget, the new threshold
-  `suspend_after` (20 by default), counts every packet issued in it.
+  `suspend_after` (20 by default), counts every packet issued in it. It ends
+  approved with the command that leaves the ledger showing an approval: the
+  latest round is a GREEN round of the current stage under the pinned
+  contract, no escalation is open, and no blocking finding is unresolved or
+  carried by that round's candidate. A GREEN verdict that leaves an
+  escalation open, or that a pin has set aside, ends nothing.
 - A new governance-owned escalation, `suspension`, ends a campaign without
   approval. It is raised when a process audit is discharged, when an auditor
   asks for it (`suspend`), and with the packet that uses up the budget. While
-  it is open the gate is closed, no packet is issued and no check is recorded.
-  Resolving it with `metron resolve` is governance's decision to resume, and
-  begins a new campaign.
+  it is open the gate is closed, no packet is issued, and `metron check`
+  refuses before running anything. Resolving it with `metron resolve` is
+  governance's decision to resume, and begins a new campaign.
 - `metron check --timeout` bounds each check command, 30 minutes by default.
   A command still running at the limit is stopped with what it started and
   recorded as failed with exit code 124, so a hung check is a failed step.
@@ -108,17 +121,22 @@ orchestrator bounds its own retries of one packet.
 
 - The loop runs fix, run-checks, verify, review: the mandatory checks pass on
   a candidate before anyone verifies it, and the verifier sees their results.
-- A fix packet holds the blocking findings and nothing else. The backlog is
-  ordinary development work, and a reviewer closes an open non-blocking
-  finding that the candidate no longer exhibits by listing it in `addressed`,
-  with evidence (`finding.addressed`).
+- A fix packet holds the blocking findings and nothing else: the whole
+  batch, every open blocking finding and every one whose fix is already
+  claimed. The backlog is ordinary development work, and a reviewer closes an
+  open non-blocking finding that the candidate no longer exhibits by listing
+  it in `addressed`, with evidence (`finding.addressed`).
 - Every commit since the reviewed one that changes the candidate must be
   listed under a fix, in this report or an earlier accepted one. Metron lists
   the interval itself and refuses a report that leaves a commit out.
-- A fix is claimed on a candidate. If the candidate changes before the
-  verification, the claims have lapsed and are made again, so nothing reaches
-  a verifier with a commit that no fix lists. A correction is verified as one
-  batch on one candidate.
+- A fix is claimed on a candidate. A report submitted on another candidate
+  than the one the claims stand on, because the candidate changed or because
+  the implementer commits now, claims every claimed fix again, with every
+  commit of the earlier claim that is still part of the candidate. A finding
+  an audit upholds while another fix is claimed is therefore fixed in a
+  report that restates the earlier fix. So every fix a verifier sees was
+  claimed on the candidate it verifies and lists all its commits, and a
+  correction is verified as one batch on one candidate.
 - The verifier judges the scope of every fix, `proportionate` or
   `excessive`, with evidence. An excessive fix is rejected even when its
   finding is resolved.
@@ -144,8 +162,11 @@ raised on.
 
 **The reviewer is not told how earlier reviews went** (R5). A review packet
 carries no round number and no earlier rounds, and the reviewer's brief and
-prompt name neither. Findings with their history, decisions, check results
-and the verified candidate are all still there.
+prompt name neither. Its findings come without the round of the finding or of
+any step of their history; their order remains. Findings with their history,
+decisions, check results and the verified candidate are all still there. This
+is about what a reviewer is handed, not secrecy: in local mode the ledger and
+`metron status` show the rounds to whoever asks.
 
 **Gate condition E is "automated evidence".** Its evaluation is unchanged; a
 requirement without a `command` is established under condition C.
@@ -181,7 +202,8 @@ requirement without a `command` is established under condition C.
   decision answered, whether or not the stage changed.
 - **Withholding the finding history from the reviewer as well.** Nothing that
   limits what a review can conclude is withheld; only the round number, the
-  earlier verdicts and the reviewer identities are.
+  earlier verdicts, the reviewer identities and the round of each finding
+  step are.
 
 ## Compatibility and migration
 
@@ -233,10 +255,16 @@ it:
 
 - `backlog` is removed. Read the non-blocking findings from `metron findings
   --backlog`.
+- The `subjects` of a fix packet are the whole batch: every open blocking
+  finding and every finding whose fix is already claimed, not only the open
+  ones.
 - `round` is no longer required. A review packet has none, and neither has an
   audit packet issued before any round has a verdict. A tool that needs the
   round reads it from the ledger.
 - A review packet has no `history`. Fix, verify and audit packets keep it.
+- A finding's `round`, and the `round` of each step of its history, are no
+  longer required. A review packet omits them and keeps the steps in order;
+  fix, verify and audit packets, and `metron findings`, still carry them.
 - `verified`, in a review packet, names the candidate the fixes were last
   verified on. A reviewer compares it with `candidate`.
 - `earlier_decisions` is added, and `decisions` holds only the decisions that
@@ -262,10 +290,14 @@ missing ones.
   finding as recorded meets every rule of a blocking finding; uphold such a
   finding instead.
 - Implementer: the shape is unchanged, the rules are not. A report addresses
-  the packet's blocking findings only; lists every commit since the reviewed
-  one under a fix; claims a lapsed fix again; and cannot fix a finding on a
-  candidate it was recorded on. Make improvements outside corrections and
-  list every commit.
+  the packet's subjects only, so no non-blocking finding; lists every commit
+  since the reviewed one under a fix; and cannot fix a finding on a
+  candidate it was recorded on. Submitted on another candidate than the one
+  the claims stand on, it claims every claimed fix again, with every commit of
+  the earlier claim that is still part of the candidate; otherwise it is
+  refused at `/body/fixes` or `/body/fixes/N/commits`. A claimed finding
+  cannot be disputed. Make improvements outside corrections, list every
+  commit, and restate earlier claims whenever you commit during a correction.
 
 **Ledger events** (`event.schema.json`)
 
@@ -290,18 +322,21 @@ members.
 
 - `metron.status/v1`: `failed_streak` counts failed steps; `campaign_steps`,
   `campaign_budget` and, while the campaign is suspended, `suspended` are
-  added. In the text, `Rounds:` no longer ends with the failed streak, and a
-  new `Campaign:` line follows it. Scripts read the JSON.
+  added. `campaign_steps` is 0 right after the command that leaves the ledger
+  showing an approval. In the text, `Rounds:` no longer ends with the failed
+  streak, and a new `Campaign:` line follows it. Scripts read the JSON.
 - `metron.check/v1`: a result gains `timed_out`, and the document gains
   `escalations_raised`, always present. In the text, a stopped check's line
-  names the limit, and raised escalations are listed.
+  names the limit, and a raised escalation is listed as
+  `escalation.raised      E-000N (...)`, as `metron ingest` lists events.
 - `metron.gate/v1` and the gate text: the description of condition B names
   carried findings.
 - `metron.findings/v1`: a finding gains `contract`, and each history step
   `candidate`.
 - `metron.next/v1`: the shape is unchanged. `run-checks` now comes before
   `verify`; `commit-changes` also names a candidate that carries a finding;
-  `fix` also names lapsed claims; `adjudicate` also names a suspension.
+  `fix` also names lapsed claims and, in its `findings`, the claimed findings
+  of the batch; `adjudicate` also names a suspension.
 - The note `metron packet` prints for a review packet no longer names the
   round.
 
@@ -309,7 +344,7 @@ members.
 
 - `metron check --timeout` with a zero, negative or unparsable value exits 2.
 - `metron check` exits 1 when a check is stopped at its limit, and while the
-  campaign is suspended, when it records nothing.
+  campaign is suspended, when it refuses before running any command.
 - `metron packet` exits 1 while a suspension is open, as for any step owned
   by governance.
 - `metron gate` exits 1 while a suspension is open or while the candidate
@@ -319,7 +354,10 @@ members.
 
 - `metron check` runs each command within `--timeout` and records a stopped
   one as failed with exit code 124. A recording with a failure is a failed
-  step and can raise `non-convergence` or `process-audit`.
+  step and can raise `non-convergence` or `process-audit`. While the campaign
+  is suspended it runs nothing.
+- The campaign budget starts again with the command that leaves the ledger
+  showing an approval, not when the next round opens.
 - `metron packet` counts every packet against the budget, raises a
   `suspension` with the packet that uses it up, and issues nothing while a
   suspension is open.

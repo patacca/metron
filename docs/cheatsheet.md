@@ -74,7 +74,7 @@ The first row that applies is the one you get.
 | `adjudicate` | governance | A decision is owed on an escalation, or the campaign is suspended | Decide, then `metron resolve <E-id> -m "<decision>"` |
 | `commit-changes` | implementer | Files outside `.metron/` are modified or untracked | Commit or discard them |
 | `audit` | auditor | The loop is not converging | `metron packet`, audit, `metron ingest` |
-| `fix` | implementer | A blocking finding is open, or a fix was claimed on an earlier commit | `metron packet`, fix and commit, `metron ingest` |
+| `fix` | implementer | A blocking finding is open, or a fix was claimed on an earlier commit. The packet holds the whole batch: open blocking findings and claimed ones | `metron packet`, fix and commit, `metron ingest` |
 | `commit-changes` | implementer | This commit carries a blocking finding: it was recorded here and fixed on another commit | Move to a commit that contains the fix |
 | `run-checks` | implementer | A check has no passing result on this commit | `metron check` |
 | `verify` | verifier | A fix is claimed on this commit | `metron packet`, verify, `metron ingest` |
@@ -83,7 +83,7 @@ The first row that applies is the one you get.
 
 Stop at `none` and at every step governance owns. While governance owns the
 next step, `metron packet` issues nothing; while the campaign is suspended,
-`metron check` records nothing either. Both then exit 1.
+`metron check` runs and records nothing either. Both then exit 1.
 
 ## Roles
 
@@ -120,7 +120,7 @@ members for you.
 | Role | The body contains |
 | --- | --- |
 | reviewer | `coverage`: all 18 domains, each `assessed` or `not-applicable` with a `summary`<br>`requirements`: each one `satisfied`, `violated` or `unverified`, with `evidence`<br>`findings`: the new findings<br>`verdict` and `justification`<br>Optional: `reopen`, `addressed` (open non-blocking findings this commit no longer has, each with `finding` and `evidence`), `contract_gaps`, `residual_risks`, `limitations` |
-| implementer | `fixes`: each with `finding`, `commits` (full hashes), `summary`, `components`; optional `root_cause`, `tests`<br>Optional: `disputes` (each with `finding`, `rationale`), `notes`<br>Only the packet's blocking findings, and every commit since the reviewed one listed under a fix |
+| implementer | `fixes`: each with `finding`, `commits` (full hashes), `summary`, `components`; optional `root_cause`, `tests`<br>Optional: `disputes` (each with `finding`, `rationale`), `notes`<br>Only the packet's subjects. Every commit since the reviewed one is listed under a fix. On another commit than the one the claims stand on, every claimed fix is claimed again, with all the commits it had |
 | verifier | `verifications`: each with `finding`, `result` (`confirmed` or `rejected`), `evidence`, `scope` (`proportionate` or `excessive`) and `scope_evidence`. An `excessive` fix is `rejected`<br>Optional: `regressions`, `notes` |
 | auditor | `resolutions`: each with `escalation`, `analysis`, `conclusion`<br>`adjudications`, when the packet lists findings to adjudicate: each with `finding`, `decision` (`uphold`, `withdraw` or `reclassify`), `rationale`, and `tier` for `reclassify`<br>Optional: `directives`, `supersede` (earlier audit decisions, each with `decision`, a `D-` identifier, and `rationale`), `contract_recommendations`, `suspend` (why the campaign should stop until governance decides) |
 
@@ -217,9 +217,13 @@ run with a failure, a timed-out check included. Only a `GREEN` verdict or a
 resumption ends it. The **campaign budget** counts every packet issued,
 answered or not. Pins, changes of stage and new commits restart neither.
 
-While a campaign is suspended the gate is closed, no packet is issued and no
-check is recorded. Resuming starts a new campaign; leaving it suspended is
-how a campaign that cannot converge ends.
+A campaign ends **approved** with the command that leaves the ledger showing
+a `GREEN` round of the current stage under the pinned contract, no open
+escalation, and no blocking finding unresolved or carried; the budget then
+starts again from 0. A `GREEN` verdict that leaves an escalation open, or that
+a pin set aside, ends nothing. A campaign also ends **suspended**: the gate is
+closed, no packet is issued and no check runs. Resuming starts a new
+campaign; leaving it suspended is how a campaign that cannot converge ends.
 
 A finding that has come back twice, through a rejected fix or a reopening, is
 flagged root-cause-required: its next fix must include `root_cause`.
@@ -246,7 +250,7 @@ commit it was supplied for. Packets list the others as `earlier_decisions`.
 | Status | Meaning |
 | --- | --- |
 | 0 | Success. For `gate`: open |
-| 1 | A negative outcome: gate closed, report rejected, contract invalid or unpinned, a check failed, no packet while governance owns the next step, no check recorded while the campaign is suspended |
+| 1 | A negative outcome: gate closed, report rejected, contract invalid or unpinned, a check failed, no packet while governance owns the next step, no check run while the campaign is suspended |
 | 2 | Usage error |
 | 3 | Could not evaluate: I/O error, git missing, ledger corrupt, lock held |
 
@@ -282,7 +286,7 @@ with, not an exit status of Metron.
 - A correction fixes the blocking findings and nothing else. Improve the
   backlog in ordinary commits; a later review closes what you fixed.
 - Every commit since the reviewed one belongs under a fix. A commit made
-  after a fix was claimed means claiming it again.
+  after a fix was claimed means claiming it again, with all its commits.
 - Re-running a failing check on an unchanged commit is one more failed step.
 - Editing the contract's meaning requires a new pin, which voids the open
   packet and sets aside the decisions made under the old contract. It
