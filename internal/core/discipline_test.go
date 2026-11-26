@@ -290,3 +290,61 @@ func TestBlockingFindingIsNotAddressedByAReview(t *testing.T) {
 		t.Fatalf("finding %+v", f)
 	}
 }
+
+// A review packet carries its findings without round numbers, in the record
+// and in every step of the history, while the ledger keeps them.
+func TestReviewPacketFindingsCarryNoRound(t *testing.T) {
+	h := newHarness(t)
+	h.checks(true)
+	h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
+	fp := h.packet()
+	if fp.Findings[0].Round != 1 || fp.Findings[0].History[0].Round != 1 {
+		t.Fatalf("the fix packet lost the rounds: %+v", fp.Findings[0])
+	}
+	h.accept(fp, "impl-1", ImplementerBody{Fixes: []Fix{h.repair("F-0001")}})
+	h.accept(h.verifying(), "ver-1", verify(map[string]string{"F-0001": VerificationConfirmed}, "F-0001"))
+	rp := h.packet()
+	f := rp.Findings[0]
+	if rp.Round != 0 || len(rp.History) != 0 || f.Round != 0 || len(f.History) != 3 {
+		t.Fatalf("review packet round %d, %d earlier rounds, finding %+v", rp.Round, len(rp.History), f)
+	}
+	for i, step := range f.History {
+		if step.Round != 0 || step.Packet == "" || step.Candidate == "" {
+			t.Fatalf("history step %d of the review packet: %+v", i, step)
+		}
+	}
+	// The ledger's own record is untouched.
+	if x, _ := lookup(h.state, "F-0001"); x.Round != 1 || x.History[2].Round != 1 {
+		t.Fatalf("the ledger's finding lost its rounds: %+v", x)
+	}
+}
+
+// A pin is not a new campaign for component churn either: fixes that change
+// the same path in three rounds raise it although the contract was amended
+// and the stage changed in between.
+func TestChurnSurvivesPins(t *testing.T) {
+	h := newHarness(t)
+	h.checks(true)
+	for round := 1; round <= 3; round++ {
+		h.accept(h.packet(), "rev-1", red(h.contract, "crash"))
+		h.drain()
+		id := seqID("F", round)
+		d := h.accept(h.packet(), "impl-1", ImplementerBody{Fixes: []Fix{fix(id, h.touch("internal/parser/parse.go"))}})
+		if got := slices.Contains(raisedKinds(d), EscalationComponentChurn); got != (round == 3) {
+			t.Fatalf("round %d: component churn raised %t", round, got)
+		}
+		h.drain()
+		h.accept(h.verifying(), "ver-1", verify(map[string]string{id: VerificationConfirmed}, id))
+		switch round {
+		case 1:
+			amended := testContract()
+			amended.Authorizes = "a pilot with external users"
+			h.contract = amended
+			h.must(Pin(h.state, h.facts(), "amended", "gov"))
+		case 2:
+			h.contract = stageTwoContract()
+			h.must(Pin(h.state, h.facts(), "next stage", "gov"))
+		}
+		h.checks(true)
+	}
+}
