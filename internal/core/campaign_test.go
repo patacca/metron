@@ -192,3 +192,41 @@ func TestEvidenceIsRecordedInContractOrder(t *testing.T) {
 		t.Fatalf("drafts %+v", d)
 	}
 }
+
+// An approval ends a campaign once. What the next campaign spends stays
+// counted although the latest verdict is still the GREEN one: the discharge
+// of an audit and a pin back to the approved contract end nothing.
+func TestApprovalEndsACampaignOnce(t *testing.T) {
+	h := newHarness(t)
+	first := h.contract
+	h.checks(true)
+	h.accept(h.packet(), "rev-1", green(h.contract))
+	h.expect(StepNone)
+	if h.state.CampaignSteps() != 0 {
+		t.Fatalf("steps %d after the approval", h.state.CampaignSteps())
+	}
+	h.commit(true)
+	for range 3 {
+		h.checks(false)
+	}
+	ap := h.packet() // the audit that the failing checks call for
+	h.accept(ap, "aud-1", AuditorBody{Resolutions: resolutions(ap, "the tests are broken")})
+	if h.gate().Open || h.state.CampaignSteps() != 1 {
+		t.Fatalf("after the audit: gate open %t, steps %d, want 1", h.gate().Open, h.state.CampaignSteps())
+	}
+	amended := testContract()
+	amended.Authorizes = "a pilot with external users"
+	h.contract = amended
+	h.must(Pin(h.state, h.facts(), "amended", "gov"))
+	h.contract = first
+	h.must(Pin(h.state, h.facts(), "back", "gov"))
+	if h.state.CampaignSteps() != 1 {
+		t.Fatalf("steps %d after pinning the approved contract again, want 1", h.state.CampaignSteps())
+	}
+	// The next review packet is counted on top of the audit packet.
+	h.checks(true)
+	h.packet()
+	if h.state.CampaignSteps() != 2 {
+		t.Fatalf("steps %d after a second packet, want 2", h.state.CampaignSteps())
+	}
+}

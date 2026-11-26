@@ -304,15 +304,16 @@ func (s *State) fail() {
 	}
 }
 
-// approved reports whether the campaign has ended in approval, as far as the
-// ledger alone can tell: the latest round is a GREEN round of the current
-// stage under the pinned contract, no escalation is open, and no blocking
-// finding is unresolved or carried by that round's candidate. These are the
-// gate conditions that do not depend on the working tree.
+// approved reports whether the ledger shows an approval, as far as it can
+// tell without the working tree: the latest round with a verdict, which is
+// the round the gate reads, is GREEN under the pinned contract, no escalation
+// is open, no fix awaits verification, and no blocking finding is unresolved
+// or carried by that round's candidate. These are the gate conditions that do
+// not depend on the tree.
 func (s State) approved() bool {
-	n := len(s.rounds)
+	r, ok := s.latestRound()
 	pin, pinned := s.pin()
-	if n == 0 || n <= s.epochStart || !pinned || s.rounds[n-1].Verdict != VerdictGreen || s.rounds[n-1].Contract != pin.Digest {
+	if !ok || !pinned || r.Verdict != VerdictGreen || r.Contract != pin.Digest {
 		return false
 	}
 	for _, e := range s.escalations {
@@ -321,7 +322,7 @@ func (s State) approved() bool {
 		}
 	}
 	for _, x := range s.findings {
-		if x.Tier.Blocking() && (x.Status.Unresolved() || x.carriedBy(s.rounds[n-1].Candidate.Digest)) {
+		if x.Status == StatusClaimed || x.Tier.Blocking() && (x.Status.Unresolved() || x.carriedBy(r.Candidate.Digest)) {
 			return false
 		}
 	}

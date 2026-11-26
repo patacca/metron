@@ -40,6 +40,9 @@ type State struct {
 	// churn tracks, for the current campaign, the rounds in which a fix
 	// changed each path.
 	churn []churn
+	// ended is the number of the round whose approval ended the last
+	// campaign that ended approved.
+	ended int
 	// claimedOn is the digest of the candidate on which the claims that
 	// await verification stand: the one the latest fix was claimed on.
 	claimedOn string
@@ -153,9 +156,11 @@ func (s *State) apply(e Event) error {
 		return err
 	}
 	// A campaign ends with the command that leaves the ledger showing an
-	// approval. Whatever is issued afterwards belongs to the next one.
-	if !s.midBatch && s.approved() {
-		s.steps, s.churn = 0, nil
+	// approval, once per approving round. Whatever is issued afterwards
+	// belongs to the next campaign, and nothing but another approval or a
+	// resumption ends that one.
+	if r, ok := s.latestRound(); !s.midBatch && ok && r.Number > s.ended && s.approved() {
+		s.steps, s.churn, s.ended = 0, nil, r.Number
 	}
 	return nil
 }

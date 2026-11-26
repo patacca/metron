@@ -749,11 +749,13 @@ change of stage, not a new candidate, not the discharge of an audit.
 
 The ledger cannot see the working tree, so it takes a campaign as approved
 when a command leaves it showing everything of the gate that does not depend
-on the tree: the latest round is a GREEN round of the current stage under the
-pinned contract, no escalation is open, and no blocking finding is unresolved
-or carried by that round's candidate. A GREEN verdict that leaves an
-escalation open, or that a pin has set aside, approves nothing and ends
-nothing.
+on the tree: the latest round with a verdict in the current stage is GREEN
+under the pinned contract, no escalation is open, no fix awaits verification,
+and no blocking finding is unresolved or carried by that round's candidate. A
+GREEN verdict that leaves an escalation open, or that a pin has set aside,
+approves nothing and ends nothing. A round ends a campaign once: an audit
+discharged later, or a pin that brings an approved contract back, ends
+nothing again, so what the next campaign has spent stays counted.
 
 **The failure streak** counts failed steps. A failed step is a command whose
 events record a failure:
