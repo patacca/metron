@@ -7,9 +7,9 @@
 <p align="center"><em>Quality without excess. Progress without compromise.</em></p>
 
 Metron decides whether a specific commit of your repository is approved for a
-specific lifecycle stage, and it bounds how long the review process that gets
-you there can run without a decision of yours: a campaign ends approved or
-suspended, never by wearing the reviewers down.
+specific lifecycle stage, and it bounds how many steps the review process
+that gets you there can take without a decision of yours: a campaign ends
+approved or suspended, never by wearing the reviewers down.
 
 It is a single deterministic executable. It does not run models. Humans and
 agents supply the engineering judgment; Metron supplies the rules they cannot
@@ -176,8 +176,10 @@ planned authenticated mode adds.
 A GREEN gate approves one candidate for one stage and the activity the
 contract names. It does not claim the code is free of defects or optimal.
 
-Metron bounds how long a campaign runs before the next step is yours; it
-cannot make the campaign end GREEN. That takes a candidate that can meet the
+Metron bounds how many packets and failed steps a campaign takes before the
+next step is yours (retries of one packet that never yields an accepted
+report are for whoever runs the loop to bound); it cannot make the campaign
+end GREEN. That takes a candidate that can meet the
 contract, a contract that can be met, and roles that judge well. A suspended
 campaign is the process stopping where only your decision can help.
 [Section 10 of the architecture](docs/architecture.md#10-convergence-safeguards)

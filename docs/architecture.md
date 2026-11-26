@@ -2,8 +2,8 @@
 
 Metron is a convergent engineering review framework. It decides whether a
 specific commit of a repository is approved for a specific lifecycle stage, and
-it bounds how long the review process that leads to that decision can run
-without a decision by the repository's owner.
+it bounds how many steps the review process that leads to that decision can
+take without a decision by the repository's owner.
 
 This document is the normative design. Where code and this document disagree,
 one of them has a bug. Trust assumptions are in [trust-model.md](trust-model.md).
