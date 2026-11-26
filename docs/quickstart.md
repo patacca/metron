@@ -591,7 +591,7 @@ retry.
 | `commit … belonged to the fix of F-0001 when it was claimed before and is still part of the candidate` | A fix claimed again must keep the commits it was first claimed with. | Add them to its `commits`. |
 | `the fix of F-0001 is confirmed although its scope is excessive` | A fix that changes more than its finding needs cannot be confirmed. | Reject it. The implementer takes out what the finding does not need. |
 | `Next step: adjudicate` | Governance owes a decision: the review was `INDETERMINATE`, the reviewer found a risk the contract does not cover, or the campaign is suspended. | Supply the evidence or amend and pin the contract, then `metron resolve E-0001 -m "<decision>"`. After an `INDETERMINATE` review the commit is then reviewed again. Resolving a suspension resumes the campaign; leaving it open ends it. |
-| `Next step: audit` | The loop is not converging: a disputed finding, three failed steps without `GREEN` (a review that is not `GREEN`, a rejected fix, a failed check), the same files changed fix after fix. | `metron packet` issues the auditor's packet. The bar does not drop. |
+| `Next step: audit` | The loop is not converging: a disputed finding, three failed steps without `GREEN` (a review that is not `GREEN`, a rejected fix, a failed check), the same file changed by fixes in three rounds. | `metron packet` issues the auditor's packet. The bar does not drop. |
 | `Next step: submit-report` | A packet is open and waiting for its report. | `metron ingest <file>`. `metron packet` prints the packet again if it was lost. |
 
 ## Where to go next

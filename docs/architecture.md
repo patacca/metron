@@ -777,9 +777,12 @@ verdict; its packet then names no round, and the escalation records round
 
 **The campaign budget** counts every packet issued in the campaign, whatever
 becomes of it: answered, or voided before anyone answered. It is what bounds
-a campaign whose individual steps keep succeeding, or whose packets are never
-answered. The packet that uses the budget up is issued together with the
-suspension. Its role may still answer it, and then nothing more is issued.
+a campaign whose individual steps keep succeeding, and one whose packets are
+voided again and again before a report is accepted. It does not count time: a
+packet that stays open and valid is returned again, not issued again, so a
+role that never reports spends nothing (see below). The packet that uses the
+budget up is issued together with the suspension. Its role may still answer
+it, and then nothing more is issued.
 
 **Suspension** is termination without approval. While a `suspension` is open:
 

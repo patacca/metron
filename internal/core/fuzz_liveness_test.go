@@ -72,9 +72,13 @@ func (s *sim) cooperate() bool {
 }
 
 // obstruct performs the next action the way roles that never converge do:
-// every review is RED, every fix is rejected, every audit carries on. It
-// must not be called when the next action belongs to governance.
-func (s *sim) obstruct() {
+// every review is RED, every fix is rejected, every audit carries on. The
+// bits of mode add the other ways a step fails: bit 0, the checks fail; bit
+// 1, the implementer disputes a finding instead of fixing it; bit 2, the
+// candidate changes under a read-only role, so that its packet is void
+// before anyone answers it. It must not be called when the next action
+// belongs to governance.
+func (s *sim) obstruct(mode byte) {
 	s.t.Helper()
 	a := s.next()
 	switch a.Step {
@@ -84,11 +88,15 @@ func (s *sim) obstruct() {
 	case StepCommitChanges:
 		s.commit(true)
 	case StepRunChecks:
-		s.checks(true)
+		s.checks(!bit(mode, 0))
 	case StepSubmitReport, StepReview, StepFix, StepVerify, StepAudit:
 		s.lost = ""
 		p := s.packet()
 		s.packets[p.ID] = p
+		if bit(mode, 2) && p.ReadOnly {
+			s.commit(true)
+			return
+		}
 		switch p.Role {
 		case RoleReviewer:
 			s.accept(p, "co-rev", red(p.Contract, "never good enough"))
@@ -97,7 +105,13 @@ func (s *sim) obstruct() {
 			// whoever made it.
 			s.commit(true)
 			var b ImplementerBody
-			for _, id := range p.Subjects {
+			for i, id := range p.Subjects {
+				// A dispute replaces one fix; the others account for
+				// every commit.
+				if x := findIn(p.Findings, id); bit(mode, 1) && i == 0 && len(p.Subjects) > 1 && x.Status == StatusOpen && !x.Disputed {
+					b.Disputes = append(b.Disputes, Dispute{Finding: id, Rationale: "not a defect"})
+					continue
+				}
 				fx := s.restate(id)
 				fx.RootCause = "analysed"
 				b.Fixes = append(b.Fixes, fx)
@@ -150,7 +164,7 @@ func (s *sim) converges() {
 // and cannot get it approved: after each decision by governance, a
 // governance-owned action arrives within the bound the contract's thresholds
 // set, and the gate does not open on the way.
-func (s *sim) stalls() {
+func (s *sim) stalls(modes []byte) {
 	s.t.Helper()
 	for campaign := 0; campaign < 3; campaign++ {
 		for s.next().Owner == RoleGovernance {
@@ -160,13 +174,18 @@ func (s *sim) stalls() {
 		// a round that was GREEN before: a candidate approved earlier whose
 		// checks pass again. Nothing these roles do approves anything.
 		before := len(s.state.rounds)
-		bound := 4*s.contract.Thresholds().SuspendAfter + 40
+		th := s.contract.Thresholds()
+		bound := 6*th.SuspendAfter + 6*th.ProcessAuditAfter + 60
 		for steps := 0; s.next().Owner != RoleGovernance; steps++ {
 			if steps > bound {
 				s.t.Fatalf("%d steps of roles that never converge and no action owned by governance; next is %+v", bound, s.next())
 			}
 			prev := s.state
-			s.obstruct()
+			var mode byte
+			if len(modes) > 0 {
+				mode = modes[(campaign*31+steps)%len(modes)]
+			}
+			s.obstruct(mode)
 			s.check(prev)
 			if r, _ := s.state.latestRound(); s.gate().Open && (r.Number > before || r.Verdict != VerdictGreen) {
 				s.t.Fatalf("the gate opened on round %d (%s) although no verdict was GREEN since round %d", r.Number, r.Verdict, before)
@@ -203,15 +222,22 @@ func FuzzLiveness(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, data []byte) {
 		prefix(t, data).converges()
-		prefix(t, data).stalls()
+		prefix(t, data).stalls(nil)
+		// The same bytes, read backwards, choose how each step fails.
+		modes := slices.Clone(data)
+		slices.Reverse(modes)
+		prefix(t, data).stalls(modes)
 	})
 }
 
 func TestLivenessSeeds(t *testing.T) {
 	for i, seed := range commandSeeds() {
 		prefix(t, seed).converges()
+		for _, modes := range [][]byte{{1}, {2}, {4}, {1, 2, 4, 0, 3, 5, 6, 7}} {
+			prefix(t, seed).stalls(modes)
+		}
 		s := prefix(t, seed)
-		s.stalls()
+		s.stalls(nil)
 		// Roles that never converge leave the campaign waiting for
 		// governance, not approved.
 		if a := s.next(); a.Owner != RoleGovernance || s.gate().Open {

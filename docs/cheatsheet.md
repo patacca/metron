@@ -14,9 +14,10 @@ metron gate          # exit 0 = this commit is approved for this stage
 
 ```
 review ──RED──▶ fix ──▶ run-checks ──▶ verify ──all confirmed──▶ review ──GREEN──▶ gate
-                 ▲          │             │
-                 └──────────┴─────────────┘
-                   a check fails, a fix is rejected, or a regression blocks
+   │             ▲          │             │
+   │             └──────────┴─────────────┘
+   │               a check fails, a fix is rejected, or a regression blocks
+   └──INDETERMINATE──▶ adjudicate (governance supplies evidence or amends the contract)
 ```
 
 An orchestrator stops in both cases and never performs a governance step. It
@@ -222,7 +223,8 @@ a `GREEN` round of the current stage under the pinned contract, no open
 escalation, and no blocking finding unresolved or carried; the budget then
 starts again from 0. A `GREEN` verdict that leaves an escalation open, or that
 a pin set aside, ends nothing. A campaign also ends **suspended**: the gate is
-closed, no packet is issued and no check runs. Resuming starts a new
+closed, no packet is issued and no check runs; only the report of a packet
+that was already open is still accepted. Resuming starts a new
 campaign; leaving it suspended is how a campaign that cannot converge ends.
 
 A finding that has come back twice, through a rejected fix or a reopening, is
@@ -285,8 +287,9 @@ with, not an exit status of Metron.
   number of times.
 - A correction fixes the blocking findings and nothing else. Improve the
   backlog in ordinary commits; a later review closes what you fixed.
-- Every commit since the reviewed one belongs under a fix. A commit made
-  after a fix was claimed means claiming it again, with all its commits.
+- Every commit since the reviewed one that changes the candidate belongs
+  under a fix. If the candidate changes after a fix was claimed, claim it
+  again, with all its commits.
 - Re-running a failing check on an unchanged commit is one more failed step.
 - Editing the contract's meaning requires a new pin, which voids the open
   packet and sets aside the decisions made under the old contract. It

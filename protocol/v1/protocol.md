@@ -44,7 +44,7 @@ state, the contract or the gate outcome.
 | Principle | Rule | Why |
 | --- | --- | --- |
 | Safety | The gate never opens while a mandatory requirement is violated or unverified. Every failure mode closes the gate. | A gate that opens by default when something goes wrong (a crash, a timeout, a malformed report) approves exactly the cases nobody looked at. |
-| Liveness | Every state names one action that someone can perform, and a campaign never runs unattended without bound: within the limits the contract sets, the gate opens or the next action belongs to governance. Possible improvements never block. | A process that can be blocked forever by "it could be better" stops being used, and one that can run forever without anyone deciding wastes the effort it was meant to direct. Reaching GREEN cannot be promised: it depends on engineering judgments, which no program makes. |
+| Liveness | Every state names one action that someone can perform, and a campaign never runs unattended without bound: within the limits the contract sets on packets and failed steps, the gate opens or the next action belongs to governance. Retries of one packet that never yields an accepted report are for whoever runs the loop to bound. Possible improvements never block. | A process that can be blocked forever by "it could be better" stops being used, and one that can run forever without anyone deciding wastes the effort it was meant to direct. Reaching GREEN cannot be promised: it depends on engineering judgments, which no program makes. |
 | Proportionality | A finding blocks only if it is tied to a contract requirement or an unacceptable risk. Over-engineering is itself reviewable. | Blocking needs a standard that exists before the review, or the standard is whatever the reviewer prefers. Unnecessary complexity is a cost, not a safe default. |
 | Empiricism | Decisions cite evidence. What cannot be decided without real-world data is a calibration, not a blocker. | Arguments without evidence cannot be checked and so cannot converge. Some questions can only be settled by running the system. |
 | Independence | Iteration counts, effort and deadlines change the investigation procedure, never the approval threshold. A reviewer is not told how many reviews came before, how they ended or who held them. | A bar that drops after enough failed rounds rewards persistence instead of quality; one that rises does the opposite. Both make the verdict depend on history instead of on the candidate. |
@@ -533,8 +533,9 @@ contract, and whoever relies on one checks its citation against the contract
 in force.
 
 Every packet carries each finding's **history**: every step recorded for it,
-with the round, the packet whose report caused it, the candidate it was made
-on, and what was said at the time, such as the fix's summary, the verifier's
+with the packet whose report caused it, the candidate it was made on, the
+round (except in a review packet, which names no round anywhere), and what
+was said at the time, such as the fix's summary, the verifier's
 evidence, the justification for a reopening, a dispute or contradiction and
 how it was resolved, or the rationale for a withdrawal or reclassification.
 Continuity depends on it. A reviewer who suspects that a verification was
@@ -657,8 +658,11 @@ counted against it. Governance may also leave it suspended; that is how a
 campaign that cannot converge ends.
 
 This is the difference between a bounded process and a successful one.
-Metron guarantees that a campaign cannot run unattended beyond the limits in
-the contract, and that running out of them never approves anything. It cannot
+Metron guarantees that a campaign cannot issue packets or fail steps beyond
+the limits in the contract without a decision by governance, and that
+running out of them never approves anything. It does not see a role that
+never reports, or whose reports are all rejected: a rejected report records
+nothing, so whoever runs the loop bounds the retries of one packet. It cannot
 guarantee that a campaign ends GREEN: that takes a candidate that can meet the
 contract, a contract that can be met, and roles that judge well. A suspension
 is the process stopping at the point where only a decision can help.

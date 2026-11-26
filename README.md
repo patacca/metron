@@ -7,8 +7,9 @@
 <p align="center"><em>Quality without excess. Progress without compromise.</em></p>
 
 Metron decides whether a specific commit of your repository is approved for a
-specific lifecycle stage, and it keeps the review process that gets you there
-from looping forever.
+specific lifecycle stage, and it bounds how long the review process that gets
+you there can run without a decision of yours: a campaign ends approved or
+suspended, never by wearing the reviewers down.
 
 It is a single deterministic executable. It does not run models. Humans and
 agents supply the engineering judgment; Metron supplies the rules they cannot
@@ -59,7 +60,7 @@ candidate that fails them. Then:
    blocks but a requirement could not be verified, it is INDETERMINATE, and
    governance supplies the missing evidence or amends the contract.
 6. If the loop stops converging (three failed steps without GREEN, the same
-   files changed fix after fix, a disputed finding), an **auditor** is
+   file changed by fixes in three rounds, a disputed finding), an **auditor** is
    brought in, and a finding whose fix keeps failing needs a root-cause
    analysis before it can be fixed again. The bar never drops.
 7. If that does not help, the campaign is **suspended**: after a process

@@ -99,7 +99,8 @@ against the confirmed fixes of blocking findings.
   approval. It is raised when a process audit is discharged, when an auditor
   asks for it (`suspend`), and with the packet that uses up the budget. While
   it is open the gate is closed, no packet is issued, and `metron check`
-  refuses before running anything. Resolving it with `metron resolve` is
+  refuses before running anything; only the report of a packet that was
+  already open is still accepted. Resolving it with `metron resolve` is
   governance's decision to resume, and begins a new campaign.
 - `metron check --timeout` bounds each check command, 30 minutes by default.
   A command still running at the limit is stopped with what it started and
@@ -180,9 +181,11 @@ requirement without a `command` is established under condition C.
   no decision and names nobody to take one. A suspension is in the ledger,
   keeps the gate closed, and makes the next step governance's.
 - **A budget of failures instead of packets.** Steps that succeed (a
-  confirmed fix, a passing check, a discharged audit) and packets nobody
-  answers can keep a campaign going without a single failure. Counting every
-  packet issued bounds those campaigns too.
+  confirmed fix, a passing check, a discharged audit) and packets that are
+  voided before anyone answers them can keep a campaign going without a
+  single failure. Counting every packet issued bounds those campaigns too. A
+  packet that stays open and is never answered is not issued again, so it
+  spends nothing: an orchestrator bounds its own retries of one packet.
 - **Restarting the counts on a pin or a change of stage.** Amending the
   contract would erase the record of a loop that is not converging.
 - **A scoped or partial review after a correction.** No such review may issue
